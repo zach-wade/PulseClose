@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/zachwade/BridgeFlow_archived/app/src -path */api/* -name *validation* -o -path */api/* -name *track*)",
+      "Bash(grep -A 50 \"CREATE TABLE.*borrower_validations\" /Users/zachwade/BridgeFlow_archived/supabase/migrations/*.sql)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(npx create-next-app@latest pulseclose-init --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(rm -rf /tmp/pulseclose-init)",
+      "Bash(printf nnnn:*)",
+      "Bash(yes n:*)",
+      "Bash(npx shadcn@latest init -d)"
+    ]
+  }
+}
