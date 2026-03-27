@@ -8,7 +8,10 @@
       "Bash(rm -rf /tmp/pulseclose-init)",
       "Bash(printf nnnn:*)",
       "Bash(yes n:*)",
-      "Bash(npx shadcn@latest init -d)"
+      "Bash(npx shadcn@latest init -d)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)"
     ]
   }
 }
