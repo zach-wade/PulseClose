@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,16 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Building2,
-  User,
-  HardHat,
-  ArrowLeft,
-  Search,
-} from "lucide-react";
+import { Building2, User, HardHat, ArrowLeft, Search } from "lucide-react";
 import Link from "next/link";
 
 export default function NewValidationPage() {
+  const router = useRouter();
   const [borrowerName, setBorrowerName] = useState("");
   const [entityName, setEntityName] = useState("");
   const [entityState, setEntityState] = useState("");
@@ -29,18 +25,43 @@ export default function NewValidationPage() {
   const [gcLicense, setGcLicense] = useState("");
   const [gcState, setGcState] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    // TODO: POST to /api/validations
-    // For now, just simulate
-    setTimeout(() => setLoading(false), 1000);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/validations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          borrower_name: borrowerName,
+          borrower_entity_name: entityName,
+          entity_state: entityState,
+          guarantor_name: guarantorName || null,
+          gc_name: gcName || null,
+          gc_license_number: gcLicense || null,
+          gc_state: gcState || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create validation");
+      }
+
+      const { id } = await res.json();
+      router.push(`/dashboard/validations/${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setLoading(false);
+    }
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" render={<Link href="/dashboard" />}>
           <ArrowLeft className="h-4 w-4" />
@@ -57,7 +78,6 @@ export default function NewValidationPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Borrower Info */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -93,7 +113,6 @@ export default function NewValidationPage() {
           </CardContent>
         </Card>
 
-        {/* Entity Info */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -133,7 +152,6 @@ export default function NewValidationPage() {
           </CardContent>
         </Card>
 
-        {/* GC Info (optional) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -180,6 +198,12 @@ export default function NewValidationPage() {
             </div>
           </CardContent>
         </Card>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <Button variant="outline" render={<Link href="/dashboard" />}>
