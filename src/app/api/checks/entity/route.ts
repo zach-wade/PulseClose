@@ -1,26 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profile = await getUserProfile();
+  if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("org_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    return NextResponse.json({ error: "User profile not found" }, { status: 400 });
-  }
+  const supabase = createAdminClient();
 
   const body = await request.json();
   const { entity_name, state } = body;
@@ -46,7 +34,7 @@ export async function POST(request: Request) {
         borrower_entity_name: entity_name,
         overall_status: "pending",
         confidence_score: 0,
-        created_by: user.id,
+        created_by: profile.id,
       })
       .select("id")
       .single();

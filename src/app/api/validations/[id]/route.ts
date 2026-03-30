@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getUserProfile } from "@/lib/supabase/get-user-profile";
 
 // GET /api/validations/[id] — full validation with all check results
 export async function GET(
@@ -7,19 +8,22 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profile = await getUserProfile();
+  if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const supabase = createAdminClient();
 
   // Fetch validation + all related checks in parallel
   const [validationRes, entityRes, trackRecordRes, litigationRes, gcRes] =
     await Promise.all([
-      supabase.from("borrower_validations").select("*").eq("id", id).single(),
+      supabase
+        .from("borrower_validations")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", profile.org_id)
+        .single(),
       supabase
         .from("entity_checks")
         .select("*")

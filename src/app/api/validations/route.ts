@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
 
 // GET /api/validations — list all validations for the user's org
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profile = await getUserProfile();
+  if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabase = createAdminClient();
   const { data: validations, error } = await supabase
     .from("borrower_validations")
     .select("*")
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -28,25 +27,12 @@ export async function GET() {
 
 // POST /api/validations — create a new validation and run all checks
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profile = await getUserProfile();
+  if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get user's org
-  const { data: profile } = await supabase
-    .from("users")
-    .select("org_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    return NextResponse.json({ error: "User profile not found" }, { status: 400 });
-  }
+  const supabase = createAdminClient();
 
   const body = await request.json();
   const {
@@ -76,7 +62,7 @@ export async function POST(request: Request) {
       guarantor_name: guarantor_name || null,
       overall_status: "pending",
       confidence_score: 0,
-      created_by: user.id,
+      created_by: profile.id,
     })
     .select()
     .single();
@@ -94,22 +80,18 @@ export async function POST(request: Request) {
   try {
     const [entityResult, properties, litigationResults, gcResult] =
       await Promise.all([
-        // Entity check
         adapter.lookupEntity({
           entity_name: borrower_entity_name,
           state: entity_state,
         }),
-        // Track record
         adapter.searchProperties({
           borrower_name,
           entity_name: borrower_entity_name,
         }),
-        // Litigation
         adapter.searchLitigation({
           entity_name: borrower_entity_name,
           borrower_name,
         }),
-        // GC (only if provided)
         gc_name
           ? adapter.lookupGC({
               gc_name,
@@ -192,10 +174,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // 7. Log usage records (realistic demo pricing)
+    // 7. Log usage records
+    const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
+    const regridToken = process.env.REGRID_API_TOKEN;
     const usageRecords = [
-      { check_type: "sos_lookup", data_source: "stub", cost_cents: 500 },
-      { check_type: "property_search", data_source: "stub", cost_cents: 1500 },
+      { check_type: "sos_lookup", data_source: cobaltKey ? "cobalt" : "stub", cost_cents: 500 },
+      { check_type: "property_search", data_source: regridToken ? "regrid" : "stub", cost_cents: 1500 },
       { check_type: "litigation_search", data_source: "stub", cost_cents: 1000 },
     ];
     if (gc_name) {
@@ -244,7 +228,6 @@ export async function POST(request: Request) {
         ? "verified"
         : "partial";
 
-    // Confidence: medium baseline for demo data
     const confidenceScore = overallStatus === "verified" ? 72 : overallStatus === "flagged" ? 45 : 60;
 
     // 9. Generate AI analysis (non-blocking — continues if it fails)
@@ -277,7 +260,7 @@ export async function POST(request: Request) {
     // 11. Audit log
     await supabase.from("audit_log").insert({
       org_id: profile.org_id,
-      user_id: user.id,
+      user_id: profile.id,
       action: "validation.created",
       entity_type: "borrower_validation",
       entity_id: validation.id,
