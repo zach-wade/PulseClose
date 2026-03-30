@@ -206,16 +206,21 @@ export default function ValidationDetailPage() {
         </Button>
       </div>
 
-      {/* Demo banner */}
-      <div className="rounded-md border border-info/30 bg-info/5 p-3 flex items-center gap-2">
-        <Badge variant="secondary" className="bg-info/20 text-info">
-          DEMO DATA
-        </Badge>
-        <p className="text-sm text-muted-foreground">
-          All check results are simulated. Real vendor APIs will replace stub
-          data when connected.
-        </p>
-      </div>
+      {/* Data source banner — only show if stub data was used */}
+      {data.entity_checks.some((e) =>
+        (e as unknown as Record<string, unknown>).raw_response &&
+        JSON.stringify((e as unknown as Record<string, unknown>).raw_response).includes('"_adapter":"stub"')
+      ) && (
+        <div className="rounded-md border border-info/30 bg-info/5 p-3 flex items-center gap-2">
+          <Badge variant="secondary" className="bg-info/20 text-info">
+            DEMO DATA
+          </Badge>
+          <p className="text-sm text-muted-foreground">
+            Some check results use simulated data. Real vendor APIs will replace
+            stub data as they are connected.
+          </p>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
