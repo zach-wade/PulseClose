@@ -5,21 +5,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Scale, CheckCircle2, XCircle } from "lucide-react";
+import { Scale, CheckCircle2, XCircle, FlaskConical } from "lucide-react";
 import type { LitigationCheck } from "./shared-types";
 
 export { type LitigationCheck };
 
-export function LitigationGrid({ data }: { data: LitigationCheck[] }) {
+export function LitigationGrid({ data, isStub = false }: { data: LitigationCheck[]; isStub?: boolean }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Scale className="h-4 w-4" />
           Litigation Screening
+          {isStub && (
+            <Badge variant="secondary" className="ml-2 gap-1 text-xs">
+              <FlaskConical className="h-3 w-3" />
+              Beta
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {isStub && (
+          <p className="text-xs text-muted-foreground mb-3">
+            PACER and state court integrations coming soon. Showing sample screening format.
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           {data.map((lc) => (
             <div

@@ -5,22 +5,33 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { HardHat, XCircle } from "lucide-react";
+import { HardHat, XCircle, FlaskConical } from "lucide-react";
 import { formatDate } from "./shared-types";
 import type { GCValidation } from "./shared-types";
 
 export { type GCValidation };
 
-export function GCResultCard({ data }: { data: GCValidation }) {
+export function GCResultCard({ data, isStub = false }: { data: GCValidation; isStub?: boolean }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <HardHat className="h-4 w-4" />
           GC Validation
+          {isStub && (
+            <Badge variant="secondary" className="ml-2 gap-1 text-xs">
+              <FlaskConical className="h-3 w-3" />
+              Beta
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {isStub && (
+          <p className="text-xs text-muted-foreground mb-3">
+            State licensing board integrations coming soon. Showing sample validation format.
+          </p>
+        )}
         <div className="space-y-3">
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
