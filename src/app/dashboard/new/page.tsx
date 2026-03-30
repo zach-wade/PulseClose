@@ -59,6 +59,12 @@ export default function NewValidationPage() {
 
       if (!res.ok) {
         const data = await res.json();
+        if (data.code === "PLAN_LIMIT_REACHED") {
+          setError(data.error);
+          toast.error("Upgrade your plan to continue running validations");
+          setLoading(false);
+          return;
+        }
         throw new Error(data.error || "Failed to create validation");
       }
 

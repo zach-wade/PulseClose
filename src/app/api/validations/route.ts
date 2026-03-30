@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
+import { getCheckLimit } from "@/lib/stripe/server";
 
 // GET /api/validations — list all validations for the user's org
 export async function GET() {
@@ -44,6 +45,32 @@ export async function POST(request: Request) {
     gc_license_number,
     gc_state,
   } = body;
+
+  // Check plan limits
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("plan, checks_used_this_period, stripe_subscription_id")
+    .eq("id", profile.org_id)
+    .single();
+
+  const plan = org?.plan ?? "starter";
+  const checksUsed = org?.checks_used_this_period ?? 0;
+  const checkLimit = getCheckLimit(plan);
+
+  // Free tier gets 3 checks to try the product, paid plans get their limit
+  const effectiveLimit = org?.stripe_subscription_id ? checkLimit : 3;
+
+  if (checksUsed >= effectiveLimit) {
+    return NextResponse.json(
+      {
+        error: org?.stripe_subscription_id
+          ? `Plan limit reached (${checkLimit} checks/month). Upgrade your plan for more.`
+          : "Free trial limit reached (3 checks). Subscribe to continue.",
+        code: "PLAN_LIMIT_REACHED",
+      },
+      { status: 403 },
+    );
+  }
 
   if (!borrower_name || !borrower_entity_name || !entity_state) {
     return NextResponse.json(
@@ -257,7 +284,13 @@ export async function POST(request: Request) {
       })
       .eq("id", validation.id);
 
-    // 11. Audit log
+    // 11. Increment usage counter
+    await supabase
+      .from("organizations")
+      .update({ checks_used_this_period: (checksUsed || 0) + 1 })
+      .eq("id", profile.org_id);
+
+    // 12. Audit log
     await supabase.from("audit_log").insert({
       org_id: profile.org_id,
       user_id: profile.id,

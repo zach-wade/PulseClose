@@ -48,6 +48,7 @@ interface SettingsData {
     slug: string;
     plan: string;
     created_at: string;
+    stripe_subscription_id: string | null;
   } | null;
   team: {
     id: string;
@@ -245,9 +246,26 @@ export default function SettingsPage() {
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        onClick={() =>
-                          toast.info("Contact sales@pulseclose.com to upgrade")
-                        }
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/stripe/checkout", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                plan: plan.name.toLowerCase(),
+                                interval: "monthly",
+                              }),
+                            });
+                            const { url, error } = await res.json();
+                            if (url) {
+                              window.location.href = url;
+                            } else {
+                              toast.error(error || "Failed to start checkout");
+                            }
+                          } catch {
+                            toast.error("Failed to start checkout");
+                          }
+                        }}
                       >
                         {plan.name === "Enterprise"
                           ? "Contact Sales"
@@ -259,6 +277,27 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {data.org?.stripe_subscription_id && (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/stripe/portal", { method: "POST" });
+                  const { url, error } = await res.json();
+                  if (url) {
+                    window.location.href = url;
+                  } else {
+                    toast.error(error || "Failed to open billing portal");
+                  }
+                } catch {
+                  toast.error("Failed to open billing portal");
+                }
+              }}
+            >
+              Manage Billing
+            </Button>
+          )}
         </TabsContent>
 
         {/* Team tab */}
