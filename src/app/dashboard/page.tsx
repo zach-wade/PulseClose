@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
   Shield,
@@ -119,8 +120,31 @@ export default function DashboardPage() {
       {/* Validation list or empty state */}
       {loading ? (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Loading...
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Borrower</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Confidence</TableHead>
+                  <TableHead className="text-right">Tier</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-36" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       ) : validations.length === 0 ? (

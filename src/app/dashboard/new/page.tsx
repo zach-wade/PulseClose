@@ -12,7 +12,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2, User, HardHat, ArrowLeft, Search } from "lucide-react";
+import {
+  Building2,
+  User,
+  HardHat,
+  ArrowLeft,
+  Search,
+  Loader2,
+  Scale,
+  Sparkles,
+} from "lucide-react";
+import { toast } from "sonner";
 import Link from "next/link";
 
 export default function NewValidationPage() {
@@ -53,6 +63,7 @@ export default function NewValidationPage() {
       }
 
       const { id } = await res.json();
+      toast.success("Validation complete — viewing report");
       router.push(`/dashboard/validations/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -205,12 +216,39 @@ export default function NewValidationPage() {
           </div>
         )}
 
+        {loading && (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm font-medium mb-3">Running validation checks...</p>
+              <div className="space-y-2">
+                {[
+                  { icon: Search, label: "Entity lookup (SOS)" },
+                  { icon: Building2, label: "Track record search" },
+                  { icon: Scale, label: "Litigation screening" },
+                  ...(gcName ? [{ icon: HardHat, label: "GC validation" }] : []),
+                  { icon: Sparkles, label: "AI risk analysis" },
+                ].map((step, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <step.icon className="h-3.5 w-3.5" />
+                    {step.label}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex justify-end gap-3">
-          <Button variant="outline" render={<Link href="/dashboard" />}>
+          <Button variant="outline" render={<Link href="/dashboard" />} disabled={loading}>
             Cancel
           </Button>
           <Button type="submit" disabled={loading}>
-            <Search className="mr-2 h-4 w-4" />
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="mr-2 h-4 w-4" />
+            )}
             {loading ? "Running checks..." : "Run Validation"}
           </Button>
         </div>

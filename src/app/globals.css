@@ -141,3 +141,60 @@
     @apply font-sans;
   }
 }
+
+/* Print styles for PDF export */
+@media print {
+  /* Hide navigation and controls */
+  nav,
+  [data-sidebar],
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset layout */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 1rem !important;
+    max-width: 100% !important;
+  }
+
+  /* Add print header */
+  body::before {
+    content: "PulseClose — Borrower Validation Report";
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #0F172A;
+  }
+
+  body::after {
+    content: "Generated " attr(data-print-date) " — Confidential";
+    display: block;
+    font-size: 10px;
+    color: #64748B;
+    margin-top: 2rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #E2E8F0;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 0.75in;
+    size: letter;
+  }
+
+  /* Ensure cards print cleanly */
+  [data-slot="card"] {
+    break-inside: avoid;
+    border: 1px solid #E2E8F0 !important;
+    box-shadow: none !important;
+  }
+}

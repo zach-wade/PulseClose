@@ -8,32 +8,44 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
-  Shield,
-  Search,
-  Building2,
-  HardHat,
-  Scale,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
   Clock,
   Star,
   FileDown,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Lightbulb,
 } from "lucide-react";
+import { EntityResultCard } from "@/components/dashboard/entity-result-card";
+import { TrackRecordTable } from "@/components/dashboard/track-record-table";
+import { LitigationGrid } from "@/components/dashboard/litigation-grid";
+import { GCResultCard } from "@/components/dashboard/gc-result-card";
+import type { EntityCheck } from "@/components/dashboard/shared-types";
+import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
+import type { LitigationCheck } from "@/components/dashboard/shared-types";
+import type { GCValidation } from "@/components/dashboard/shared-types";
+
+interface AIAnalysis {
+  summary: string;
+  risk_rating: "low" | "medium" | "high";
+  pillar_assessments: {
+    entity: string;
+    track_record: string;
+    litigation: string;
+    gc: string | null;
+  };
+  flags: string[];
+  recommendations: string[];
+}
 
 interface ValidationDetail {
   id: string;
@@ -45,59 +57,11 @@ interface ValidationDetail {
   experience_tier: number | null;
   validation_date: string | null;
   created_at: string;
+  ai_analysis: AIAnalysis | null;
   entity_checks: EntityCheck[];
   track_record: TrackRecordEntry[];
   litigation_checks: LitigationCheck[];
   gc_validations: GCValidation[];
-}
-
-interface EntityCheck {
-  id: string;
-  entity_name: string;
-  state: string;
-  entity_type: string | null;
-  sos_status: string;
-  formation_date: string | null;
-  last_filing_date: string | null;
-  registered_agent: string | null;
-  source_url: string | null;
-  confidence: string;
-  flags: string[];
-}
-
-interface TrackRecordEntry {
-  id: string;
-  property_address: string;
-  acquisition_date: string | null;
-  disposition_date: string | null;
-  acquisition_price: number | null;
-  disposition_price: number | null;
-  project_type: string;
-  outcome: string;
-  hold_months: number | null;
-  profit: number | null;
-}
-
-interface LitigationCheck {
-  id: string;
-  search_type: string;
-  entity_name: string;
-  result: string;
-  details: string | null;
-  case_number: string | null;
-  source: string;
-}
-
-interface GCValidation {
-  id: string;
-  gc_name: string;
-  license_number: string | null;
-  license_state: string;
-  license_status: string;
-  license_classification: string | null;
-  expiration_date: string | null;
-  disciplinary_actions: string[];
-  insurance_verified: boolean;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -120,7 +84,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function ExperienceStars({ tier }: { tier: number | null }) {
   if (!tier) return <span className="text-muted-foreground text-sm">N/A</span>;
-  const stars = 5 - tier; // tier 1 = 4 stars, tier 4 = 1 star
+  const stars = 5 - tier;
   return (
     <div className="flex items-center gap-1">
       {Array.from({ length: 4 }).map((_, i) => (
@@ -132,24 +96,6 @@ function ExperienceStars({ tier }: { tier: number | null }) {
       <span className="ml-1 text-sm text-muted-foreground">Tier {tier}</span>
     </div>
   );
-}
-
-function formatCurrency(n: number | null): string {
-  if (n == null) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
-function formatDate(d: string | null): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 export default function ValidationDetailPage() {
@@ -175,10 +121,38 @@ export default function ValidationDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="animate-pulse text-muted-foreground">
-          Loading validation...
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-9 w-9 rounded-md" />
+          <div>
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-32 mt-2" />
+          </div>
         </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="p-6 space-y-3">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 space-y-3">
+            <Skeleton className="h-4 w-1/4" />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -197,17 +171,6 @@ export default function ValidationDetailPage() {
   const completedProjects = data.track_record.filter(
     (t) => t.outcome === "completed",
   );
-  const totalProfit = completedProjects.reduce(
-    (sum, t) => sum + (t.profit ?? 0),
-    0,
-  );
-  const avgHold =
-    completedProjects.length > 0
-      ? Math.round(
-          completedProjects.reduce((sum, t) => sum + (t.hold_months ?? 0), 0) /
-            completedProjects.length,
-        )
-      : 0;
   const flaggedLitigation = data.litigation_checks.filter(
     (l) => l.result === "found",
   );
@@ -295,287 +258,106 @@ export default function ValidationDetailPage() {
         </Card>
       </div>
 
-      {/* Entity Checks */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Search className="h-4 w-4" />
-            Entity Validation
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.entity_checks.map((ec) => (
-            <div key={ec.id} className="space-y-3">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Entity</p>
-                  <p className="font-medium">{ec.entity_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    State / Type
-                  </p>
-                  <p className="font-medium">
-                    {ec.state} — {ec.entity_type ?? "Unknown"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">SOS Status</p>
-                  <Badge
-                    variant={
-                      ec.sos_status === "active"
-                        ? "default"
-                        : ec.sos_status === "suspended"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                  >
-                    {ec.sos_status.toUpperCase()}
-                  </Badge>
-                </div>
+      {/* AI Analysis */}
+      {data.ai_analysis && (
+        <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-4 w-4 text-info" />
+              AI Risk Assessment
+              <Badge
+                variant={
+                  data.ai_analysis.risk_rating === "low"
+                    ? "default"
+                    : data.ai_analysis.risk_rating === "high"
+                      ? "destructive"
+                      : "secondary"
+                }
+                className="ml-2"
+              >
+                {data.ai_analysis.risk_rating === "low" && (
+                  <TrendingDown className="mr-1 h-3 w-3" />
+                )}
+                {data.ai_analysis.risk_rating === "medium" && (
+                  <Minus className="mr-1 h-3 w-3" />
+                )}
+                {data.ai_analysis.risk_rating === "high" && (
+                  <TrendingUp className="mr-1 h-3 w-3" />
+                )}
+                {data.ai_analysis.risk_rating.toUpperCase()} RISK
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm leading-relaxed">{data.ai_analysis.summary}</p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Entity</p>
+                <p className="text-sm">{data.ai_analysis.pillar_assessments.entity}</p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Formed</p>
-                  <p className="font-mono text-sm">
-                    {formatDate(ec.formation_date)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Last Filing</p>
-                  <p className="font-mono text-sm">
-                    {formatDate(ec.last_filing_date)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Registered Agent
-                  </p>
-                  <p className="text-sm">{ec.registered_agent ?? "—"}</p>
-                </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Track Record</p>
+                <p className="text-sm">{data.ai_analysis.pillar_assessments.track_record}</p>
               </div>
-              {ec.flags.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Litigation</p>
+                <p className="text-sm">{data.ai_analysis.pillar_assessments.litigation}</p>
+              </div>
+              {data.ai_analysis.pillar_assessments.gc && (
                 <div className="space-y-1">
-                  {ec.flags.map((flag, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 text-sm text-amber-600"
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      {flag}
-                    </div>
-                  ))}
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">GC</p>
+                  <p className="text-sm">{data.ai_analysis.pillar_assessments.gc}</p>
                 </div>
               )}
             </div>
-          ))}
-        </CardContent>
-      </Card>
 
-      {/* Track Record */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Building2 className="h-4 w-4" />
-            Track Record
-            <span className="text-sm font-normal text-muted-foreground ml-1">
-              {completedProjects.length} completed, {formatCurrency(totalProfit)}{" "}
-              total profit, {avgHold}mo avg hold
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Property</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Purchase</TableHead>
-                <TableHead className="text-right">Sale</TableHead>
-                <TableHead className="text-right">Profit</TableHead>
-                <TableHead className="text-right">Hold</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.track_record.map((tr) => (
-                <TableRow key={tr.id}>
-                  <TableCell className="font-medium max-w-[200px] truncate">
-                    {tr.property_address}
-                  </TableCell>
-                  <TableCell className="capitalize">{tr.project_type}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {formatCurrency(tr.acquisition_price)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {formatCurrency(tr.disposition_price)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right font-mono text-sm ${
-                      tr.profit && tr.profit > 0
-                        ? "text-green-600"
-                        : tr.profit && tr.profit < 0
-                          ? "text-red-600"
-                          : ""
-                    }`}
-                  >
-                    {formatCurrency(tr.profit)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {tr.hold_months ?? "—"}mo
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        tr.outcome === "completed"
-                          ? "default"
-                          : tr.outcome === "in_progress"
-                            ? "secondary"
-                            : "destructive"
-                      }
-                    >
-                      {tr.outcome}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Litigation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Scale className="h-4 w-4" />
-            Litigation Screening
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {data.litigation_checks.map((lc) => (
-              <div
-                key={lc.id}
-                className={`rounded-md border p-3 ${
-                  lc.result === "found"
-                    ? "border-destructive/30 bg-destructive/5"
-                    : "border-border"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium capitalize">
-                    {lc.search_type.replace("_", " ")}
-                  </p>
-                  {lc.result === "clear" ? (
-                    <Badge variant="default" className="gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Clear
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="gap-1">
-                      <XCircle className="h-3 w-3" />
-                      Found
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {lc.source}
-                </p>
-                {lc.details && (
-                  <p className="text-sm mt-2">{lc.details}</p>
-                )}
-                {lc.case_number && (
-                  <p className="text-xs font-mono text-muted-foreground mt-1">
-                    Case: {lc.case_number}
-                  </p>
-                )}
+            {data.ai_analysis.flags.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Flags</p>
+                {data.ai_analysis.flags.map((flag, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-amber-600">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    {flag}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            )}
 
-      {/* GC Validation */}
-      {data.gc_validations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <HardHat className="h-4 w-4" />
-              GC Validation
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.gc_validations.map((gc) => (
-              <div key={gc.id} className="space-y-3">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contractor</p>
-                    <p className="font-medium">{gc.gc_name}</p>
+            {data.ai_analysis.recommendations.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recommendations</p>
+                {data.ai_analysis.recommendations.map((rec, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-info" />
+                    {rec}
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">License</p>
-                    <p className="font-mono text-sm">
-                      {gc.license_number ?? "—"} ({gc.license_state})
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Status</p>
-                    <Badge
-                      variant={
-                        gc.license_status === "active"
-                          ? "default"
-                          : "destructive"
-                      }
-                    >
-                      {gc.license_status.toUpperCase()}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Classification
-                    </p>
-                    <p className="text-sm">
-                      {gc.license_classification ?? "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Expires</p>
-                    <p className="font-mono text-sm">
-                      {formatDate(gc.expiration_date)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Insurance</p>
-                    <Badge
-                      variant={
-                        gc.insurance_verified ? "default" : "secondary"
-                      }
-                    >
-                      {gc.insurance_verified ? "Verified" : "Unverified"}
-                    </Badge>
-                  </div>
-                </div>
-                {gc.disciplinary_actions.length > 0 && (
-                  <div className="space-y-1">
-                    {gc.disciplinary_actions.map((action, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 text-sm text-red-600"
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                        {action}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       )}
+
+      {/* Entity Checks */}
+      {data.entity_checks.map((ec) => (
+        <EntityResultCard key={ec.id} data={ec} />
+      ))}
+
+      {/* Track Record */}
+      {data.track_record.length > 0 && (
+        <TrackRecordTable data={data.track_record} />
+      )}
+
+      {/* Litigation */}
+      {data.litigation_checks.length > 0 && (
+        <LitigationGrid data={data.litigation_checks} />
+      )}
+
+      {/* GC Validation */}
+      {data.gc_validations.map((gc) => (
+        <GCResultCard key={gc.id} data={gc} />
+      ))}
     </div>
   );
 }

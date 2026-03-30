@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAdapter } from "@/lib/adapters";
+import { generateValidationAnalysis } from "@/lib/ai/analysis";
 
 // GET /api/validations — list all validations for the user's org
 export async function GET() {
@@ -191,17 +192,17 @@ export async function POST(request: Request) {
       });
     }
 
-    // 7. Log usage records
+    // 7. Log usage records (realistic demo pricing)
     const usageRecords = [
-      { check_type: "sos_lookup", data_source: "stub", cost_cents: 0 },
-      { check_type: "property_search", data_source: "stub", cost_cents: 0 },
-      { check_type: "litigation_search", data_source: "stub", cost_cents: 0 },
+      { check_type: "sos_lookup", data_source: "stub", cost_cents: 500 },
+      { check_type: "property_search", data_source: "stub", cost_cents: 1500 },
+      { check_type: "litigation_search", data_source: "stub", cost_cents: 1000 },
     ];
     if (gc_name) {
       usageRecords.push({
         check_type: "gc_lookup",
         data_source: "stub",
-        cost_cents: 0,
+        cost_cents: 500,
       });
     }
     await supabase.from("usage_records").insert(
@@ -246,7 +247,21 @@ export async function POST(request: Request) {
     // Confidence: medium baseline for demo data
     const confidenceScore = overallStatus === "verified" ? 72 : overallStatus === "flagged" ? 45 : 60;
 
-    // 9. Update the validation record with results
+    // 9. Generate AI analysis (non-blocking — continues if it fails)
+    const aiAnalysis = await generateValidationAnalysis({
+      borrower_name,
+      entity_name: borrower_entity_name,
+      guarantor_name: guarantor_name || null,
+      entity_result: entityResult,
+      properties,
+      litigation_results: litigationResults,
+      gc_result: gcResult,
+      experience_tier: experienceTier,
+      overall_status: overallStatus,
+      confidence_score: confidenceScore,
+    }).catch(() => null);
+
+    // 10. Update the validation record with results + AI analysis
     await supabase
       .from("borrower_validations")
       .update({
@@ -255,10 +270,11 @@ export async function POST(request: Request) {
         experience_tier: experienceTier,
         validation_date: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ...(aiAnalysis ? { ai_analysis: aiAnalysis } : {}),
       })
       .eq("id", validation.id);
 
-    // 10. Audit log
+    // 11. Audit log
     await supabase.from("audit_log").insert({
       org_id: profile.org_id,
       user_id: user.id,
