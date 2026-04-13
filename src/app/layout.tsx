@@ -16,8 +16,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PulseClose",
-  description:
-    "Automated borrower validation for bridge lenders. Entity checks, track record verification, GC credentials, and litigation screening.",
+  description: "PulseClose — borrower validation product login.",
+  // app.pulseclose.com is the authenticated product. Marketing lives at pulseclose.com.
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function RootLayout({

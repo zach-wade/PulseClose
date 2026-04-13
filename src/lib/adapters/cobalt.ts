@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { stubAdapter } from "./stub";
 import { searchPropertiesRegrid } from "./regrid";
+import { searchLitigationCourtListener } from "./courtlistener";
 
 const COBALT_BASE_URL = "https://apigateway.cobaltintelligence.com/v1";
 
@@ -178,7 +179,7 @@ function getLastFilingDate(biz: CobaltBusiness): string | null {
   return dates[0] ?? null;
 }
 
-function createCobaltAdapter(apiKey: string, regridToken?: string): ValidationAdapter {
+function createCobaltAdapter(apiKey: string, regridToken?: string, courtListenerToken?: string): ValidationAdapter {
   return {
     async lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult> {
       try {
@@ -238,8 +239,73 @@ function createCobaltAdapter(apiKey: string, regridToken?: string): ValidationAd
     lookupGC(req: GCLookupRequest): Promise<GCLookupResult> {
       return stubAdapter.lookupGC(req);
     },
-    searchLitigation(req: LitigationSearchRequest): Promise<LitigationRecord[]> {
-      return stubAdapter.searchLitigation(req);
+    async searchLitigation(req: LitigationSearchRequest): Promise<LitigationRecord[]> {
+      if (!courtListenerToken) {
+        return stubAdapter.searchLitigation(req);
+      }
+
+      try {
+        const { bankruptcy, lawsuits } = await searchLitigationCourtListener(req, courtListenerToken);
+
+        // Build results: real data for bankruptcy + lawsuits, stub for county-level records
+        const records: LitigationRecord[] = [];
+
+        // Bankruptcy — real CourtListener data
+        if (bankruptcy.length > 0) {
+          records.push(...bankruptcy);
+        } else {
+          records.push({
+            search_type: "bankruptcy",
+            entity_name: req.entity_name || req.borrower_name,
+            result: "clear",
+            details: null,
+            case_number: null,
+            source: "CourtListener RECAP Archive",
+            raw_response: { _adapter: "courtlistener", _result: "no_records" },
+          });
+        }
+
+        // Lawsuits — real CourtListener data
+        if (lawsuits.length > 0) {
+          records.push(...lawsuits);
+        } else {
+          records.push({
+            search_type: "lawsuit",
+            entity_name: req.entity_name || req.borrower_name,
+            result: "clear",
+            details: null,
+            case_number: null,
+            source: "CourtListener RECAP Archive",
+            raw_response: { _adapter: "courtlistener", _result: "no_records" },
+          });
+        }
+
+        // Foreclosure + lis pendens — county-level, no API available yet
+        records.push({
+          search_type: "foreclosure",
+          entity_name: req.borrower_name,
+          result: "clear",
+          details: "County recorder search not yet available — manual review recommended",
+          case_number: null,
+          source: "County Records (not yet automated)",
+          raw_response: { _adapter: "pending", _note: "county_level_not_automated" },
+        });
+
+        records.push({
+          search_type: "lis_pendens",
+          entity_name: req.borrower_name,
+          result: "clear",
+          details: "County recorder search not yet available — manual review recommended",
+          case_number: null,
+          source: "County Records (not yet automated)",
+          raw_response: { _adapter: "pending", _note: "county_level_not_automated" },
+        });
+
+        return records;
+      } catch (err) {
+        console.error("CourtListener litigation search failed, falling back to stub:", err);
+        return stubAdapter.searchLitigation(req);
+      }
     },
   };
 }

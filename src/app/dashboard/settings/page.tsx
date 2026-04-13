@@ -354,10 +354,14 @@ export default function SettingsPage() {
               <CardTitle className="text-base flex items-center gap-2">
                 <UserPlus className="h-4 w-4" />
                 Invite Team Member
+                <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleInvite} className="flex gap-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                Team invitations are coming soon. Contact us to add team members to your organization.
+              </p>
+              <form onSubmit={handleInvite} className="flex gap-4 opacity-50 pointer-events-none">
                 <div className="flex-1 space-y-1.5">
                   <Label htmlFor="invite_email">Email Address</Label>
                   <Input
@@ -366,11 +370,11 @@ export default function SettingsPage() {
                     placeholder="colleague@company.com"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    required
+                    disabled
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button type="submit">
+                  <Button type="submit" disabled>
                     <UserPlus className="mr-2 h-4 w-4" />
                     Send Invite
                   </Button>

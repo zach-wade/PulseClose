@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { HardHat, Loader2 } from "lucide-react";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import type { GCValidation } from "@/components/dashboard/shared-types";
@@ -64,9 +65,13 @@ export default function GCValidationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">GC Validation</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold tracking-tight">GC Validation</h1>
+          <Badge variant="secondary" className="text-xs">Beta</Badge>
+        </div>
         <p className="text-muted-foreground text-sm mt-1">
-          Contractor license verification, insurance, and disciplinary history
+          Contractor license verification, insurance, and disciplinary history.
+          Results are simulated while we integrate state licensing board APIs.
         </p>
       </div>
 

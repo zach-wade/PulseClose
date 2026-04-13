@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe, getPlanFromPriceId } from "@/lib/stripe/server";
 
+// In-memory idempotency store for processed webhook events.
+// Prevents double-processing if Stripe retries delivery.
+// TTL: 24 hours. For multi-instance deployments, move to Redis/Supabase.
+const processedEvents = new Map<string, number>();
+const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000;
+
+function cleanupProcessedEvents() {
+  const cutoff = Date.now() - IDEMPOTENCY_TTL;
+  for (const [id, timestamp] of processedEvents) {
+    if (timestamp < cutoff) processedEvents.delete(id);
+  }
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
   const sig = request.headers.get("stripe-signature");
@@ -21,6 +34,13 @@ export async function POST(request: Request) {
     console.error("Webhook signature verification failed:", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
+
+  // Idempotency check — skip already-processed events
+  cleanupProcessedEvents();
+  if (processedEvents.has(event.id)) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+  processedEvents.set(event.id, Date.now());
 
   const supabase = createAdminClient();
 

@@ -4,6 +4,7 @@ import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
 import { getCheckLimit } from "@/lib/stripe/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // GET /api/validations — list all validations for the user's org
 export async function GET() {
@@ -31,6 +32,15 @@ export async function POST(request: Request) {
   const profile = await getUserProfile();
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit: 10 validations per minute per org
+  const rl = checkRateLimit(`validations:${profile.org_id}`, 10, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait before running another validation.", code: "RATE_LIMITED" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    );
   }
 
   const supabase = createAdminClient();
@@ -204,10 +214,11 @@ export async function POST(request: Request) {
     // 7. Log usage records
     const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
     const regridToken = process.env.REGRID_API_TOKEN;
+    const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
     const usageRecords = [
       { check_type: "sos_lookup", data_source: cobaltKey ? "cobalt" : "stub", cost_cents: 500 },
       { check_type: "property_search", data_source: regridToken ? "regrid" : "stub", cost_cents: 1500 },
-      { check_type: "litigation_search", data_source: "stub", cost_cents: 1000 },
+      { check_type: "litigation_search", data_source: courtListenerToken ? "courtlistener" : "stub", cost_cents: courtListenerToken ? 1000 : 0 },
     ];
     if (gc_name) {
       usageRecords.push({

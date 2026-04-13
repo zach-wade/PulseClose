@@ -2,12 +2,22 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = checkRateLimit(`checks:${profile.org_id}`, 30, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly.", code: "RATE_LIMITED" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    );
+  }
+
   const supabase = createAdminClient();
 
   const body = await request.json();
@@ -60,12 +70,13 @@ export async function POST(request: Request) {
         raw_response: result.raw_response,
       });
 
+      const isStub = !!(result.raw_response as Record<string, unknown>)?._demo;
       await supabase.from("usage_records").insert({
         org_id: profile.org_id,
         validation_id: validation.id,
         check_type: "gc_lookup",
-        data_source: "stub",
-        cost_cents: 500,
+        data_source: isStub ? "stub" : "vendor",
+        cost_cents: isStub ? 0 : 500,
         response_status: "success",
       });
     }

@@ -7,10 +7,12 @@ import { createCobaltAdapter } from "./cobalt";
 export function getAdapter(): ValidationAdapter {
   const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
   const regridToken = process.env.REGRID_API_TOKEN;
+  const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
 
   if (cobaltKey) {
-    // Cobalt handles entity lookups, Regrid handles property search
-    return createCobaltAdapter(cobaltKey, regridToken || undefined);
+    // Cobalt handles entity lookups, Regrid handles property search,
+    // CourtListener handles litigation (bankruptcy + federal lawsuits)
+    return createCobaltAdapter(cobaltKey, regridToken || undefined, courtListenerToken || undefined);
   }
 
   return stubAdapter;

@@ -11,7 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Scale, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Scale, Loader2, Info } from "lucide-react";
 import { LitigationGrid } from "@/components/dashboard/litigation-grid";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
 import { toast } from "sonner";
@@ -73,6 +74,14 @@ export default function LitigationPage() {
         <p className="text-muted-foreground text-sm mt-1">
           Bankruptcy, foreclosure, lis pendens, and lawsuit searches
         </p>
+      </div>
+
+      <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-4 py-3 text-sm">
+        <Info className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+        <div>
+          <span className="font-medium">Bankruptcy</span> and <span className="font-medium">federal lawsuit</span> searches use live court records via CourtListener.{" "}
+          <span className="font-medium">Foreclosure</span> and <span className="font-medium">lis pendens</span> searches are county-level records — automated search coming soon. Manual review recommended for now.
+        </div>
       </div>
 
       <Card>
