@@ -19,6 +19,7 @@ import { toast } from "sonner";
 export default function TrackRecordPage() {
   const [borrowerName, setBorrowerName] = useState("");
   const [entityName, setEntityName] = useState("");
+  const [state, setState] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<TrackRecordEntry[] | null>(null);
 
@@ -34,6 +35,7 @@ export default function TrackRecordPage() {
         body: JSON.stringify({
           borrower_name: borrowerName,
           entity_name: entityName || undefined,
+          state: state || undefined,
         }),
       });
 
@@ -94,6 +96,16 @@ export default function TrackRecordPage() {
                 placeholder="e.g. Smith Capital LLC"
                 value={entityName}
                 onChange={(e) => setEntityName(e.target.value)}
+              />
+            </div>
+            <div className="w-20 space-y-1.5">
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                placeholder="CA"
+                maxLength={2}
+                value={state}
+                onChange={(e) => setState(e.target.value.toUpperCase())}
               />
             </div>
             <div className="flex items-end">

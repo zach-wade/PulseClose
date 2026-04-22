@@ -1,17 +1,27 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
-import { getAdapter } from "@/lib/adapters";
+import { getAdapter, getPropertyDataSource } from "@/lib/adapters";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = checkRateLimit(`checks:${profile.org_id}`, 30, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly.", code: "RATE_LIMITED" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    );
+  }
+
   const supabase = createAdminClient();
 
   const body = await request.json();
-  const { borrower_name, entity_name } = body;
+  const { borrower_name, entity_name, state } = body;
 
   if (!borrower_name) {
     return NextResponse.json(
@@ -26,6 +36,7 @@ export async function POST(request: Request) {
     const results = await adapter.searchProperties({
       borrower_name,
       entity_name: entity_name || undefined,
+      state: state || undefined,
     });
 
     // Create a lightweight validation record for FK
@@ -63,12 +74,13 @@ export async function POST(request: Request) {
         })),
       );
 
+      const dataSource = getPropertyDataSource();
       await supabase.from("usage_records").insert({
         org_id: profile.org_id,
         validation_id: validation.id,
         check_type: "property_search",
-        data_source: "stub",
-        cost_cents: 1500,
+        data_source: dataSource,
+        cost_cents: dataSource === "stub" ? 0 : 1500,
         response_status: "success",
       });
     }

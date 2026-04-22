@@ -65,12 +65,13 @@ export async function POST(request: Request) {
         raw_response: result.raw_response,
       });
 
+      const isStub = !!(result.raw_response as Record<string, unknown>)?._demo;
       await supabase.from("usage_records").insert({
         org_id: profile.org_id,
         validation_id: validation.id,
         check_type: "sos_lookup",
-        data_source: "stub",
-        cost_cents: 500,
+        data_source: isStub ? "stub" : "cobalt",
+        cost_cents: isStub ? 0 : 500,
         response_status: "success",
       });
     }

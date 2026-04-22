@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
-import { getAdapter } from "@/lib/adapters";
+import { getAdapter, getPropertyDataSource, getGCDataSource } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
 import { getCheckLimit } from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -124,6 +124,7 @@ export async function POST(request: Request) {
         adapter.searchProperties({
           borrower_name,
           entity_name: borrower_entity_name,
+          state: entity_state,
         }),
         adapter.searchLitigation({
           entity_name: borrower_entity_name,
@@ -213,18 +214,19 @@ export async function POST(request: Request) {
 
     // 7. Log usage records
     const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
-    const regridToken = process.env.REGRID_API_TOKEN;
     const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
+    const propertySource = getPropertyDataSource();
     const usageRecords = [
-      { check_type: "sos_lookup", data_source: cobaltKey ? "cobalt" : "stub", cost_cents: 500 },
-      { check_type: "property_search", data_source: regridToken ? "regrid" : "stub", cost_cents: 1500 },
+      { check_type: "sos_lookup", data_source: cobaltKey ? "cobalt" : "stub", cost_cents: cobaltKey ? 500 : 0 },
+      { check_type: "property_search", data_source: propertySource, cost_cents: propertySource === "stub" ? 0 : 1500 },
       { check_type: "litigation_search", data_source: courtListenerToken ? "courtlistener" : "stub", cost_cents: courtListenerToken ? 1000 : 0 },
     ];
     if (gc_name) {
+      const gcSource = getGCDataSource(gc_state || entity_state, gc_license_number);
       usageRecords.push({
         check_type: "gc_lookup",
-        data_source: "stub",
-        cost_cents: 500,
+        data_source: gcSource,
+        cost_cents: gcSource === "stub" ? 0 : 500,
       });
     }
     await supabase.from("usage_records").insert(

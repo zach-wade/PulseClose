@@ -10,8 +10,10 @@ import type {
   LitigationRecord,
 } from "./types";
 import { stubAdapter } from "./stub";
-import { searchPropertiesRegrid } from "./regrid";
+import { searchPropertiesRegrid, RegridError } from "./regrid";
+import { enrichPropertiesWithAttom } from "./attom";
 import { searchLitigationCourtListener } from "./courtlistener";
+import { lookupCSLB, CSLBError } from "./cslb";
 
 const COBALT_BASE_URL = "https://apigateway.cobaltintelligence.com/v1";
 
@@ -179,7 +181,15 @@ function getLastFilingDate(biz: CobaltBusiness): string | null {
   return dates[0] ?? null;
 }
 
-function createCobaltAdapter(apiKey: string, regridToken?: string, courtListenerToken?: string): ValidationAdapter {
+interface CobaltAdapterOptions {
+  cobaltKey: string;
+  attomKey?: string;
+  regridToken?: string;
+  courtListenerToken?: string;
+}
+
+function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
+  const { cobaltKey: apiKey, attomKey, regridToken, courtListenerToken } = opts;
   return {
     async lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult> {
       try {
@@ -229,14 +239,48 @@ function createCobaltAdapter(apiKey: string, regridToken?: string, courtListener
       }
     },
 
-    // Property search via Regrid (if token available) or stub
-    searchProperties(req: PropertySearchRequest): Promise<PropertyRecord[]> {
+    // Property search: Regrid finds by owner name → ATTOM enriches with sale history
+    // ATTOM does NOT support owner-name search — it's address-only.
+    async searchProperties(req: PropertySearchRequest): Promise<PropertyRecord[]> {
+      let results: PropertyRecord[] = [];
+
+      // Regrid: owner-name property search (primary)
       if (regridToken) {
-        return searchPropertiesRegrid(req, regridToken);
+        try {
+          results = await searchPropertiesRegrid(req, regridToken);
+        } catch (err) {
+          console.warn("Regrid property search failed:", err instanceof RegridError ? err.message : err);
+        }
       }
-      return stubAdapter.searchProperties(req);
+
+      // No Regrid key — fall back to stub
+      if (!regridToken) {
+        return stubAdapter.searchProperties(req);
+      }
+
+      // ATTOM: enrich Regrid results with full sale history (best-effort)
+      if (attomKey && results.length > 0) {
+        try {
+          results = await enrichPropertiesWithAttom(results, attomKey);
+        } catch (err) {
+          console.warn("ATTOM enrichment failed, returning Regrid data only:", err);
+        }
+      }
+
+      return results;
     },
-    lookupGC(req: GCLookupRequest): Promise<GCLookupResult> {
+
+    // GC lookup: CSLB for California, stub for other states
+    async lookupGC(req: GCLookupRequest): Promise<GCLookupResult> {
+      if (req.state.toUpperCase() === "CA" && req.license_number) {
+        try {
+          return await lookupCSLB(req);
+        } catch (err) {
+          console.warn("CSLB lookup failed, falling back to stub:", err instanceof CSLBError ? err.message : err);
+          return stubAdapter.lookupGC(req);
+        }
+      }
+      // Non-CA states or no license number — stub for now
       return stubAdapter.lookupGC(req);
     },
     async searchLitigation(req: LitigationSearchRequest): Promise<LitigationRecord[]> {
