@@ -6,6 +6,9 @@ import { generateValidationAnalysis } from "@/lib/ai/analysis";
 import { getCheckLimit } from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 
+// Allow up to 60s for vendor API calls + AI analysis
+export const maxDuration = 60;
+
 // GET /api/validations — list all validations for the user's org
 export async function GET() {
   const profile = await getUserProfile();

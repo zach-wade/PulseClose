@@ -4,6 +4,8 @@ import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter, getPropertyDataSource } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const profile = await getUserProfile();
   if (!profile) {

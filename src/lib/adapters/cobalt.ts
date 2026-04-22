@@ -258,10 +258,12 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
         return stubAdapter.searchProperties(req);
       }
 
-      // ATTOM: enrich Regrid results with full sale history (best-effort)
+      // ATTOM: enrich first 5 Regrid results with sale history (best-effort, capped for speed)
       if (attomKey && results.length > 0) {
         try {
-          results = await enrichPropertiesWithAttom(results, attomKey);
+          const toEnrich = results.slice(0, 5);
+          const enriched = await enrichPropertiesWithAttom(toEnrich, attomKey);
+          results = [...enriched, ...results.slice(5)];
         } catch (err) {
           console.warn("ATTOM enrichment failed, returning Regrid data only:", err);
         }
