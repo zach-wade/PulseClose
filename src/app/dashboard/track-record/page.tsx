@@ -43,7 +43,7 @@ export default function TrackRecordPage() {
 
       const data = await res.json();
       setResults(
-        data.map((p: TrackRecordEntry & { source?: string }, i: number) => ({
+        data.map((p: TrackRecordEntry & { source?: string; raw_response?: Record<string, unknown> }, i: number) => ({
           id: `tr-${i}`,
           property_address: p.property_address,
           acquisition_date: p.acquisition_date,
@@ -54,6 +54,7 @@ export default function TrackRecordPage() {
           outcome: p.outcome,
           hold_months: p.hold_months,
           profit: p.profit,
+          raw_response: p.raw_response,
         })),
       );
       toast.success(`Found ${data.length} properties`);
@@ -98,15 +99,17 @@ export default function TrackRecordPage() {
                 onChange={(e) => setEntityName(e.target.value)}
               />
             </div>
-            <div className="w-20 space-y-1.5">
-              <Label htmlFor="state">State</Label>
+            <div className="w-24 space-y-1.5">
+              <Label htmlFor="state">State *</Label>
               <Input
                 id="state"
                 placeholder="CA"
                 maxLength={2}
                 value={state}
                 onChange={(e) => setState(e.target.value.toUpperCase())}
+                required
               />
+              <p className="text-xs text-muted-foreground">Required</p>
             </div>
             <div className="flex items-end">
               <Button type="submit" disabled={loading}>

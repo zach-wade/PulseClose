@@ -365,12 +365,12 @@ export default function ValidationDetailPage() {
 
       {/* Litigation */}
       {data.litigation_checks.length > 0 && (
-        <LitigationGrid data={data.litigation_checks} isStub />
+        <LitigationGrid data={data.litigation_checks} />
       )}
 
       {/* GC Validation */}
       {data.gc_validations.map((gc) => (
-        <GCResultCard key={gc.id} data={gc} isStub />
+        <GCResultCard key={gc.id} data={gc} />
       ))}
     </div>
   );

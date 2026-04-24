@@ -5,31 +5,33 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { HardHat, XCircle, FlaskConical } from "lucide-react";
+import { HardHat, XCircle } from "lucide-react";
 import { formatDate } from "./shared-types";
 import type { GCValidation } from "./shared-types";
 
 export { type GCValidation };
 
-export function GCResultCard({ data, isStub = false }: { data: GCValidation; isStub?: boolean }) {
+export function GCResultCard({ data }: { data: GCValidation }) {
+  const isStub = !!(data.raw_response as Record<string, unknown>)?._demo;
+  const isCA = data.license_state?.toUpperCase() === "CA";
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <HardHat className="h-4 w-4" />
           GC Validation
-          {isStub && (
-            <Badge variant="secondary" className="ml-2 gap-1 text-xs">
-              <FlaskConical className="h-3 w-3" />
-              Beta
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isStub && (
+        {isStub && !isCA && (
           <p className="text-xs text-muted-foreground mb-3">
-            State licensing board integrations coming soon. Showing sample validation format.
+            License verification for {data.license_state} is not yet automated. Manual verification recommended.
+          </p>
+        )}
+        {isStub && isCA && (
+          <p className="text-xs text-muted-foreground mb-3">
+            CSLB lookup requires a license number. Showing simulated data.
           </p>
         )}
         <div className="space-y-3">

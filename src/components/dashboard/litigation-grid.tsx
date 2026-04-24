@@ -5,21 +5,28 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Scale, CheckCircle2, XCircle, FlaskConical } from "lucide-react";
+import { Scale, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
 import type { LitigationCheck } from "./shared-types";
+import { extractCourtListenerDetails } from "@/lib/adapters/extract";
 
 export { type LitigationCheck };
 
-function isCountyLevel(searchType: string): boolean {
-  return searchType === "foreclosure" || searchType === "lis_pendens";
-}
-
-function isNotAutomated(source: string): boolean {
-  return source.includes("not yet automated") || source.includes("[DEMO]");
-}
-
-export function LitigationGrid({ data, isStub = false }: { data: LitigationCheck[]; isStub?: boolean }) {
-  const hasCountyPending = data.some((lc) => isCountyLevel(lc.search_type) && isNotAutomated(lc.source));
+export function LitigationGrid({ data }: { data: LitigationCheck[] }) {
+  if (data.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Scale className="h-4 w-4" />
+            Litigation Screening
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">No litigation checks were run.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -27,68 +34,100 @@ export function LitigationGrid({ data, isStub = false }: { data: LitigationCheck
         <CardTitle className="flex items-center gap-2 text-base">
           <Scale className="h-4 w-4" />
           Litigation Screening
-          {isStub && (
-            <Badge variant="secondary" className="ml-2 gap-1 text-xs">
-              <FlaskConical className="h-3 w-3" />
-              Beta
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isStub && (
-          <p className="text-xs text-muted-foreground mb-3">
-            Showing sample screening format. Live data sources noted per check.
-          </p>
-        )}
-        {hasCountyPending && !isStub && (
-          <p className="text-xs text-muted-foreground mb-3">
-            Foreclosure and lis pendens are county-level records. Automated search coming soon — manual review recommended.
-          </p>
-        )}
         <div className="grid gap-3 sm:grid-cols-2">
           {data.map((lc) => {
-            const pending = isNotAutomated(lc.source);
+            const cl = extractCourtListenerDetails(lc.raw_response);
+            const isActive = cl?.isActive ?? false;
+            const isFound = lc.result === "found";
+
             return (
               <div
                 key={lc.id}
                 className={`rounded-md border p-3 ${
-                  lc.result === "found"
-                    ? "border-destructive/30 bg-destructive/5"
-                    : pending
-                      ? "border-dashed border-muted-foreground/30"
+                  isFound && isActive
+                    ? "border-destructive/40 bg-destructive/5"
+                    : isFound
+                      ? "border-amber-300/40 bg-amber-50/50"
                       : "border-border"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium capitalize">
-                      {lc.search_type.replace("_", " ")}
-                    </p>
-                    {pending && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        Manual
-                      </Badge>
-                    )}
-                  </div>
+                  <p className="text-sm font-medium capitalize">
+                    {lc.search_type.replace("_", " ")}
+                  </p>
                   {lc.result === "clear" ? (
                     <Badge variant="default" className="gap-1">
                       <CheckCircle2 className="h-3 w-3" />
                       Clear
                     </Badge>
-                  ) : (
+                  ) : isActive ? (
                     <Badge variant="destructive" className="gap-1">
                       <XCircle className="h-3 w-3" />
-                      Found
+                      Active
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="gap-1">
+                      Dismissed
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">{lc.source}</p>
-                {lc.details && <p className="text-sm mt-2">{lc.details}</p>}
-                {lc.case_number && (
-                  <p className="text-xs font-mono text-muted-foreground mt-1">
-                    Case: {lc.case_number}
+
+                {/* Court name and jurisdiction */}
+                {cl?.courtName && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {cl.courtName}
                   </p>
+                )}
+                {!cl?.courtName && lc.source && (
+                  <p className="text-xs text-muted-foreground mt-1">{lc.source}</p>
+                )}
+
+                {/* Case details */}
+                {cl?.caseName && (
+                  <p className="text-sm mt-2 font-medium">{cl.caseName}</p>
+                )}
+                {!cl?.caseName && lc.details && (
+                  <p className="text-sm mt-2">{lc.details}</p>
+                )}
+
+                {/* Nature of suit / cause */}
+                {cl?.natureOfSuit && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {cl.natureOfSuit}
+                  </p>
+                )}
+                {cl?.cause && (
+                  <p className="text-xs text-muted-foreground">
+                    {cl.cause}
+                  </p>
+                )}
+
+                {/* Dates */}
+                <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                  {cl?.dateFiled && <span>Filed: {cl.dateFiled}</span>}
+                  {cl?.dateTerminated && <span>Terminated: {cl.dateTerminated}</span>}
+                </div>
+
+                {/* Case number with link */}
+                {lc.case_number && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <p className="text-xs font-mono text-muted-foreground">
+                      Case: {lc.case_number}
+                    </p>
+                    {cl?.absoluteUrl && (
+                      <a
+                        href={cl.absoluteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-700"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
             );

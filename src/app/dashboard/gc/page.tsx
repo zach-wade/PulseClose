@@ -65,13 +65,10 @@ export default function GCValidationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">GC Validation</h1>
-          <Badge variant="secondary" className="text-xs">Beta</Badge>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">GC Validation</h1>
         <p className="text-muted-foreground text-sm mt-1">
           Contractor license verification, insurance, and disciplinary history.
-          Results are simulated while we integrate state licensing board APIs.
+          CSLB lookup is live for California. Other states coming soon.
         </p>
       </div>
 

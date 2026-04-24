@@ -10,6 +10,7 @@ export interface EntityCheck {
   source_url: string | null;
   confidence: string;
   flags: string[];
+  raw_response?: Record<string, unknown>;
 }
 
 export interface TrackRecordEntry {
@@ -23,6 +24,7 @@ export interface TrackRecordEntry {
   outcome: string;
   hold_months: number | null;
   profit: number | null;
+  raw_response?: Record<string, unknown>;
 }
 
 export interface LitigationCheck {
@@ -33,6 +35,7 @@ export interface LitigationCheck {
   details: string | null;
   case_number: string | null;
   source: string;
+  raw_response?: Record<string, unknown>;
 }
 
 export interface GCValidation {
@@ -45,6 +48,7 @@ export interface GCValidation {
   expiration_date: string | null;
   disciplinary_actions: string[];
   insurance_verified: boolean;
+  raw_response?: Record<string, unknown>;
 }
 
 export function formatCurrency(n: number | null): string {

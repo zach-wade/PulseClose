@@ -188,7 +188,7 @@ export default function NewValidationPage() {
                 <Label htmlFor="gcName">GC name</Label>
                 <Input
                   id="gcName"
-                  placeholder="ABC Construction"
+                  placeholder="Contractor name"
                   value={gcName}
                   onChange={(e) => setGcName(e.target.value)}
                 />
@@ -197,7 +197,7 @@ export default function NewValidationPage() {
                 <Label htmlFor="gcLicense">License number</Label>
                 <Input
                   id="gcLicense"
-                  placeholder="1234567"
+                  placeholder="License #"
                   value={gcLicense}
                   onChange={(e) => setGcLicense(e.target.value)}
                 />
