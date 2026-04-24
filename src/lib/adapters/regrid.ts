@@ -132,7 +132,9 @@ export async function searchPropertiesRegrid(
   }
 
   try {
-    const res = await fetch(`${REGRID_BASE_URL}/parcels/owner?${params}`);
+    const res = await fetch(`${REGRID_BASE_URL}/parcels/owner?${params}`, {
+      signal: AbortSignal.timeout(20000),
+    });
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -156,7 +158,9 @@ export async function searchPropertiesRegrid(
         fallbackParams.set("path", `/us/${req.state.toLowerCase()}`);
       }
 
-      const fallbackRes = await fetch(`${REGRID_BASE_URL}/parcels/owner?${fallbackParams}`);
+      const fallbackRes = await fetch(`${REGRID_BASE_URL}/parcels/owner?${fallbackParams}`, {
+        signal: AbortSignal.timeout(20000),
+      });
       if (!fallbackRes.ok) return [];
       const fallbackData: RegridResponse = await fallbackRes.json();
       return mapFeaturesToRecords(fallbackData.parcels?.features ?? []);

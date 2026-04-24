@@ -273,8 +273,20 @@ export async function POST(request: Request) {
 
     const confidenceScore = overallStatus === "verified" ? 72 : overallStatus === "flagged" ? 45 : 60;
 
-    // 9. Generate AI analysis (non-blocking — continues if it fails)
-    const aiAnalysis = await generateValidationAnalysis({
+    // 9. Update the validation record with check results immediately
+    await supabase
+      .from("borrower_validations")
+      .update({
+        overall_status: overallStatus,
+        confidence_score: confidenceScore,
+        experience_tier: experienceTier,
+        validation_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", validation.id);
+
+    // 10. Generate AI analysis in the background (don't block the response)
+    generateValidationAnalysis({
       borrower_name,
       entity_name: borrower_entity_name,
       guarantor_name: guarantor_name || null,
@@ -285,20 +297,17 @@ export async function POST(request: Request) {
       experience_tier: experienceTier,
       overall_status: overallStatus,
       confidence_score: confidenceScore,
-    }).catch(() => null);
-
-    // 10. Update the validation record with results + AI analysis
-    await supabase
-      .from("borrower_validations")
-      .update({
-        overall_status: overallStatus,
-        confidence_score: confidenceScore,
-        experience_tier: experienceTier,
-        validation_date: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        ...(aiAnalysis ? { ai_analysis: aiAnalysis } : {}),
+    })
+      .then((aiAnalysis) => {
+        if (aiAnalysis) {
+          supabase
+            .from("borrower_validations")
+            .update({ ai_analysis: aiAnalysis, updated_at: new Date().toISOString() })
+            .eq("id", validation.id)
+            .then(() => {});
+        }
       })
-      .eq("id", validation.id);
+      .catch(() => {});
 
     // 11. Increment usage counter
     await supabase
