@@ -167,24 +167,26 @@ export function Sidebar() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profile } = await supabase
-        .from("users")
-        .select("full_name, org_id")
-        .eq("id", user.id)
-        .single();
+      // Use auth metadata first (always available, no RLS issues)
+      const meta = user.user_metadata ?? {};
+      const displayName = meta.full_name || user.email?.split("@")[0] || "User";
 
-      if (!profile) return;
-
-      const { data: org } = await supabase
-        .from("organizations")
-        .select("name")
-        .eq("id", profile.org_id)
-        .single();
+      // Try to fetch org name — use admin-safe API route instead of direct RLS query
+      let orgName = "";
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const data = await res.json();
+          orgName = data.org?.name ?? "";
+        }
+      } catch {
+        // Org name is cosmetic — don't fail the sidebar
+      }
 
       setUserInfo({
-        full_name: profile.full_name ?? user.email ?? "User",
+        full_name: displayName,
         email: user.email ?? "",
-        org_name: org?.name ?? "",
+        org_name: orgName,
       });
     }
     loadUser();
