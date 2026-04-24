@@ -10,13 +10,17 @@ export function getAdapter(): ValidationAdapter {
   const regridToken = process.env.REGRID_API_TOKEN;
   const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
 
+  const realieKey = process.env.REALIE_API_KEY;
+
   if (cobaltKey) {
     // Cobalt: entity lookups
-    // ATTOM (primary) + Regrid (fallback): property/track record search
+    // Realie (primary) + Regrid (fallback): property/track record search
+    // ATTOM: sale history enrichment (only when Regrid is used)
     // CSLB: GC validation (CA only, auto-detected by state)
     // CourtListener: litigation (bankruptcy + federal lawsuits)
     return createCobaltAdapter({
       cobaltKey,
+      realieKey: realieKey || undefined,
       attomKey: attomKey || undefined,
       regridToken: regridToken || undefined,
       courtListenerToken: courtListenerToken || undefined,
@@ -27,8 +31,9 @@ export function getAdapter(): ValidationAdapter {
 }
 
 // Helper: detect which data source was actually used for property search
-// Regrid is primary (owner-name search), ATTOM enriches with sale history
+// Realie is primary (richer data), Regrid is fallback, ATTOM enriches Regrid results
 export function getPropertyDataSource(): string {
+  if (process.env.REALIE_API_KEY) return "realie";
   if (process.env.REGRID_API_TOKEN && process.env.ATTOM_API_KEY) return "regrid+attom";
   if (process.env.REGRID_API_TOKEN) return "regrid";
   return "stub";

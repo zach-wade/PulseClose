@@ -10,6 +10,7 @@ import type {
   LitigationRecord,
 } from "./types";
 import { stubAdapter } from "./stub";
+import { searchPropertiesRealie, RealieError } from "./realie";
 import { searchPropertiesRegrid, RegridError } from "./regrid";
 import { enrichPropertiesWithAttom } from "./attom";
 import { searchLitigationCourtListener } from "./courtlistener";
@@ -183,13 +184,14 @@ function getLastFilingDate(biz: CobaltBusiness): string | null {
 
 interface CobaltAdapterOptions {
   cobaltKey: string;
+  realieKey?: string;
   attomKey?: string;
   regridToken?: string;
   courtListenerToken?: string;
 }
 
 function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
-  const { cobaltKey: apiKey, attomKey, regridToken, courtListenerToken } = opts;
+  const { cobaltKey: apiKey, realieKey, attomKey, regridToken, courtListenerToken } = opts;
   return {
     async lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult> {
       try {
@@ -239,13 +241,24 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
       }
     },
 
-    // Property search: Regrid finds by owner name → ATTOM enriches with sale history
-    // ATTOM does NOT support owner-name search — it's address-only.
+    // Property search: Realie primary (rich data) → Regrid fallback → stub
+    // ATTOM enriches with sale history if Regrid was used (Realie already has transfer data)
     async searchProperties(req: PropertySearchRequest): Promise<PropertyRecord[]> {
       let results: PropertyRecord[] = [];
+      let usedRealie = false;
 
-      // Regrid: owner-name property search (primary)
-      if (regridToken) {
+      // Realie: owner-name property search (primary — richer data, cheaper)
+      if (realieKey && req.state) {
+        try {
+          results = await searchPropertiesRealie(req, realieKey);
+          usedRealie = true;
+        } catch (err) {
+          console.warn("Realie property search failed:", err instanceof RealieError ? err.message : err);
+        }
+      }
+
+      // Regrid fallback: if Realie failed, unavailable, or no state param
+      if (results.length === 0 && regridToken) {
         try {
           results = await searchPropertiesRegrid(req, regridToken);
         } catch (err) {
@@ -253,19 +266,19 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
         }
       }
 
-      // No Regrid key — fall back to stub
-      if (!regridToken) {
+      // No vendor keys at all — stub
+      if (!realieKey && !regridToken) {
         return stubAdapter.searchProperties(req);
       }
 
-      // ATTOM: enrich first 5 Regrid results with sale history (best-effort, capped for speed)
-      if (attomKey && results.length > 0) {
+      // ATTOM enrichment only if we used Regrid (Realie already has transfer/lender data)
+      if (!usedRealie && attomKey && results.length > 0) {
         try {
           const toEnrich = results.slice(0, 5);
           const enriched = await enrichPropertiesWithAttom(toEnrich, attomKey);
           results = [...enriched, ...results.slice(5)];
         } catch (err) {
-          console.warn("ATTOM enrichment failed, returning Regrid data only:", err);
+          console.warn("ATTOM enrichment failed, returning data without enrichment:", err);
         }
       }
 
