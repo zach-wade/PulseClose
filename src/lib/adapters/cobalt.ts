@@ -236,8 +236,19 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
         };
       } catch (err) {
         console.error("Cobalt Intelligence lookup failed:", err);
-        // Fall back to stub on error
-        return stubAdapter.lookupEntity(req);
+        // Return a clear error result instead of silently falling back to stub
+        return {
+          entity_name: req.entity_name,
+          state: req.state,
+          entity_type: null,
+          sos_status: "not_found" as const,
+          formation_date: null,
+          last_filing_date: null,
+          registered_agent: null,
+          source_url: null,
+          flags: [`Entity lookup failed: ${err instanceof Error ? err.message : "unknown error"}. Manual verification recommended.`],
+          raw_response: { _adapter: "cobalt", _error: true, _message: String(err) },
+        };
       }
     },
 
@@ -339,26 +350,8 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
           });
         }
 
-        // Foreclosure + lis pendens — county-level, no API available yet
-        records.push({
-          search_type: "foreclosure",
-          entity_name: req.borrower_name,
-          result: "clear",
-          details: "County recorder search not yet available — manual review recommended",
-          case_number: null,
-          source: "County Records (not yet automated)",
-          raw_response: { _adapter: "pending", _note: "county_level_not_automated" },
-        });
-
-        records.push({
-          search_type: "lis_pendens",
-          entity_name: req.borrower_name,
-          result: "clear",
-          details: "County recorder search not yet available — manual review recommended",
-          case_number: null,
-          source: "County Records (not yet automated)",
-          raw_response: { _adapter: "pending", _note: "county_level_not_automated" },
-        });
+        // Foreclosure + lis pendens: not searched (county-level, no API yet)
+        // Don't insert fake "clear" records — only return what we actually searched.
 
         return records;
       } catch (err) {

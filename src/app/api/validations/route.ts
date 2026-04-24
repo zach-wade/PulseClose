@@ -242,36 +242,58 @@ export async function POST(request: Request) {
     );
 
     // 8. Calculate overall status and experience tier
+    // Count all properties found (current holdings + completed sales)
+    // A borrower with 14 active properties is clearly experienced, not Tier 4
+    const totalProjects = properties.length;
     const completedProjects = properties.filter(
       (p) => p.outcome === "completed",
     ).length;
+    const projectCount = Math.max(totalProjects, completedProjects);
     const experienceTier =
-      completedProjects >= 10
+      projectCount >= 10
         ? 1
-        : completedProjects >= 5
+        : projectCount >= 5
           ? 2
-          : completedProjects >= 1
+          : projectCount >= 1
             ? 3
             : 4;
 
-    const hasFlags =
+    // Distinguish active litigation from dismissed/terminated
+    const activeLitigation = litigationResults.filter(
+      (l) => l.result === "found" && l.raw_response &&
+        !(l.raw_response as Record<string, unknown>).date_terminated,
+    );
+    const dismissedLitigation = litigationResults.filter(
+      (l) => l.result === "found" && l.raw_response &&
+        !!(l.raw_response as Record<string, unknown>).date_terminated,
+    );
+
+    const hasActiveFlags =
       entityResult.sos_status !== "active" ||
-      entityResult.flags.length > 0 ||
-      litigationResults.some((l) => l.result === "found") ||
+      activeLitigation.length > 0 ||
       (gcResult && gcResult.license_status !== "active");
 
-    const allGood =
-      entityResult.sos_status === "active" &&
-      !litigationResults.some((l) => l.result === "found") &&
-      (!gcResult || gcResult.license_status === "active");
+    const hasInfoFlags =
+      entityResult.flags.length > 0 ||
+      dismissedLitigation.length > 0;
 
-    const overallStatus = hasFlags
+    const overallStatus = hasActiveFlags
       ? "flagged"
-      : allGood
-        ? "verified"
-        : "partial";
+      : hasInfoFlags
+        ? "partial"
+        : "verified";
 
-    const confidenceScore = overallStatus === "verified" ? 72 : overallStatus === "flagged" ? 45 : 60;
+    // Calculate confidence from actual signals instead of hardcoding
+    let confidenceScore = 50; // base
+    if (entityResult.sos_status === "active") confidenceScore += 15;
+    if (projectCount >= 10) confidenceScore += 20;
+    else if (projectCount >= 5) confidenceScore += 15;
+    else if (projectCount >= 1) confidenceScore += 10;
+    if (activeLitigation.length === 0) confidenceScore += 10;
+    if (!gcResult || gcResult.license_status === "active") confidenceScore += 5;
+    if (entityResult.sos_status === "suspended" || entityResult.sos_status === "dissolved") confidenceScore -= 20;
+    if (activeLitigation.length > 0) confidenceScore -= 15;
+    confidenceScore = Math.max(10, Math.min(100, confidenceScore));
 
     // 9. Update the validation record with check results immediately
     await supabase

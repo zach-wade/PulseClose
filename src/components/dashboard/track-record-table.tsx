@@ -21,6 +21,7 @@ export { type TrackRecordEntry };
 
 export function TrackRecordTable({ data }: { data: TrackRecordEntry[] }) {
   const completedProjects = data.filter((t) => t.outcome === "completed");
+  const currentHoldings = data.filter((t) => t.outcome === "in_progress");
   const totalProfit = completedProjects.reduce(
     (sum, t) => sum + (t.profit ?? 0),
     0,
@@ -33,6 +34,18 @@ export function TrackRecordTable({ data }: { data: TrackRecordEntry[] }) {
         )
       : 0;
 
+  // Build summary parts
+  const parts: string[] = [];
+  if (completedProjects.length > 0) {
+    parts.push(`${completedProjects.length} completed, ${formatCurrency(totalProfit)} profit, ${avgHold}mo avg hold`);
+  }
+  if (currentHoldings.length > 0) {
+    parts.push(`${currentHoldings.length} current holding${currentHoldings.length !== 1 ? "s" : ""}`);
+  }
+  if (parts.length === 0) {
+    parts.push("No properties found");
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -40,8 +53,7 @@ export function TrackRecordTable({ data }: { data: TrackRecordEntry[] }) {
           <Building2 className="h-4 w-4" />
           Track Record
           <span className="text-sm font-normal text-muted-foreground ml-1">
-            {completedProjects.length} completed, {formatCurrency(totalProfit)}{" "}
-            total profit, {avgHold}mo avg hold
+            {parts.join(" · ")}
           </span>
         </CardTitle>
       </CardHeader>

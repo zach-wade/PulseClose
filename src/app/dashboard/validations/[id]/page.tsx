@@ -206,21 +206,28 @@ export default function ValidationDetailPage() {
         </Button>
       </div>
 
-      {/* Data source banner — only show if stub data was used */}
-      {data.entity_checks.some((e) =>
-        (e as unknown as Record<string, unknown>).raw_response &&
-        JSON.stringify((e as unknown as Record<string, unknown>).raw_response).includes('"_adapter":"stub"')
-      ) && (
-        <div className="rounded-md border border-info/30 bg-info/5 p-3 flex items-center gap-2">
-          <Badge variant="secondary" className="bg-info/20 text-info">
-            DEMO DATA
-          </Badge>
-          <p className="text-sm text-muted-foreground">
-            Some check results use simulated data. Real vendor APIs will replace
-            stub data as they are connected.
-          </p>
-        </div>
-      )}
+      {/* Data source banner — only show if stub data was actually used in any check */}
+      {(() => {
+        const allRaw = [
+          ...data.entity_checks.map((e) => (e as unknown as Record<string, unknown>).raw_response),
+          ...data.track_record.map((t) => (t as unknown as Record<string, unknown>).raw_response),
+          ...data.litigation_checks.map((l) => (l as unknown as Record<string, unknown>).raw_response),
+          ...(data.gc_validations ?? []).map((g) => (g as unknown as Record<string, unknown>).raw_response),
+        ];
+        const hasStub = allRaw.some((r) => r && JSON.stringify(r).includes('"_demo":true'));
+        if (!hasStub) return null;
+        return (
+          <div className="rounded-md border border-info/30 bg-info/5 p-3 flex items-center gap-2">
+            <Badge variant="secondary" className="bg-info/20 text-info">
+              DEMO DATA
+            </Badge>
+            <p className="text-sm text-muted-foreground">
+              Some check results use simulated data. Real vendor APIs will replace
+              stub data as they are connected.
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -240,11 +247,13 @@ export default function ValidationDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Projects Found</p>
+            <p className="text-sm text-muted-foreground">Properties Found</p>
             <p className="text-2xl font-bold mt-1">
               {data.track_record.length}
               <span className="text-sm font-normal text-muted-foreground ml-1">
-                ({completedProjects.length} completed)
+                ({completedProjects.length > 0
+                  ? `${completedProjects.length} sold`
+                  : `${data.track_record.length} current`})
               </span>
             </p>
           </CardContent>
