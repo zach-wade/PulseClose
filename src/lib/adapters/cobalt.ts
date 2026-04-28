@@ -49,20 +49,33 @@ interface CobaltResponse {
   message?: string;
 }
 
-async function cobaltSearch(
+class CobaltRateLimitError extends Error {
+  constructor() {
+    super("Cobalt rate limited (429)");
+    this.name = "CobaltRateLimitError";
+  }
+}
+
+async function cobaltSearchOnce(
   entityName: string,
   state: string,
   apiKey: string,
+  liveData: boolean,
 ): Promise<CobaltResponse> {
   const params = new URLSearchParams({
     searchQuery: entityName,
     state: state,
+    liveData: String(liveData),
   });
 
   const res = await fetch(`${COBALT_BASE_URL}/search?${params}`, {
     headers: { "x-api-key": apiKey },
+    signal: AbortSignal.timeout(15000),
   });
 
+  if (res.status === 429) {
+    throw new CobaltRateLimitError();
+  }
   if (!res.ok) {
     throw new Error(`Cobalt API error: ${res.status} ${res.statusText}`);
   }
@@ -77,6 +90,36 @@ async function cobaltSearch(
   return data;
 }
 
+// Try live data with retry-on-429, then fall back to Cobalt's cached data
+// (`liveData=false`) if live keeps throttling. Cached data is usually within
+// days of live and is enough for entity verification.
+async function cobaltSearch(
+  entityName: string,
+  state: string,
+  apiKey: string,
+): Promise<CobaltResponse> {
+  // Attempt 1: live, no wait
+  try {
+    return await cobaltSearchOnce(entityName, state, apiKey, true);
+  } catch (err) {
+    if (!(err instanceof CobaltRateLimitError)) throw err;
+    console.warn("Cobalt 429 on first live attempt — backing off 2s and retrying");
+  }
+
+  // Attempt 2: live, after 2s backoff
+  await new Promise((r) => setTimeout(r, 2000));
+  try {
+    return await cobaltSearchOnce(entityName, state, apiKey, true);
+  } catch (err) {
+    if (!(err instanceof CobaltRateLimitError)) throw err;
+    console.warn("Cobalt 429 on second live attempt — falling back to liveData=false (cached)");
+  }
+
+  // Attempt 3: cached. Cobalt caches recent scrapes; this avoids another
+  // upstream state-SOS hit. We accept slightly stale data over surfacing 429.
+  return cobaltSearchOnce(entityName, state, apiKey, false);
+}
+
 async function pollForResult(
   retryId: string,
   apiKey: string,
@@ -87,7 +130,10 @@ async function pollForResult(
 
     const res = await fetch(
       `${COBALT_BASE_URL}/search?retryId=${retryId}`,
-      { headers: { "x-api-key": apiKey } },
+      {
+        headers: { "x-api-key": apiKey },
+        signal: AbortSignal.timeout(15000),
+      },
     );
 
     if (!res.ok) {
