@@ -294,6 +294,45 @@ export async function POST(request: Request) {
 
     const sanctionsHit = sanctionsResult.result === "potential_match";
 
+    // Input sanity checks — surface obviously-off inputs to the analyst
+    // BEFORE they trust the report. These warnings appear at the top of
+    // the validation detail page.
+    const inputWarnings: string[] = [];
+
+    // 1) Borrower name looks like an LLC/Corp/Trust — bridge loans usually
+    //    have an individual principal/guarantor.
+    const looksLikeEntity = /\b(LLC|L\.L\.C|Inc|Incorporated|Corp|Corporation|Ltd|Limited|LP|LLP|Trust|Co|Company)\b\.?/i.test(borrower_name);
+    if (looksLikeEntity) {
+      inputWarnings.push(
+        `Borrower "${borrower_name}" appears to be an entity (LLC/Corp/Trust suffix). Bridge loans typically have an individual principal/guarantor — confirm this is correct.`,
+      );
+    }
+
+    // 2) Borrower not linked to entity in SOS filings. Skip when borrower
+    //    looks like an entity (different relationship semantics) or when
+    //    the SOS lookup itself failed.
+    const stripWs = (s: string | null | undefined) =>
+      (s ?? "").toLowerCase().replace(/\s+/g, "");
+    const borrowerCompact = stripWs(borrower_name);
+    const guarantorCompact = stripWs(guarantor_name);
+    const cobaltBiz = (entityResult.raw_response as { results?: Array<{ officers?: Array<{ name?: string }> }> } | null)?.results?.[0];
+    const officerNames = (cobaltBiz?.officers ?? [])
+      .map((o) => stripWs(o.name))
+      .filter(Boolean);
+    const agentCompact = stripWs(entityResult.registered_agent);
+    const candidates = [agentCompact, ...officerNames];
+    const borrowerLinked =
+      !borrowerCompact || candidates.some((c) => c && (c.includes(borrowerCompact) || borrowerCompact.includes(c)));
+    const guarantorLinked =
+      !guarantorCompact || candidates.some((c) => c && (c.includes(guarantorCompact) || guarantorCompact.includes(c)));
+    const sosWorked = entityResult.sos_status !== "not_found" && !(entityResult.raw_response as { _error?: boolean } | null)?._error;
+
+    if (sosWorked && !looksLikeEntity && !borrowerLinked && !guarantorLinked) {
+      inputWarnings.push(
+        `Borrower "${borrower_name}"${guarantor_name ? ` (guarantor "${guarantor_name}")` : ""} does not appear in entity "${entityResult.entity_name}" filings (registered agent or officers). Verify the borrower is connected to this entity.`,
+      );
+    }
+
     const hasActiveFlags =
       entityResult.sos_status !== "active" ||
       activeLitigation.length > 0 ||
@@ -331,6 +370,7 @@ export async function POST(request: Request) {
         overall_status: overallStatus,
         confidence_score: confidenceScore,
         experience_tier: experienceTier,
+        input_warnings: inputWarnings,
         validation_date: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

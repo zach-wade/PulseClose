@@ -76,7 +76,10 @@ export async function generateValidationAnalysis(
     }
   }
 
-  const avgLtvPct = ltvCount > 0 ? (ltvSum / ltvCount) * 100 : null;
+  // Realie returns LTV as a percentage already (e.g. 45.1 means 45.1%),
+  // not as a decimal. Don't multiply by 100 — that gave the AI memo
+  // 4,512.7% on KIM AN TRUONG's portfolio in an earlier run.
+  const avgLtvPct = ltvCount > 0 ? ltvSum / ltvCount : null;
   const lenderList = [...lenders];
   const completedSales = input.properties.filter((p) => p.outcome === "completed").length;
   const distressed = input.properties.filter(

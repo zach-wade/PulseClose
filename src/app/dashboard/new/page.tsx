@@ -103,7 +103,7 @@ export default function NewValidationPage() {
               Borrower Information
             </CardTitle>
             <CardDescription>
-              Primary borrower and guarantor details
+              Individual principal/guarantor — typically a person, not an LLC. The borrowing entity goes in the next section.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -117,6 +117,9 @@ export default function NewValidationPage() {
                   onChange={(e) => setBorrowerName(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Person&apos;s legal name. Avoid LLC/Corp suffixes here — they belong in Entity below.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guarantorName">Guarantor name</Label>
@@ -138,7 +141,7 @@ export default function NewValidationPage() {
               Entity Information
             </CardTitle>
             <CardDescription>
-              Borrowing entity for Secretary of State lookup
+              Borrowing entity (LLC, Corp, Trust, LP) — the legal name on the loan. We verify this against state SOS records and check whether the borrower above appears in the entity&apos;s filings.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

@@ -61,6 +61,7 @@ interface ValidationDetail {
   validation_date: string | null;
   created_at: string;
   ai_analysis: AIAnalysis | null;
+  input_warnings: string[] | null;
   entity_checks: EntityCheck[];
   track_record: TrackRecordEntry[];
   litigation_checks: LitigationCheck[];
@@ -109,18 +110,49 @@ export default function ValidationDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollCount = 0;
+
+    async function load(isPoll = false) {
       try {
         const res = await fetch(`/api/validations/${params.id}`);
         if (!res.ok) throw new Error("Failed to load validation");
-        setData(await res.json());
+        const next = await res.json();
+        if (!cancelled) setData(next);
+        if (!isPoll) setLoading(false);
+        return next;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        setLoading(false);
+        if (!isPoll && !cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+          setLoading(false);
+        }
+        return null;
       }
     }
-    load();
+
+    // Poll for AI analysis if it isn't ready yet. AI runs after the
+    // initial response so the page often loads before it's persisted.
+    // Stop polling once it lands or after ~90s (15 polls × 6s).
+    function schedulePoll() {
+      pollTimer = setTimeout(async () => {
+        if (cancelled) return;
+        pollCount++;
+        const next = await load(true);
+        if (next?.ai_analysis || pollCount >= 15) return;
+        schedulePoll();
+      }, 6000);
+    }
+
+    (async () => {
+      const initial = await load(false);
+      if (initial && !initial.ai_analysis) schedulePoll();
+    })();
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, [params.id]);
 
   if (loading) {
@@ -210,6 +242,21 @@ export default function ValidationDetailPage() {
         </Button>
       </div>
 
+      {/* Input warnings — surface mismatched/odd inputs at the top */}
+      {data.input_warnings && data.input_warnings.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-1.5">
+          <p className="text-xs font-medium uppercase tracking-wide text-amber-800">
+            Input Warning{data.input_warnings.length > 1 ? "s" : ""}
+          </p>
+          {data.input_warnings.map((w, i) => (
+            <div key={i} className="flex items-start gap-2 text-sm text-amber-900">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {w}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Data source banner — only show if stub data was actually used in any check */}
       {(() => {
         const allRaw = [
@@ -277,7 +324,21 @@ export default function ValidationDetailPage() {
         </Card>
       </div>
 
-      {/* AI Analysis */}
+      {/* AI Analysis — pending state while async generation runs */}
+      {!data.ai_analysis && (
+        <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Sparkles className="h-4 w-4 text-info animate-pulse shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">AI Risk Assessment is generating…</p>
+              <p className="text-xs text-muted-foreground">
+                Claude is analyzing the validation data. This page will update automatically — usually within 30 seconds.
+              </p>
+            </div>
+            <div className="h-1.5 w-1.5 rounded-full bg-info animate-pulse" />
+          </CardContent>
+        </Card>
+      )}
       {data.ai_analysis && (
         <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
           <CardHeader>
