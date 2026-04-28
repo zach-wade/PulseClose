@@ -25,6 +25,9 @@ import {
   HelpCircle,
   Loader2,
   AlertTriangle,
+  Link2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, formatDate } from "./shared-types";
@@ -76,7 +79,50 @@ interface Props {
 export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) {
   const [addressInput, setAddressInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
   const flips = initial;
+
+  async function handleGenerateLink() {
+    setGeneratingLink(true);
+    try {
+      const res = await fetch(`/api/validations/${validationId}/share-token`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+      const { token } = (await res.json()) as { token: string };
+      const url = `${window.location.origin}/share/${token}`;
+      setShareUrl(url);
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success("Share link copied to clipboard");
+      } catch {
+        toast.success("Share link generated — copy below");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate link");
+    } finally {
+      setGeneratingLink(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Copied");
+    } catch {
+      toast.error("Could not copy — select and copy manually");
+    }
+  }
 
   const summary = {
     submitted: flips.length,
@@ -153,6 +199,46 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
             verify completed flips — current-portfolio search can&apos;t see properties
             already sold.
           </p>
+        </div>
+
+        {/* Borrower share link — analyst sends this to the borrower so they
+            can self-submit addresses without needing a PulseClose login. */}
+        <div className="rounded-md border bg-muted/30 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Borrower share link</p>
+              <p className="text-xs text-muted-foreground">
+                Generate a private URL the borrower can use to submit addresses themselves.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGenerateLink}
+              disabled={generatingLink}
+            >
+              {generatingLink ? (
+                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Link2 className="mr-2 h-3.5 w-3.5" />
+              )}
+              {shareUrl ? "Refresh link" : "Generate link"}
+            </Button>
+          </div>
+          {shareUrl && (
+            <div className="flex items-center gap-2 mt-2">
+              <code className="flex-1 text-xs bg-background border rounded px-2 py-1.5 font-mono truncate">
+                {shareUrl}
+              </code>
+              <Button variant="ghost" size="icon" onClick={handleCopy} className="h-8 w-8">
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">

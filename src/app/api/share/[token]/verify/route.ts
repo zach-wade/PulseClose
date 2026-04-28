@@ -1,44 +1,39 @@
-// POST /api/track-record/verify
-// Authed analyst endpoint for trust-but-verify. Borrower share-link
-// endpoint (/api/share/[token]/verify) calls the same verifyAddresses
-// helper but skips auth and uses the token to find the validation.
+// POST /api/share/[token]/verify
+// Public, token-based endpoint for borrowers to self-submit flip
+// addresses without logging in. Validates the share token, runs the
+// same verifyAddresses helper, persists the results.
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
 
 export const maxDuration = 60;
 
-interface VerifyBody {
-  validation_id: string;
+interface ShareVerifyBody {
   addresses: string[];
-  state?: string;
 }
 
-export async function POST(request: Request) {
-  const profile = await getUserProfile();
-  if (!profile) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ token: string }> },
+) {
+  const { token } = await params;
+  if (!token || token.length < 16) {
+    return NextResponse.json({ error: "Invalid share token" }, { status: 400 });
   }
 
-  const rl = checkRateLimit(`verify:${profile.org_id}`, 10, 60_000);
+  // Per-token rate limit so a single share link can't be hammered.
+  const rl = checkRateLimit(`share:${token}`, 5, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
-      { error: "Too many requests", code: "RATE_LIMITED" },
+      { error: "Too many requests — try again in a minute" },
       { status: 429 },
     );
   }
 
-  const body = (await request.json()) as VerifyBody;
-  if (!body.validation_id || !Array.isArray(body.addresses)) {
-    return NextResponse.json(
-      { error: "validation_id and addresses[] required" },
-      { status: 400 },
-    );
-  }
-  if (body.addresses.length === 0) {
+  const body = (await request.json()) as ShareVerifyBody;
+  if (!Array.isArray(body.addresses) || body.addresses.length === 0) {
     return NextResponse.json({ error: "Submit at least one address" }, { status: 400 });
   }
   if (body.addresses.length > MAX_ADDRESSES) {
@@ -53,18 +48,17 @@ export async function POST(request: Request) {
   const { data: validation, error: vErr } = await supabase
     .from("borrower_validations")
     .select("id, org_id, borrower_name, borrower_entity_name")
-    .eq("id", body.validation_id)
-    .eq("org_id", profile.org_id)
+    .eq("share_token", token)
     .single();
 
   if (vErr || !validation) {
-    return NextResponse.json({ error: "Validation not found" }, { status: 404 });
+    return NextResponse.json({ error: "Share link not found" }, { status: 404 });
   }
 
   const realieKey = process.env.REALIE_API_KEY;
   if (!realieKey) {
     return NextResponse.json(
-      { error: "Address verification requires Realie API key" },
+      { error: "Address verification is unavailable right now" },
       { status: 503 },
     );
   }
@@ -80,12 +74,11 @@ export async function POST(request: Request) {
   const verified = await verifyAddresses({
     borrower_name: validation.borrower_name,
     entity_name: validation.borrower_entity_name,
-    fallback_state: body.state ?? entityCheck?.state ?? "",
+    fallback_state: entityCheck?.state ?? "",
     addresses: body.addresses,
     realie_key: realieKey,
   });
 
-  // Replace prior results for this validation.
   await supabase.from("verified_flips").delete().eq("validation_id", validation.id);
   await supabase.from("verified_flips").insert(
     verified.map((v) => ({
@@ -101,16 +94,16 @@ export async function POST(request: Request) {
       profit: v.profit,
       current_owner: v.current_owner,
       grantor_chain: v.grantor_chain,
-      source: "Realie",
+      source: "Realie (borrower-submitted via share link)",
       raw_response: v.error ? { _error: true, _message: v.error } : null,
     })),
   );
 
   await supabase.from("usage_records").insert(
     verified.map(() => ({
-      org_id: profile.org_id,
+      org_id: validation.org_id,
       validation_id: validation.id,
-      check_type: "address_verify",
+      check_type: "address_verify_share",
       data_source: "realie",
       cost_cents: 50,
       response_status: "success" as const,

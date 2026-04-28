@@ -30,11 +30,15 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Redirect unauthenticated users to login for protected routes only.
-  // Everything is public by default except /dashboard and /api.
+  // Everything is public by default except /dashboard and /api,
+  // EXCEPT for routes that authenticate with their own token/signature
+  // instead of a session cookie (Stripe webhook, borrower share link).
+  const path = request.nextUrl.pathname;
   const protectedPrefixes = ["/dashboard", "/api"];
-  const isProtected = protectedPrefixes.some((prefix) =>
-    request.nextUrl.pathname.startsWith(prefix),
-  );
+  const publicAuthExceptions = ["/api/stripe/webhook", "/api/share/"];
+  const isProtected =
+    protectedPrefixes.some((prefix) => path.startsWith(prefix)) &&
+    !publicAuthExceptions.some((prefix) => path.startsWith(prefix));
 
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
