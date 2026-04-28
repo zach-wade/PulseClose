@@ -5,16 +5,44 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Search, AlertTriangle, ExternalLink, Users, FileText } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle2, ExternalLink, Users, FileText } from "lucide-react";
 import { formatDate } from "./shared-types";
 import type { EntityCheck } from "./shared-types";
 import { extractCobaltDetails } from "@/lib/adapters/extract";
 
 export { type EntityCheck };
 
-export function EntityResultCard({ data }: { data: EntityCheck }) {
+// Strip whitespace+casing so "KIM AN TRUONG" matches "KIMAN TRUONG" — common
+// when the SOS filing collapses or expands middle names differently than the
+// legal name on file with the bank.
+function namesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.toLowerCase().replace(/\s+/g, "") === b.toLowerCase().replace(/\s+/g, "");
+}
+
+export function EntityResultCard({
+  data,
+  borrowerName,
+  guarantorName,
+}: {
+  data: EntityCheck;
+  borrowerName?: string;
+  guarantorName?: string | null;
+}) {
   const cobalt = extractCobaltDetails(data.raw_response);
   const hasError = data.raw_response?._error === true;
+  const agentMatchesBorrower = namesMatch(data.registered_agent, borrowerName);
+  const agentMatchesGuarantor =
+    !!guarantorName && namesMatch(data.registered_agent, guarantorName);
+  const officerMatchesBorrower = (cobalt?.officers ?? []).some((o) =>
+    namesMatch(o.name, borrowerName),
+  );
+  const controlSignal =
+    agentMatchesBorrower || officerMatchesBorrower
+      ? `Borrower ${borrowerName} is ${agentMatchesBorrower ? "registered agent" : "an officer"} of the entity`
+      : agentMatchesGuarantor
+        ? `Guarantor ${guarantorName} is registered agent of the entity`
+        : null;
 
   return (
     <Card>
@@ -129,6 +157,14 @@ export function EntityResultCard({ data }: { data: EntityCheck }) {
                   {d.name}{d.date ? ` — ${d.date}` : ""}
                 </p>
               ))}
+            </div>
+          )}
+
+          {/* Positive signal: borrower/guarantor controls the entity */}
+          {controlSignal && (
+            <div className="flex items-start gap-2 text-sm text-emerald-700 pt-2 border-t">
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {controlSignal}
             </div>
           )}
 

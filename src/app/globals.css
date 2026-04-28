@@ -197,4 +197,42 @@
     border: 1px solid #E2E8F0 !important;
     box-shadow: none !important;
   }
+
+  /* shadcn Table wraps in a div with overflow-x-auto. In print, that
+     wrapper clips the table to its visible width AND drops the rendered
+     content on subsequent pages. Force overflow visible so all 14+ rows
+     render. */
+  [data-slot="table-container"],
+  .overflow-auto,
+  .overflow-x-auto,
+  .overflow-y-auto {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Tables paginate row-by-row, with the header repeating on each page.
+     Avoid breaking a single row across pages. */
+  table {
+    page-break-inside: auto;
+    width: 100% !important;
+    font-size: 11px;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+
+  /* Tighter table cell padding so 9-column track-record fits on letter */
+  th, td {
+    padding: 4px 6px !important;
+  }
 }

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import {
@@ -336,30 +336,41 @@ export async function POST(request: Request) {
       })
       .eq("id", validation.id);
 
-    // 10. Generate AI analysis in the background (don't block the response)
-    generateValidationAnalysis({
-      borrower_name,
-      entity_name: borrower_entity_name,
-      guarantor_name: guarantor_name || null,
-      entity_result: entityResult,
-      properties,
-      litigation_results: litigationResults,
-      gc_result: gcResult,
-      sanctions_result: sanctionsResult,
-      experience_tier: experienceTier,
-      overall_status: overallStatus,
-      confidence_score: confidenceScore,
-    })
-      .then((aiAnalysis) => {
+    // 10. Generate AI analysis after the response is sent. `after()` keeps
+    // the work alive in Vercel serverless past the response — a plain
+    // fire-and-forget promise was getting killed when the function returned,
+    // which is why some validations were missing AI memos.
+    const validationId = validation.id;
+    after(async () => {
+      try {
+        const aiAnalysis = await generateValidationAnalysis({
+          borrower_name,
+          entity_name: borrower_entity_name,
+          guarantor_name: guarantor_name || null,
+          entity_result: entityResult,
+          properties,
+          litigation_results: litigationResults,
+          gc_result: gcResult,
+          sanctions_result: sanctionsResult,
+          experience_tier: experienceTier,
+          overall_status: overallStatus,
+          confidence_score: confidenceScore,
+        });
         if (aiAnalysis) {
-          supabase
+          await supabase
             .from("borrower_validations")
-            .update({ ai_analysis: aiAnalysis, updated_at: new Date().toISOString() })
-            .eq("id", validation.id)
-            .then(() => {});
+            .update({
+              ai_analysis: aiAnalysis,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", validationId);
+        } else {
+          console.warn(`AI analysis returned null for validation ${validationId}`);
         }
-      })
-      .catch(() => {});
+      } catch (err) {
+        console.error(`AI analysis failed for validation ${validationId}:`, err);
+      }
+    });
 
     // 11. Increment usage counter
     await supabase

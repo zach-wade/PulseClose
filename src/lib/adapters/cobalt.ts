@@ -172,6 +172,18 @@ function mapSosStatus(
   return "dissolved";
 }
 
+// Normalize entity names so "TT INVESTMENT PROPERTIES, LLC" and
+// "TT Investment Properties" compare as the same name. Without this we'd
+// flag every search where the user dropped the suffix or used different case.
+function normalizeEntityName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[.,;:'"()/\\&]/g, " ")
+    .replace(/\b(llc|inc|incorporated|corp|corporation|ltd|limited|lp|llp|trust|company|co)\b\.?/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function buildFlags(biz: CobaltBusiness, entityName: string): string[] {
   const flags: string[] = [];
 
@@ -203,8 +215,9 @@ function buildFlags(biz: CobaltBusiness, entityName: string): string[] {
     );
   }
 
-  // Name mismatch
-  if (biz.title && biz.title.toLowerCase() !== entityName.toLowerCase()) {
+  // Name mismatch — only flag if the names differ in a meaningful way
+  // (not just casing or LLC/Inc suffix differences).
+  if (biz.title && normalizeEntityName(biz.title) !== normalizeEntityName(entityName)) {
     flags.push(`Registered name "${biz.title}" differs from search "${entityName}"`);
   }
 

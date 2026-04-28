@@ -366,7 +366,12 @@ export default function ValidationDetailPage() {
 
       {/* Entity Checks */}
       {data.entity_checks.map((ec) => (
-        <EntityResultCard key={ec.id} data={ec} />
+        <EntityResultCard
+          key={ec.id}
+          data={ec}
+          borrowerName={data.borrower_name}
+          guarantorName={data.guarantor_name}
+        />
       ))}
 
       {/* Track Record */}
