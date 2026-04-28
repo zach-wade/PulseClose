@@ -8,6 +8,11 @@ import type { PropertySearchRequest, PropertyRecord } from "./types";
 
 const REALIE_BASE_URL = "https://app.realie.ai/api";
 
+export interface AddressLookupResult {
+  property: PropertyRecord | null;
+  rawProperty: Record<string, unknown> | null;
+}
+
 interface RealieTransfer {
   grantor?: string;
   grantee?: string;
@@ -145,6 +150,51 @@ function mapPropertyToRecord(prop: RealieProperty): PropertyRecord {
     profit,
     source: "Realie Property Records",
     raw_response: prop as unknown as Record<string, unknown>,
+  };
+}
+
+/**
+ * Look up a single property by street address.
+ * Uses /public/property/address/ endpoint.
+ * Used for trust-but-verify: borrower claims they flipped 123 Oak St,
+ * we check the deed chain to confirm they actually owned it.
+ */
+export async function lookupPropertyByAddress(
+  address: string,
+  state: string,
+  apiKey: string,
+): Promise<AddressLookupResult> {
+  const params = new URLSearchParams({
+    state: state.toUpperCase(),
+    address,
+  });
+
+  const res = await fetch(
+    `${REALIE_BASE_URL}/public/property/address/?${params}`,
+    {
+      headers: { Authorization: apiKey, Accept: "application/json" },
+      signal: AbortSignal.timeout(20000),
+    },
+  );
+
+  if (res.status === 404) {
+    // Realie returns 404 when no property is found at the address.
+    return { property: null, rawProperty: null };
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new RealieError(
+      `Realie address lookup ${res.status}: ${res.statusText}. ${body}`.trim(),
+      res.status,
+    );
+  }
+
+  const data = (await res.json()) as { property?: RealieProperty };
+  if (!data.property) return { property: null, rawProperty: null };
+
+  return {
+    property: mapPropertyToRecord(data.property),
+    rawProperty: data.property as unknown as Record<string, unknown>,
   };
 }
 

@@ -75,6 +75,23 @@ export interface SanctionsMatch {
   source_url: string | null;
 }
 
+export interface VerifiedFlip {
+  id: string;
+  submitted_address: string;
+  resolved_address: string | null;
+  match_status: "owned_and_sold" | "owned_and_held" | "never_owned" | "not_found" | "pending";
+  acquisition_date: string | null;
+  acquisition_price: number | null;
+  disposition_date: string | null;
+  disposition_price: number | null;
+  hold_months: number | null;
+  profit: number | null;
+  current_owner: string | null;
+  grantor_chain: { grantor: string; grantee: string; date: string | null; price: number | null }[];
+  source: string;
+  raw_response?: Record<string, unknown> | null;
+}
+
 export function formatCurrency(n: number | null): string {
   if (n == null) return "—";
   return new Intl.NumberFormat("en-US", {

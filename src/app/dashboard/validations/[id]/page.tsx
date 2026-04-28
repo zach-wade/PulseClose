@@ -30,11 +30,13 @@ import { TrackRecordTable } from "@/components/dashboard/track-record-table";
 import { LitigationGrid } from "@/components/dashboard/litigation-grid";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import { SanctionsCard } from "@/components/dashboard/sanctions-card";
+import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
 import type { GCValidation } from "@/components/dashboard/shared-types";
 import type { SanctionsCheck } from "@/components/dashboard/shared-types";
+import type { VerifiedFlip } from "@/components/dashboard/shared-types";
 
 interface AIAnalysis {
   summary: string;
@@ -67,6 +69,7 @@ interface ValidationDetail {
   litigation_checks: LitigationCheck[];
   gc_validations: GCValidation[];
   sanctions_checks: SanctionsCheck[];
+  verified_flips: VerifiedFlip[];
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -439,6 +442,13 @@ export default function ValidationDetailPage() {
       {data.track_record.length > 0 && (
         <TrackRecordTable data={data.track_record} />
       )}
+
+      {/* Verified Track Record (trust-but-verify) */}
+      <VerifiedTrackRecord
+        validationId={data.id}
+        initial={data.verified_flips ?? []}
+        onUpdate={(flips) => setData({ ...data, verified_flips: flips })}
+      />
 
       {/* Litigation */}
       {data.litigation_checks.length > 0 && (
