@@ -123,7 +123,11 @@ export async function POST(request: Request) {
   const adapter = getAdapter();
 
   try {
-    const [entityResult, properties, litigationResults, gcResult, sanctionsResult] =
+    // First wave: entity, properties, litigation, GC in parallel.
+    // Sanctions runs AFTER so we can include officers/agent from the
+    // entity filing in the screen — comprehensive PEP/sanctions coverage
+    // beats a few seconds of latency.
+    const [entityResult, properties, litigationResults, gcResult] =
       await Promise.all([
         adapter.lookupEntity({
           entity_name: borrower_entity_name,
@@ -145,12 +149,27 @@ export async function POST(request: Request) {
               state: gc_state || entity_state,
             })
           : Promise.resolve(null),
-        adapter.screenSanctions({
-          borrower_name,
-          entity_name: borrower_entity_name,
-          guarantor_name: guarantor_name || undefined,
-        }),
       ]);
+
+    // Extract officers + registered agent from the Cobalt entity response
+    // so we can include them in the sanctions screen.
+    const cobaltResults = (entityResult.raw_response as
+      | { results?: Array<{ officers?: Array<{ name?: string }> }> }
+      | null)?.results;
+    const officerNames = (cobaltResults?.[0]?.officers ?? [])
+      .map((o) => o.name)
+      .filter((n): n is string => Boolean(n));
+    const additionalPersons = [
+      ...officerNames,
+      ...(entityResult.registered_agent ? [entityResult.registered_agent] : []),
+    ];
+
+    const sanctionsResult = await adapter.screenSanctions({
+      borrower_name,
+      entity_name: borrower_entity_name,
+      guarantor_name: guarantor_name || undefined,
+      additional_persons: additionalPersons,
+    });
 
     // 3. Store entity check
     await supabase.from("entity_checks").insert({
@@ -310,21 +329,17 @@ export async function POST(request: Request) {
 
     // 2) Borrower not linked to entity in SOS filings. Skip when borrower
     //    looks like an entity (different relationship semantics) or when
-    //    the SOS lookup itself failed.
+    //    the SOS lookup itself failed. Reuses additionalPersons (officers
+    //    + registered agent) gathered earlier for the sanctions screen.
     const stripWs = (s: string | null | undefined) =>
       (s ?? "").toLowerCase().replace(/\s+/g, "");
     const borrowerCompact = stripWs(borrower_name);
     const guarantorCompact = stripWs(guarantor_name);
-    const cobaltBiz = (entityResult.raw_response as { results?: Array<{ officers?: Array<{ name?: string }> }> } | null)?.results?.[0];
-    const officerNames = (cobaltBiz?.officers ?? [])
-      .map((o) => stripWs(o.name))
-      .filter(Boolean);
-    const agentCompact = stripWs(entityResult.registered_agent);
-    const candidates = [agentCompact, ...officerNames];
+    const candidates = additionalPersons.map(stripWs).filter(Boolean);
     const borrowerLinked =
-      !borrowerCompact || candidates.some((c) => c && (c.includes(borrowerCompact) || borrowerCompact.includes(c)));
+      !borrowerCompact || candidates.some((c) => c.includes(borrowerCompact) || borrowerCompact.includes(c));
     const guarantorLinked =
-      !guarantorCompact || candidates.some((c) => c && (c.includes(guarantorCompact) || guarantorCompact.includes(c)));
+      !guarantorCompact || candidates.some((c) => c.includes(guarantorCompact) || guarantorCompact.includes(c));
     const sosWorked = entityResult.sos_status !== "not_found" && !(entityResult.raw_response as { _error?: boolean } | null)?._error;
 
     if (sosWorked && !looksLikeEntity && !borrowerLinked && !guarantorLinked) {
@@ -363,7 +378,13 @@ export async function POST(request: Request) {
     if (sanctionsHit) confidenceScore -= 30; // sanctions hit is a major flag
     confidenceScore = Math.max(10, Math.min(100, confidenceScore));
 
-    // 9. Update the validation record with check results immediately
+    // 9. Update the validation record with check results immediately.
+    // Cache property + flag counts so the dashboard list can render them
+    // without a join — keeps the home page snappy.
+    const flagCount =
+      entityResult.flags.length +
+      activeLitigation.length +
+      sanctionsResult.matches.length;
     await supabase
       .from("borrower_validations")
       .update({
@@ -371,6 +392,8 @@ export async function POST(request: Request) {
         confidence_score: confidenceScore,
         experience_tier: experienceTier,
         input_warnings: inputWarnings,
+        property_count: properties.length,
+        flag_count: flagCount,
         validation_date: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

@@ -360,18 +360,39 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
       return results;
     },
 
-    // GC lookup: CSLB for California, stub for other states
+    // GC lookup: CSLB for California with license number, otherwise return
+    // a clear "not_automated" result so analysts know to do a manual check
+    // instead of being shown stub demo data that looks real.
     async lookupGC(req: GCLookupRequest): Promise<GCLookupResult> {
-      if (req.state.toUpperCase() === "CA" && req.license_number) {
+      const state = req.state.toUpperCase();
+      if (state === "CA" && req.license_number) {
         try {
           return await lookupCSLB(req);
         } catch (err) {
-          console.warn("CSLB lookup failed, falling back to stub:", err instanceof CSLBError ? err.message : err);
-          return stubAdapter.lookupGC(req);
+          console.warn("CSLB lookup failed:", err instanceof CSLBError ? err.message : err);
+          // Surface CSLB failure as not_automated rather than fake stub data.
         }
       }
-      // Non-CA states or no license number — stub for now
-      return stubAdapter.lookupGC(req);
+      const reason = state === "CA"
+        ? "CSLB lookup requires a license number"
+        : `License validation not yet automated for ${state}`;
+      return {
+        gc_name: req.gc_name,
+        license_number: req.license_number ?? null,
+        license_state: state,
+        license_status: "active",          // unknown — UI uses _not_automated flag
+        license_classification: null,
+        expiration_date: null,
+        disciplinary_actions: [],
+        insurance_verified: false,
+        source_url: null,
+        raw_response: {
+          _adapter: "cobalt",
+          _not_automated: true,
+          _reason: reason,
+          _state: state,
+        },
+      };
     },
     async searchLitigation(req: LitigationSearchRequest): Promise<LitigationRecord[]> {
       if (!courtListenerToken) {

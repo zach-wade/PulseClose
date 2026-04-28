@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Sparkles,
 } from "lucide-react";
 
 interface Validation {
@@ -32,6 +33,9 @@ interface Validation {
   overall_status: string;
   confidence_score: number;
   experience_tier: number | null;
+  property_count: number | null;
+  flag_count: number | null;
+  ai_analysis: unknown;
   validation_date: string | null;
   created_at: string;
 }
@@ -129,6 +133,9 @@ export default function DashboardPage() {
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Confidence</TableHead>
                   <TableHead className="text-right">Tier</TableHead>
+                  <TableHead className="text-right">Props</TableHead>
+                  <TableHead className="text-right">Flags</TableHead>
+                  <TableHead>AI</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
               </TableHeader>
@@ -140,6 +147,9 @@ export default function DashboardPage() {
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-4 w-10 ml-auto" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-14" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   </TableRow>
                 ))}
@@ -173,6 +183,9 @@ export default function DashboardPage() {
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Confidence</TableHead>
                   <TableHead className="text-right">Tier</TableHead>
+                  <TableHead className="text-right">Props</TableHead>
+                  <TableHead className="text-right">Flags</TableHead>
+                  <TableHead>AI</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
               </TableHeader>
@@ -198,6 +211,34 @@ export default function DashboardPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {v.experience_tier ? `T${v.experience_tier}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {v.property_count ?? 0}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {v.flag_count == null ? "—" : v.flag_count > 0 ? (
+                        <span className="text-amber-600 font-medium">{v.flag_count}</span>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {v.ai_analysis ? (
+                        <Badge variant="default" className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                          <Sparkles className="h-3 w-3" />
+                          Ready
+                        </Badge>
+                      ) : v.overall_status === "pending" ? (
+                        <Badge variant="outline" className="gap-1">
+                          <Clock className="h-3 w-3" />
+                          Waiting
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="gap-1">
+                          <Sparkles className="h-3 w-3 animate-pulse" />
+                          Generating…
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {v.validation_date

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StateSelect } from "@/components/ui/state-select";
 import {
   Card,
   CardContent,
@@ -158,14 +159,10 @@ export default function NewValidationPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="entityState">State of formation *</Label>
-                <Input
+                <StateSelect
                   id="entityState"
-                  placeholder="CA"
-                  maxLength={2}
                   value={entityState}
-                  onChange={(e) =>
-                    setEntityState(e.target.value.toUpperCase())
-                  }
+                  onChange={setEntityState}
                   required
                 />
               </div>
@@ -208,12 +205,10 @@ export default function NewValidationPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="gcState">License state</Label>
-                <Input
+                <StateSelect
                   id="gcState"
-                  placeholder="CA"
-                  maxLength={2}
                   value={gcState}
-                  onChange={(e) => setGcState(e.target.value.toUpperCase())}
+                  onChange={setGcState}
                 />
               </div>
             </div>

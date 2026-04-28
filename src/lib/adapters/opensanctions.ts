@@ -152,6 +152,21 @@ export async function screenSanctionsOpenSanctions(
     queries.guarantor = buildPersonQuery(req.guarantor_name);
     queryNameMap.guarantor = req.guarantor_name;
   }
+  // Officers, registered agent, and other principals from the entity
+  // filing. Dedupe + skip names already screened above.
+  const seen = new Set(
+    [req.borrower_name, req.guarantor_name]
+      .filter((s): s is string => Boolean(s))
+      .map((s) => s.toLowerCase().replace(/\s+/g, " ").trim()),
+  );
+  for (const [idx, name] of (req.additional_persons ?? []).entries()) {
+    const norm = name.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    const qid = `person_${idx}`;
+    queries[qid] = buildPersonQuery(name);
+    queryNameMap[qid] = name;
+  }
 
   if (Object.keys(queries).length === 0) {
     return {

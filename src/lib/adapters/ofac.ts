@@ -169,14 +169,21 @@ export async function screenSanctionsOFAC(
     const list = await loadSdnList();
 
     const allMatches: SanctionsMatch[] = [];
-    if (req.borrower_name) {
-      allMatches.push(...screenName(list, req.borrower_name, "individual").matches);
-    }
+    const seen = new Set<string>();
+    const screenIndividual = (name: string) => {
+      const norm = name.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!norm || seen.has(norm)) return;
+      seen.add(norm);
+      allMatches.push(...screenName(list, name, "individual").matches);
+    };
+
+    if (req.borrower_name) screenIndividual(req.borrower_name);
     if (req.entity_name) {
       allMatches.push(...screenName(list, req.entity_name, "entity").matches);
     }
-    if (req.guarantor_name && req.guarantor_name !== req.borrower_name) {
-      allMatches.push(...screenName(list, req.guarantor_name, "individual").matches);
+    if (req.guarantor_name) screenIndividual(req.guarantor_name);
+    for (const name of req.additional_persons ?? []) {
+      screenIndividual(name);
     }
 
     return {

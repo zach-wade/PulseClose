@@ -3,6 +3,15 @@
 
 // ── Realie ──
 
+// Realie returns dates as YYYYMMDD strings. Convert to ISO so the rest
+// of the app can use shared formatDate helpers.
+function realieDateToISO(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  if (raw.includes("-") || raw.includes("T")) return raw.slice(0, 10);
+  if (raw.length === 8) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+  return raw;
+}
+
 export interface RealieDetails {
   lenderName: string | null;
   modelValue: number | null;
@@ -52,12 +61,21 @@ export function extractRealieDetails(raw: Record<string, unknown> | null | undef
     assessedValue: (raw.totalAssessedValue as number) ?? null,
     taxValue: (raw.taxValue as number) ?? null,
     transfers: Array.isArray(raw.transfers)
-      ? (raw.transfers as Record<string, unknown>[]).map((t) => ({
-          grantor: (t.grantor as string) ?? "Unknown",
-          grantee: (t.grantee as string) ?? "Unknown",
-          date: (t.transferDate as string) ?? null,
-          price: (t.transferPrice as number) ?? null,
-        }))
+      ? (raw.transfers as Record<string, unknown>[])
+          .map((t) => ({
+            grantor: (t.grantor as string) ?? "Unknown",
+            grantee: (t.grantee as string) ?? "Unknown",
+            date: realieDateToISO(t.transferDate),
+            price: (t.transferPrice as number) ?? null,
+          }))
+          // Most recent transfer first — most useful for "when did the
+          // current owner acquire this property?"
+          .sort((a, b) => {
+            if (!a.date && !b.date) return 0;
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return b.date.localeCompare(a.date);
+          })
       : [],
   };
 }

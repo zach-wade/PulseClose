@@ -79,6 +79,11 @@ export interface SanctionsScreenRequest {
   borrower_name: string;
   entity_name?: string;
   guarantor_name?: string;
+  // Additional individuals to screen — typically officers, members, or
+  // the registered agent pulled from the entity's SOS filing. Each is
+  // screened as a Person against PEP + sanctions lists so we don't miss
+  // a hit on a controlling-but-not-named-borrower party.
+  additional_persons?: string[];
 }
 
 export interface SanctionsMatch {

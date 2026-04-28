@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Building2, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { formatCurrency } from "./shared-types";
+import { formatCurrency, formatDate } from "./shared-types";
 import type { TrackRecordEntry } from "./shared-types";
 import { extractRealieDetails } from "@/lib/adapters/extract";
 
@@ -258,12 +258,16 @@ function PropertyRow({
             </div>
             {d.transfers.length > 0 && (
               <div className="mt-3 pt-3 border-t">
-                <p className="text-sm text-muted-foreground mb-1">Transfer History</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Transfer History (most recent first)
+                </p>
                 {d.transfers.map((t, i) => (
                   <p key={i} className="text-sm">
-                    {t.grantor} <span className="text-muted-foreground mx-1">&rarr;</span> {t.grantee}
+                    <span className={i === 0 ? "font-medium" : ""}>
+                      {t.grantor} <span className="text-muted-foreground mx-1">&rarr;</span> {t.grantee}
+                    </span>
                     {t.price ? ` (${formatCurrency(t.price)})` : ""}
-                    {t.date ? ` — ${t.date}` : ""}
+                    {t.date ? ` — ${formatDate(t.date)}` : ""}
                   </p>
                 ))}
               </div>
