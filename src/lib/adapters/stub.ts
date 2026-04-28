@@ -11,6 +11,8 @@ import type {
   GCLookupResult,
   LitigationSearchRequest,
   LitigationRecord,
+  SanctionsScreenRequest,
+  SanctionsScreenResult,
 } from "./types";
 
 const STATES_DATA: Record<string, { agent: string; type: string }> = {
@@ -191,6 +193,19 @@ export class StubAdapter implements ValidationAdapter {
     }
 
     return checks;
+  }
+
+  async screenSanctions(
+    req: SanctionsScreenRequest,
+  ): Promise<SanctionsScreenResult> {
+    await delay(150 + Math.random() * 250);
+    return {
+      result: "clear",
+      sources_searched: ["OFAC SDN [DEMO]"],
+      matches: [],
+      source: "stub",
+      raw_response: { _demo: true, _adapter: "stub", _query: req },
+    };
   }
 }
 

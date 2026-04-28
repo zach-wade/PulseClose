@@ -73,10 +73,37 @@ export interface LitigationRecord {
   raw_response: Record<string, unknown> | null;
 }
 
+// Sanctions / PEP screening — borrower + entity names against OFAC SDN,
+// global sanctions, and PEP lists.
+export interface SanctionsScreenRequest {
+  borrower_name: string;
+  entity_name?: string;
+  guarantor_name?: string;
+}
+
+export interface SanctionsMatch {
+  query_name: string;        // The name we searched
+  matched_name: string;      // The name on the list
+  list_name: string;         // e.g. "OFAC SDN", "EU Consolidated", "UK HMT"
+  programs: string[];        // Sanctions programs (e.g. ["SDGT", "IRAN"])
+  schema: "Person" | "Company" | "LegalEntity" | "Other";
+  score: number;             // 0..1 match confidence
+  source_url: string | null;
+}
+
+export interface SanctionsScreenResult {
+  result: "clear" | "potential_match" | "not_run";
+  sources_searched: string[];   // e.g. ["OpenSanctions default", "OFAC SDN"]
+  matches: SanctionsMatch[];
+  source: string;               // Adapter that produced this result
+  raw_response: Record<string, unknown> | null;
+}
+
 // Adapter interface — each vendor implements this
 export interface ValidationAdapter {
   lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult>;
   searchProperties(req: PropertySearchRequest): Promise<PropertyRecord[]>;
   lookupGC(req: GCLookupRequest): Promise<GCLookupResult>;
   searchLitigation(req: LitigationSearchRequest): Promise<LitigationRecord[]>;
+  screenSanctions(req: SanctionsScreenRequest): Promise<SanctionsScreenResult>;
 }

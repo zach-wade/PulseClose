@@ -51,6 +51,30 @@ export interface GCValidation {
   raw_response?: Record<string, unknown>;
 }
 
+export interface SanctionsCheck {
+  id: string;
+  borrower_name: string;
+  entity_name: string | null;
+  guarantor_name: string | null;
+  result: "clear" | "potential_match" | "not_run" | "pending";
+  match_count: number;
+  matches: SanctionsMatch[];
+  sources_searched: string[];
+  source: string;
+  check_date: string;
+  raw_response?: Record<string, unknown>;
+}
+
+export interface SanctionsMatch {
+  query_name: string;
+  matched_name: string;
+  list_name: string;
+  programs: string[];
+  schema: "Person" | "Company" | "LegalEntity" | "Other";
+  score: number;
+  source_url: string | null;
+}
+
 export function formatCurrency(n: number | null): string {
   if (n == null) return "—";
   return new Intl.NumberFormat("en-US", {

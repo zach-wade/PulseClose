@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
-import { getAdapter, getPropertyDataSource, getGCDataSource } from "@/lib/adapters";
+import {
+  getAdapter,
+  getPropertyDataSource,
+  getGCDataSource,
+  getSanctionsDataSource,
+} from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
 import { getCheckLimit } from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -118,7 +123,7 @@ export async function POST(request: Request) {
   const adapter = getAdapter();
 
   try {
-    const [entityResult, properties, litigationResults, gcResult] =
+    const [entityResult, properties, litigationResults, gcResult, sanctionsResult] =
       await Promise.all([
         adapter.lookupEntity({
           entity_name: borrower_entity_name,
@@ -140,6 +145,11 @@ export async function POST(request: Request) {
               state: gc_state || entity_state,
             })
           : Promise.resolve(null),
+        adapter.screenSanctions({
+          borrower_name,
+          entity_name: borrower_entity_name,
+          guarantor_name: guarantor_name || undefined,
+        }),
       ]);
 
     // 3. Store entity check
@@ -215,14 +225,31 @@ export async function POST(request: Request) {
       });
     }
 
+    // 6b. Store sanctions / PEP screen
+    await supabase.from("sanctions_checks").insert({
+      validation_id: validation.id,
+      borrower_name,
+      entity_name: borrower_entity_name,
+      guarantor_name: guarantor_name || null,
+      result: sanctionsResult.result,
+      match_count: sanctionsResult.matches.length,
+      matches: sanctionsResult.matches,
+      sources_searched: sanctionsResult.sources_searched,
+      source: sanctionsResult.source,
+      raw_response: sanctionsResult.raw_response,
+    });
+
     // 7. Log usage records
     const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
     const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
     const propertySource = getPropertyDataSource();
+    const sanctionsSource = getSanctionsDataSource();
     const usageRecords = [
       { check_type: "sos_lookup", data_source: cobaltKey ? "cobalt" : "stub", cost_cents: cobaltKey ? 500 : 0 },
       { check_type: "property_search", data_source: propertySource, cost_cents: propertySource === "stub" ? 0 : 1500 },
       { check_type: "litigation_search", data_source: courtListenerToken ? "courtlistener" : "stub", cost_cents: courtListenerToken ? 1000 : 0 },
+      // Sanctions: OpenSanctions ~$0.01 per query (free trial), OFAC direct = free
+      { check_type: "sanctions_screen", data_source: sanctionsSource, cost_cents: sanctionsSource === "opensanctions" ? 100 : 0 },
     ];
     if (gc_name) {
       const gcSource = getGCDataSource(gc_state || entity_state, gc_license_number);
@@ -241,14 +268,11 @@ export async function POST(request: Request) {
       })),
     );
 
-    // 8. Calculate overall status and experience tier
-    // Count all properties found (current holdings + completed sales)
-    // A borrower with 14 active properties is clearly experienced, not Tier 4
-    const totalProjects = properties.length;
-    const completedProjects = properties.filter(
-      (p) => p.outcome === "completed",
-    ).length;
-    const projectCount = Math.max(totalProjects, completedProjects);
+    // 8. Calculate overall status and experience tier.
+    // Tier reflects size of CURRENT VISIBLE PORTFOLIO, not all-time flips —
+    // historical sales aren't searched (deed APIs would be needed). The AI
+    // memo is told to interpret it that way too.
+    const projectCount = properties.length;
     const experienceTier =
       projectCount >= 10
         ? 1
@@ -268,9 +292,12 @@ export async function POST(request: Request) {
         !!(l.raw_response as Record<string, unknown>).date_terminated,
     );
 
+    const sanctionsHit = sanctionsResult.result === "potential_match";
+
     const hasActiveFlags =
       entityResult.sos_status !== "active" ||
       activeLitigation.length > 0 ||
+      sanctionsHit ||
       (gcResult && gcResult.license_status !== "active");
 
     const hasInfoFlags =
@@ -291,8 +318,10 @@ export async function POST(request: Request) {
     else if (projectCount >= 1) confidenceScore += 10;
     if (activeLitigation.length === 0) confidenceScore += 10;
     if (!gcResult || gcResult.license_status === "active") confidenceScore += 5;
+    if (sanctionsResult.result === "clear") confidenceScore += 5;
     if (entityResult.sos_status === "suspended" || entityResult.sos_status === "dissolved") confidenceScore -= 20;
     if (activeLitigation.length > 0) confidenceScore -= 15;
+    if (sanctionsHit) confidenceScore -= 30; // sanctions hit is a major flag
     confidenceScore = Math.max(10, Math.min(100, confidenceScore));
 
     // 9. Update the validation record with check results immediately
@@ -316,6 +345,7 @@ export async function POST(request: Request) {
       properties,
       litigation_results: litigationResults,
       gc_result: gcResult,
+      sanctions_result: sanctionsResult,
       experience_tier: experienceTier,
       overall_status: overallStatus,
       confidence_score: confidenceScore,

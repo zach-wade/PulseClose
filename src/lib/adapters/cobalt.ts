@@ -8,6 +8,8 @@ import type {
   GCLookupResult,
   LitigationSearchRequest,
   LitigationRecord,
+  SanctionsScreenRequest,
+  SanctionsScreenResult,
 } from "./types";
 import { stubAdapter } from "./stub";
 import { searchPropertiesRealie, RealieError } from "./realie";
@@ -15,6 +17,8 @@ import { searchPropertiesRegrid, RegridError } from "./regrid";
 import { enrichPropertiesWithAttom } from "./attom";
 import { searchLitigationCourtListener } from "./courtlistener";
 import { lookupCSLB, CSLBError } from "./cslb";
+import { screenSanctionsOpenSanctions, OpenSanctionsError } from "./opensanctions";
+import { screenSanctionsOFAC } from "./ofac";
 
 const COBALT_BASE_URL = "https://apigateway.cobaltintelligence.com/v1";
 
@@ -188,10 +192,11 @@ interface CobaltAdapterOptions {
   attomKey?: string;
   regridToken?: string;
   courtListenerToken?: string;
+  openSanctionsKey?: string;
 }
 
 function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
-  const { cobaltKey: apiKey, realieKey, attomKey, regridToken, courtListenerToken } = opts;
+  const { cobaltKey: apiKey, realieKey, attomKey, regridToken, courtListenerToken, openSanctionsKey } = opts;
   return {
     async lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult> {
       try {
@@ -358,6 +363,24 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
         console.error("CourtListener litigation search failed, falling back to stub:", err);
         return stubAdapter.searchLitigation(req);
       }
+    },
+
+    // Sanctions / PEP screening:
+    //   1. OpenSanctions if key (covers OFAC + EU + UN + UK + global PEPs)
+    //   2. OFAC SDN direct download (free, government source) as fallback
+    async screenSanctions(req: SanctionsScreenRequest): Promise<SanctionsScreenResult> {
+      if (openSanctionsKey) {
+        try {
+          return await screenSanctionsOpenSanctions(req, openSanctionsKey);
+        } catch (err) {
+          console.warn(
+            "OpenSanctions screen failed, falling back to OFAC direct:",
+            err instanceof OpenSanctionsError ? err.message : err,
+          );
+        }
+      }
+      // Free fallback: OFAC SDN direct download. Always available, no key required.
+      return screenSanctionsOFAC(req);
     },
   };
 }

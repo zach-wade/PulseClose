@@ -29,10 +29,12 @@ import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { TrackRecordTable } from "@/components/dashboard/track-record-table";
 import { LitigationGrid } from "@/components/dashboard/litigation-grid";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
+import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
 import type { GCValidation } from "@/components/dashboard/shared-types";
+import type { SanctionsCheck } from "@/components/dashboard/shared-types";
 
 interface AIAnalysis {
   summary: string;
@@ -42,6 +44,7 @@ interface AIAnalysis {
     track_record: string;
     litigation: string;
     gc: string | null;
+    sanctions: string | null;
   };
   flags: string[];
   recommendations: string[];
@@ -62,6 +65,7 @@ interface ValidationDetail {
   track_record: TrackRecordEntry[];
   litigation_checks: LitigationCheck[];
   gc_validations: GCValidation[];
+  sanctions_checks: SanctionsCheck[];
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -266,7 +270,8 @@ export default function ValidationDetailPage() {
                 data.entity_checks.reduce(
                   (n, e) => n + e.flags.length,
                   0,
-                )}
+                ) +
+                (data.sanctions_checks?.[0]?.match_count ?? 0)}
             </p>
           </CardContent>
         </Card>
@@ -324,6 +329,12 @@ export default function ValidationDetailPage() {
                   <p className="text-sm">{data.ai_analysis.pillar_assessments.gc}</p>
                 </div>
               )}
+              {data.ai_analysis.pillar_assessments.sanctions && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sanctions / PEP</p>
+                  <p className="text-sm">{data.ai_analysis.pillar_assessments.sanctions}</p>
+                </div>
+              )}
             </div>
 
             {data.ai_analysis.flags.length > 0 && (
@@ -366,6 +377,11 @@ export default function ValidationDetailPage() {
       {/* Litigation */}
       {data.litigation_checks.length > 0 && (
         <LitigationGrid data={data.litigation_checks} />
+      )}
+
+      {/* Sanctions / PEP */}
+      {data.sanctions_checks?.[0] && (
+        <SanctionsCard data={data.sanctions_checks[0]} />
       )}
 
       {/* GC Validation */}

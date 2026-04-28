@@ -16,7 +16,7 @@ export async function GET(
   const supabase = createAdminClient();
 
   // Fetch validation + all related checks in parallel
-  const [validationRes, entityRes, trackRecordRes, litigationRes, gcRes] =
+  const [validationRes, entityRes, trackRecordRes, litigationRes, gcRes, sanctionsRes] =
     await Promise.all([
       supabase
         .from("borrower_validations")
@@ -43,6 +43,11 @@ export async function GET(
         .from("gc_validations")
         .select("*")
         .eq("validation_id", id),
+      supabase
+        .from("sanctions_checks")
+        .select("*")
+        .eq("validation_id", id)
+        .order("check_date", { ascending: false }),
     ]);
 
   if (validationRes.error || !validationRes.data) {
@@ -58,5 +63,6 @@ export async function GET(
     track_record: trackRecordRes.data ?? [],
     litigation_checks: litigationRes.data ?? [],
     gc_validations: gcRes.data ?? [],
+    sanctions_checks: sanctionsRes.data ?? [],
   });
 }

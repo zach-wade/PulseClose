@@ -21,6 +21,7 @@ import {
   Loader2,
   Scale,
   Sparkles,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -231,6 +232,7 @@ export default function NewValidationPage() {
                   { icon: Search, label: "Entity lookup (SOS)" },
                   { icon: Building2, label: "Track record search" },
                   { icon: Scale, label: "Litigation screening" },
+                  { icon: Shield, label: "Sanctions / PEP screening" },
                   ...(gcName ? [{ icon: HardHat, label: "GC validation" }] : []),
                   { icon: Sparkles, label: "AI risk analysis" },
                 ].map((step, i) => (

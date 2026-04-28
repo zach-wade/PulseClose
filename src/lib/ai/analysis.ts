@@ -4,7 +4,9 @@ import type {
   PropertyRecord,
   LitigationRecord,
   GCLookupResult,
+  SanctionsScreenResult,
 } from "@/lib/adapters/types";
+import { extractRealieDetails } from "@/lib/adapters/extract";
 
 export interface ValidationAnalysis {
   summary: string;
@@ -14,6 +16,7 @@ export interface ValidationAnalysis {
     track_record: string;
     litigation: string;
     gc: string | null;
+    sanctions: string | null;
   };
   flags: string[];
   recommendations: string[];
@@ -27,6 +30,7 @@ interface AnalysisInput {
   properties: PropertyRecord[];
   litigation_results: LitigationRecord[];
   gc_result: GCLookupResult | null;
+  sanctions_result: SanctionsScreenResult | null;
   experience_tier: number;
   overall_status: string;
   confidence_score: number;
@@ -43,13 +47,56 @@ export async function generateValidationAnalysis(
 
   const client = new Anthropic({ apiKey });
 
-  const completedProjects = input.properties.filter(
-    (p) => p.outcome === "completed",
-  );
-  const totalProfit = completedProjects.reduce(
-    (sum, p) => sum + (p.profit ?? 0),
-    0,
-  );
+  // Compute portfolio metrics from Realie raw_response (the rich-data adapter).
+  // We can only see CURRENT holdings, not historical flips — be explicit about
+  // that gap in the prompt so the AI doesn't penalize the borrower for our
+  // missing data.
+  let portfolioValue = 0;
+  let totalEquity = 0;
+  let totalLienBalance = 0;
+  let ltvSum = 0;
+  let ltvCount = 0;
+  let longestHoldMonths = 0;
+  let foreclosureCount = 0;
+  const lenders = new Set<string>();
+
+  for (const p of input.properties) {
+    const realie = extractRealieDetails(p.raw_response);
+    if (realie?.modelValue) portfolioValue += realie.modelValue;
+    if (realie?.equityEstimate) totalEquity += realie.equityEstimate;
+    if (realie?.totalLienBalance) totalLienBalance += realie.totalLienBalance;
+    if (realie?.ltvCurrent != null) {
+      ltvSum += realie.ltvCurrent;
+      ltvCount++;
+    }
+    if (realie?.lenderName) lenders.add(realie.lenderName);
+    if (realie?.forecloseCode) foreclosureCount++;
+    if (p.hold_months && p.hold_months > longestHoldMonths) {
+      longestHoldMonths = p.hold_months;
+    }
+  }
+
+  const avgLtvPct = ltvCount > 0 ? (ltvSum / ltvCount) * 100 : null;
+  const lenderList = [...lenders];
+  const completedSales = input.properties.filter((p) => p.outcome === "completed").length;
+  const distressed = input.properties.filter(
+    (p) => p.outcome === "distressed" || p.outcome === "foreclosed",
+  ).length;
+
+  const sanctionsBlock = input.sanctions_result
+    ? `--- SANCTIONS / PEP SCREENING ---
+Result: ${input.sanctions_result.result === "clear" ? "Clear (no matches)" : "POTENTIAL MATCH"}
+Sources Searched: ${input.sanctions_result.sources_searched.join(", ")}
+${input.sanctions_result.matches.length > 0
+  ? `Matches:\n${input.sanctions_result.matches
+      .map(
+        (m) =>
+          `- ${m.matched_name} (${m.list_name}) — score ${(m.score * 100).toFixed(0)}%${m.programs.length > 0 ? `, programs: ${m.programs.join(", ")}` : ""}`,
+      )
+      .join("\n")}`
+  : ""}`
+    : "--- SANCTIONS / PEP SCREENING ---\nNot run.";
+
   const prompt = `You are a senior credit analyst at a bridge lending firm. Analyze this borrower validation data and produce a structured risk assessment.
 
 BORROWER: ${input.borrower_name}
@@ -64,16 +111,27 @@ Last Filing: ${input.entity_result.last_filing_date ?? "Unknown"}
 Registered Agent: ${input.entity_result.registered_agent ?? "Unknown"}
 Flags: ${input.entity_result.flags.length > 0 ? input.entity_result.flags.join("; ") : "None"}
 
---- TRACK RECORD ---
-Total Properties: ${input.properties.length}
-Completed Projects: ${completedProjects.length}
-Total Profit: $${totalProfit.toLocaleString()}
-Experience Tier: ${input.experience_tier} (1=most experienced, 4=no track record)
-Project Types: ${[...new Set(input.properties.map((p) => p.project_type))].join(", ") || "None"}
-Distressed/Foreclosed: ${input.properties.filter((p) => p.outcome === "distressed" || p.outcome === "foreclosed").length}
+--- CURRENT PORTFOLIO (deeded properties owned right now) ---
+IMPORTANT DATA SCOPE: This is current ownership only — properties the borrower owned and SOLD in the past (completed flips) are NOT visible to PulseClose without a deed-history vendor. Do NOT cite "zero completed projects" or "no realized profit" as a risk factor — that data was not searched. Treat the portfolio below as a snapshot of present holdings, not an all-time track record.
 
---- LITIGATION SCREENING ---
+Properties Owned Now: ${input.properties.length}
+Estimated Portfolio Value: ${portfolioValue > 0 ? `$${Math.round(portfolioValue).toLocaleString()}` : "Not available"}
+Total Equity: ${totalEquity > 0 ? `$${Math.round(totalEquity).toLocaleString()}` : "Not available"}
+Total Lien Balance: ${totalLienBalance > 0 ? `$${Math.round(totalLienBalance).toLocaleString()}` : "Not available"}
+Avg Current LTV: ${avgLtvPct != null ? `${avgLtvPct.toFixed(1)}%` : "Not available"}
+Longest Current Hold: ${longestHoldMonths > 0 ? `${longestHoldMonths} months` : "Unknown"}
+Distinct Lenders: ${lenderList.length > 0 ? `${lenderList.length} (${lenderList.slice(0, 3).join(", ")}${lenderList.length > 3 ? ", ..." : ""})` : "Unknown"}
+Properties in Foreclosure/Distress: ${foreclosureCount}
+Project Types Inferred: ${[...new Set(input.properties.map((p) => p.project_type))].join(", ") || "None"}
+Verified Completed Sales (in dataset): ${completedSales}${completedSales === 0 ? " — note: this is not a flip count, see scope note above" : ""}
+Other Distressed/Foreclosed: ${distressed}
+Experience Tier (visible portfolio only): ${input.experience_tier} (1=10+ properties, 2=5-9, 3=1-4, 4=none visible)
+
+--- LITIGATION SCREENING (federal courts via CourtListener) ---
 ${input.litigation_results.map((l) => `${l.search_type}: ${l.result}${l.result === "found" ? ` — ${l.details ?? "No details"} (Case: ${l.case_number ?? "N/A"})` : ""}`).join("\n")}
+Note: Coverage is federal only (bankruptcy + federal civil). State-court matters (mechanic's liens, contract disputes, most foreclosures) are not searched. Treat dismissed/terminated cases as informational, not as active risk.
+
+${sanctionsBlock}
 
 --- GC VALIDATION ---
 ${input.gc_result ? `Contractor: ${input.gc_result.gc_name}
@@ -85,16 +143,17 @@ Disciplinary Actions: ${input.gc_result.disciplinary_actions.length > 0 ? input.
 
 Respond with a JSON object matching this exact structure:
 {
-  "summary": "2-3 sentence executive summary of the borrower's risk profile. Be specific and reference actual data points.",
+  "summary": "2-3 sentence executive summary. Reference real numbers — portfolio size, LTV, hold periods, entity status, sanctions result, and any active litigation. Do NOT cite missing flip history as a risk; that data was not searched.",
   "risk_rating": "low" | "medium" | "high",
   "pillar_assessments": {
-    "entity": "1-2 sentences on the entity validation findings",
-    "track_record": "1-2 sentences on track record and experience",
-    "litigation": "1-2 sentences on litigation screening results",
-    "gc": "1-2 sentences on GC validation, or null if no GC was provided"
+    "entity": "1-2 sentences on entity validation findings",
+    "track_record": "1-2 sentences on the CURRENT PORTFOLIO. Reference value, equity, LTV, hold periods, lender concentration. If completed-flip history was not searched, state that explicitly rather than treating it as a negative.",
+    "litigation": "1-2 sentences on litigation screening. Distinguish active vs dismissed/terminated. Note federal-only coverage.",
+    "gc": "1-2 sentences on GC validation, or null if no GC was provided",
+    "sanctions": "1-2 sentences on sanctions/PEP screening result, or null if not run"
   },
-  "flags": ["Array of specific risk flags or concerns, if any"],
-  "recommendations": ["Array of specific next steps or conditions to consider"]
+  "flags": ["Array of specific risk flags. Only include items grounded in the data. Do NOT include 'no completed projects' or 'no flip history' — those are data-scope limits, not borrower risks."],
+  "recommendations": ["Array of specific next steps or conditions. If flip history is needed for underwriting, recommend the borrower submit a list of past addresses for deed verification."]
 }
 
 Use bridge lending terminology naturally. Be direct and specific — no buzzwords. Reference actual numbers and findings from the data.`;

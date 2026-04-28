@@ -112,27 +112,15 @@ function mapPropertyToRecord(prop: RealieProperty): PropertyRecord {
   const saleDate = formatDate(prop.transferDateObject ?? prop.transferDate);
   const salePrice = prop.transferPrice && prop.transferPrice > 0 ? prop.transferPrice : null;
 
-  // Check transfer history for acquisition info (prior purchase by this entity)
-  const transfers = prop.transfers ?? [];
-  let acquisitionDate = saleDate;
-  let acquisitionPrice = salePrice;
-  let dispositionDate: string | null = null;
-  let dispositionPrice: number | null = null;
+  // Current owner's most recent transfer is the acquisition. We don't see
+  // the disposition because the borrower still owns the property. Realized
+  // profit is unknown until a deed-history vendor is wired up.
+  const acquisitionDate = saleDate;
+  const acquisitionPrice = salePrice;
+  const dispositionDate: string | null = null;
+  const dispositionPrice: number | null = null;
+  const profit: number | null = null;
   let holdMonths: number | null = null;
-  let profit: number | null = null;
-
-  if (transfers.length > 0) {
-    // Most recent transfer is the current owner's purchase
-    // The main record (transferDate/transferPrice) is the latest deed recording
-    // Prior transfers show the chain
-    const priorTransfer = transfers[0];
-    if (priorTransfer.transferDate) {
-      // If there's a prior transfer, the main record is acquisition, prior is... prior
-      // The current transferDate is when the current owner acquired it
-      acquisitionDate = saleDate;
-      acquisitionPrice = salePrice;
-    }
-  }
 
   if (acquisitionDate) {
     const acq = new Date(acquisitionDate);

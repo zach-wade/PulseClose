@@ -9,6 +9,7 @@ export function getAdapter(): ValidationAdapter {
   const attomKey = process.env.ATTOM_API_KEY;
   const regridToken = process.env.REGRID_API_TOKEN;
   const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
+  const openSanctionsKey = process.env.OPENSANCTIONS_API_KEY;
 
   const realieKey = process.env.REALIE_API_KEY;
 
@@ -18,12 +19,14 @@ export function getAdapter(): ValidationAdapter {
     // ATTOM: sale history enrichment (only when Regrid is used)
     // CSLB: GC validation (CA only, auto-detected by state)
     // CourtListener: litigation (bankruptcy + federal lawsuits)
+    // OpenSanctions (if key) → OFAC SDN direct (always-on free fallback)
     return createCobaltAdapter({
       cobaltKey,
       realieKey: realieKey || undefined,
       attomKey: attomKey || undefined,
       regridToken: regridToken || undefined,
       courtListenerToken: courtListenerToken || undefined,
+      openSanctionsKey: openSanctionsKey || undefined,
     });
   }
 
@@ -45,6 +48,14 @@ export function getGCDataSource(state: string, licenseNumber?: string): string {
   return "stub";
 }
 
+// Helper: detect which data source was used for sanctions screening.
+// OpenSanctions if key set, otherwise free OFAC SDN direct download.
+export function getSanctionsDataSource(): string {
+  if (process.env.OPENSANCTIONS_API_KEY) return "opensanctions";
+  if (process.env.COBALT_INTELLIGENCE_API_KEY) return "ofac"; // real adapter active
+  return "stub";
+}
+
 export type { ValidationAdapter } from "./types";
 export type {
   SOSLookupRequest,
@@ -55,4 +66,7 @@ export type {
   GCLookupResult,
   LitigationSearchRequest,
   LitigationRecord,
+  SanctionsScreenRequest,
+  SanctionsScreenResult,
+  SanctionsMatch,
 } from "./types";
