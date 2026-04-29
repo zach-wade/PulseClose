@@ -171,7 +171,7 @@ src/lib/adapters/
 - **Original archive (pre-PulseClose):** `/Users/zachwade/BridgeFlow_archived`
 - **Active repo:** `/Users/zachwade/code/active/pulseclose`
 - **Production URL:** https://app.pulseclose.com
-- **Vercel project ref:** pulseclose (auto-deploy NOT configured — `vercel --prod --yes` after `git push`)
+- **Vercel project ref:** pulseclose. **Auto-deploy on push to main is wired up as of 2026-04-29** (GitHub integration was disconnected and reconnected to fix a silently-broken state). Push to main = production deploy. CLI `vercel --prod --yes` still works as a manual fallback.
 - **Supabase project ref:** `oazwscmgyqknwatqgtyc`
 - **GitHub:** https://github.com/zach-wade/PulseClose
 
@@ -181,7 +181,7 @@ src/lib/adapters/
 
 - **OpenSanctions trial expires 2026-05-28.** After that it falls back to OFAC SDN direct (free). Renew or upgrade before then.
 - **Cobalt key** rotation: current key `CgiH9xQq…` (40 chars). Rotate when usage cap hits. Test with curl before assuming a new key works — Cobalt's dashboard counter is unreliable.
-- **Deploys:** `git push origin main` then `vercel --prod --yes`. GitHub→Vercel auto-deploy is NOT wired up.
+- **Deploys:** `git push origin main` triggers a production deploy automatically (auto-deploy fixed 2026-04-29). CLI `vercel --prod --yes` available as manual fallback.
 - **Supabase migrations:** `supabase db push` after creating new files in `supabase/migrations/`. CLI installed via Homebrew at `/opt/homebrew/bin/supabase`. Login persists per machine (`supabase login`).
 - **Database wipes** (if needed during dev): REST API DELETEs in dependency order — `borrower_validations` first cascades most children. See session-2026-04-29 transcript for the curl pattern.
 - **Test Co counter** reset: see `~/.claude/projects/-Users-zachwade-PulseClose/memory/reference_supabase_lookup.md` for one-liner. Org id `9e580f59-b01d-4cbd-a950-76dd4f32ee6c` (probably need to re-create after wipe).
