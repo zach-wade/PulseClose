@@ -194,9 +194,341 @@ deal_eligibility_results
   computed_at
 ```
 
+### Universal infrastructure (new — for the Expansion plan)
+
+These three tables are the **building blocks every Tier feature composes on**. They land as P1 (right after the P0 corrections in ROADMAP.md) so the rest of the plan inherits clean primitives.
+
+```
+documents                                  -- every uploaded or generated file
+  id uuid PK
+  org_id uuid FK NOT NULL
+  uploaded_by_user_id uuid FK NULL          -- null when borrower-side via share token
+  share_token text NULL                     -- borrower-side authorization
+  storage_path text NOT NULL                -- supabase storage object path
+  storage_bucket text NOT NULL DEFAULT 'documents'
+  mime_type text, file_size_bytes int, original_filename text
+  purpose text NOT NULL CHECK (purpose IN (
+    'borrower_doc_intake',                  -- lender-side validation pre-fill
+    'borrower_share_upload',                -- borrower address-list upload
+    'photo_verification',                   -- C1 rehab photos
+    'bank_statement',                       -- C5 borrower bank statements
+    'investor_pdf',                         -- A1 investor criteria source
+    'handoff_artifact',                     -- generated handoff Excel/PDF
+    'inbox_submission',                     -- D1 forwarded deal email
+    'borrower_capital_summary',             -- A3 generated PDF
+    'risk_methodology',                     -- S5 generated PDF
+    'other'
+  ))
+  related_entity_type text NULL CHECK (related_entity_type IN (
+    'borrower','property','validation','investor','monitor_run','deal_evaluation', null
+  ))
+  related_entity_id uuid NULL
+  ai_extraction_status text NOT NULL DEFAULT 'not_applicable'
+    CHECK (ai_extraction_status IN ('pending','success','failed','not_applicable'))
+  ai_extraction jsonb NULL
+  schema_version int NOT NULL DEFAULT 1
+  expires_at timestamptz NULL                -- bank statements default 90d, photos null
+  created_at, updated_at
+  -- RLS: org_id = (select org_id from users where id = auth.uid())
+  --      OR share_token = current_setting('request.headers.x-share-token', true)
+  -- Indexes: (org_id, created_at desc), (related_entity_type, related_entity_id), (purpose)
+```
+
+```
+notification_preferences                   -- per-user-per-event-type routing
+  id uuid PK
+  user_id uuid FK NOT NULL
+  org_id uuid FK NOT NULL
+  channel text NOT NULL CHECK (channel IN ('email','slack','teams','sms','webhook'))
+  event_type text NOT NULL CHECK (event_type IN (
+    'monitor_change',                       -- existing monitor cron alerts
+    'tier_changed',                         -- B5 / activity event
+    'signal_applied',                       -- override actions
+    'deal_evaluated',                       -- Module 1 results
+    'photo_uploaded',                       -- C1 borrower upload
+    'bank_statement_uploaded',              -- C5 borrower upload
+    'inbox_submission',                     -- D1 forwarded deal
+    'handoff_sent',                         -- A3 / handoff PDF download
+    'expected_close_reminder',              -- D3
+    'consensus_match'                       -- E3 cross-tenant match
+  ))
+  enabled bool NOT NULL DEFAULT true
+  target_address text NOT NULL              -- email | webhook URL | phone (E.164)
+  verified_at timestamptz NULL              -- webhook test or email confirm
+  created_at, updated_at
+  -- RLS: user owns row OR org admin can read
+  -- Unique: (user_id, channel, event_type, target_address)
+```
+
+```
+activity_events                            -- universal user-facing event log
+  id uuid PK
+  org_id uuid FK NOT NULL
+  actor_user_id uuid FK NULL                -- null for system/cron events
+  verb text NOT NULL                        -- 'created' | 'updated' | 'applied_signal'
+                                            -- | 'ran_monitor' | 'changed_tier'
+                                            -- | 'sent_handoff' | 'evaluated_deal'
+                                            -- | 'extracted_doc' | 'uploaded_photo'
+                                            -- | 'reported_outcome' | 'overrode_factor'
+  subject_type text NOT NULL                -- 'validation' | 'borrower' | 'property'
+                                            -- | 'signal' | 'monitor_run'
+                                            -- | 'deal_evaluation' | 'document'
+  subject_id uuid NOT NULL
+  metadata jsonb NOT NULL DEFAULT '{}'      -- e.g., { from_tier:'medium', to_tier:'low' }
+  schema_version int NOT NULL DEFAULT 1
+  created_at timestamptz NOT NULL DEFAULT now()
+  -- RLS: org_id = current_org
+  -- Indexes: (org_id, created_at desc), (subject_type, subject_id, created_at desc),
+  --          (actor_user_id, created_at desc)
+```
+
+**Important:** `activity_events` is **user-facing** (powers the activity feed, B5). The existing `audit_log` is **security/compliance** (immutable, includes auth events, IP addresses, etc.). Both exist; they are not the same table.
+
+### Outcomes layer (new — Tier A + E foundation)
+
+```
+deal_outcomes                              -- post-close life-of-loan tracking
+  id uuid PK
+  org_id uuid FK NOT NULL
+  borrower_id uuid FK NOT NULL
+  validation_id uuid FK NULL                -- nullable: outcome may post-date validation
+  deal_evaluation_id uuid FK NULL
+  status text NOT NULL CHECK (status IN (
+    'pending','withdrawn','funded','extended','repaid','defaulted'
+  ))
+  status_date date NOT NULL
+  funded_amount numeric NULL
+  funded_terms jsonb NULL                   -- { rate, points, term_months, ltv, ltc }
+  extension_count int NOT NULL DEFAULT 0
+  default_cause text NULL                   -- 'payment'|'maturity'|'covenant'|'fraud'|'other'
+  notes text
+  reported_by_user_id uuid FK NOT NULL
+  schema_version int NOT NULL DEFAULT 1
+  created_at, updated_at
+  -- RLS: org_id-scoped
+  -- Index: (borrower_id, status_date desc)
+  -- One borrower can have many outcomes (one per loan over time)
+```
+
+```
+borrower_reputation_scores                 -- E2: derived score per borrower
+  id uuid PK
+  borrower_id uuid FK NOT NULL
+  org_id uuid FK NOT NULL                   -- score is per-org-context (org's signals + outcomes)
+  score int NOT NULL CHECK (score BETWEEN 0 AND 100)
+  letter_grade text NOT NULL CHECK (letter_grade IN ('A','B','C','D','F'))
+  components jsonb NOT NULL                 -- per-input contribution breakdown
+  validations_count int NOT NULL
+  outcomes_count int NOT NULL
+  computed_at timestamptz NOT NULL
+  expires_at timestamptz NULL               -- recompute trigger
+  schema_version int NOT NULL DEFAULT 1
+  -- RLS: org_id-scoped
+  -- Unique: (borrower_id, org_id) — one current score per borrower per org
+```
+
+```
+consensus_aggregates                       -- E3: anonymized cross-tenant counts
+  id uuid PK
+  borrower_hash text NOT NULL UNIQUE        -- HMAC of normalized name + tax-id-last-4
+  validations_count_30d int NOT NULL DEFAULT 0
+  validations_count_90d int NOT NULL DEFAULT 0
+  validations_count_365d int NOT NULL DEFAULT 0
+  last_seen_at timestamptz NOT NULL
+  last_tier_observed text                   -- 'low'|'medium'|'high'
+  computed_at timestamptz NOT NULL
+  -- RLS: readable by orgs that have set consensus_participation = true
+  --      writable only via service-role aggregation cron
+```
+
+```
+borrower_public_profiles                   -- E4: opt-in borrower-controlled visibility
+  id uuid PK
+  borrower_id uuid FK NOT NULL UNIQUE
+  public_uuid uuid NOT NULL UNIQUE          -- the URL slug
+  visibility jsonb NOT NULL                 -- { validations: bool, outcomes: bool, reputation: bool }
+  opted_in_at timestamptz NOT NULL
+  opted_in_by_user_id uuid FK
+  schema_version int NOT NULL DEFAULT 1
+  -- RLS: borrower's org admin can read; public route bypasses RLS via public_uuid lookup
+```
+
+### Litigation cards (new — Tier S3)
+
+```
+litigation_cases                           -- structured cases extracted from raw_response
+  id uuid PK
+  validation_id uuid FK NOT NULL
+  org_id uuid FK NOT NULL                   -- denormalized for RLS perf
+  case_name text NOT NULL
+  court text                                -- e.g., 'C.D. Cal.'
+  filed_at date
+  nature_of_suit text                       -- 'bankruptcy_ch7'|'bankruptcy_ch11'|'civil'|'lien'|'foreclosure'|'tax_warrant'
+  category text NOT NULL                    -- 'bankruptcy'|'civil'|'lien'|'tax'|'foreclosure'|'other'
+  status text NOT NULL                      -- 'pending'|'closed'|'discharged'|'dismissed'|'judgment'
+  dollar_amount_estimated numeric NULL
+  source_doc_url text                       -- CourtListener link
+  raw jsonb NOT NULL                        -- preserve raw shape for re-extraction
+  schema_version int NOT NULL DEFAULT 1
+  created_at
+  -- RLS: org_id-scoped
+  -- Indexes: (validation_id), (org_id, filed_at desc)
+```
+
+### Photo + bank statement extractions (new — Tier C1, C5)
+
+```
+photo_verifications                        -- C1: per-uploaded-photo verification result
+  id uuid PK
+  document_id uuid FK NOT NULL              -- → documents
+  property_id uuid FK NOT NULL
+  validation_id uuid FK NULL
+  org_id uuid FK NOT NULL
+  has_exif_gps bool NOT NULL DEFAULT false
+  exif_lat numeric, exif_lng numeric
+  distance_from_property_meters numeric NULL
+  ai_address_match_confidence numeric NULL  -- 0..1
+  ai_property_type text                     -- 'single_family'|'multi_family'|'commercial'|'unclear'
+  ai_visible_address text                   -- whatever address text was visible in image
+  ai_assessment text                        -- claude narrative
+  schema_version int NOT NULL DEFAULT 1
+  processed_at timestamptz
+  -- RLS: org_id-scoped
+```
+
+```
+bank_statement_extractions                 -- C5: per-uploaded-statement parsed metrics
+  id uuid PK
+  document_id uuid FK NOT NULL
+  borrower_id uuid FK NOT NULL
+  validation_id uuid FK NULL
+  org_id uuid FK NOT NULL
+  statement_period_start date, statement_period_end date
+  ending_balance numeric, beginning_balance numeric
+  total_deposits numeric, total_withdrawals numeric
+  nsf_count int, returned_deposit_count int
+  large_deposit_count int                   -- transactions > $10K
+  recurring_income_estimate numeric
+  parse_confidence_per_field jsonb          -- per-field 0..1 from Claude
+  raw_extraction jsonb
+  schema_version int NOT NULL DEFAULT 1
+  processed_at timestamptz
+  -- RLS: org_id-scoped
+  -- documents.expires_at default 90 days for bank_statement purpose
+```
+
+### Contact verifications (new — Tier C3)
+
+```
+contact_verifications                      -- per-(borrower, channel, value) check
+  id uuid PK
+  borrower_id uuid FK NOT NULL
+  org_id uuid FK NOT NULL
+  channel text NOT NULL CHECK (channel IN ('phone','email'))
+  value text NOT NULL                       -- normalized phone E.164 or email
+  vendor text NOT NULL                      -- 'numverify' | 'hunter' | etc
+  match_status text                         -- 'match'|'no_match'|'unknown'
+  is_voip bool, is_disposable bool
+  spam_score numeric NULL
+  raw_response jsonb
+  schema_version int NOT NULL DEFAULT 1
+  checked_at timestamptz
+  -- RLS: org_id-scoped
+```
+
+### Investor PDF parsing audit (new — Tier A1)
+
+```
+investor_criteria_extractions              -- audit of Claude parses
+  id uuid PK
+  investor_id uuid FK NOT NULL
+  document_id uuid FK NOT NULL              -- → documents (purpose='investor_pdf')
+  org_id uuid FK NOT NULL
+  raw_extraction jsonb NOT NULL             -- full Claude output
+  parsed_criteria jsonb NOT NULL            -- structured criteria preview
+  parse_confidence_per_field jsonb
+  applied bool NOT NULL DEFAULT false       -- did user save → write investor_criteria rows?
+  applied_at timestamptz NULL
+  applied_by_user_id uuid FK NULL
+  user_edits_diff jsonb                     -- diff between parsed and saved criteria
+  created_at
+  -- RLS: org_id-scoped
+```
+
+### Inbox submissions (new — Tier D1)
+
+```
+inbox_submissions                          -- Resend webhook → pending validation
+  id uuid PK
+  org_id uuid FK NOT NULL
+  document_id uuid FK NOT NULL              -- → documents (purpose='inbox_submission')
+  source_email text                         -- sender
+  subject text
+  parsed_fields jsonb                       -- borrower_name, entity, properties, loan_amount
+  parse_confidence_per_field jsonb
+  status text NOT NULL DEFAULT 'pending_review'
+    CHECK (status IN ('pending_review','converted','rejected'))
+  converted_validation_id uuid FK NULL
+  rejected_reason text NULL
+  schema_version int NOT NULL DEFAULT 1
+  created_at, updated_at
+  -- RLS: org_id-scoped
+```
+
+### Public API keys (new — Tier D5)
+
+```
+api_keys                                   -- per-org tokens for /api/public/*
+  id uuid PK
+  org_id uuid FK NOT NULL
+  label text NOT NULL                       -- human-readable
+  hashed_token text NOT NULL UNIQUE         -- bcrypt(token)
+  prefix text NOT NULL                      -- first 8 chars for display
+  scopes text[] NOT NULL DEFAULT '{}'       -- ['validations:read','handoff:read', ...]
+  last_used_at timestamptz NULL
+  created_by_user_id uuid FK NOT NULL
+  created_at, revoked_at
+  -- RLS: org_id-scoped
+```
+
+### Deal submissions (new — Tier F3)
+
+```
+deal_submissions                           -- originator → investor with status
+  id uuid PK
+  org_id uuid FK NOT NULL                   -- originating org
+  deal_evaluation_id uuid FK NOT NULL
+  investor_id uuid FK NOT NULL
+  submitted_at timestamptz NOT NULL
+  submitted_by_user_id uuid FK NOT NULL
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','accepted','declined','withdrawn','expired'))
+  decision_at timestamptz NULL
+  decision_reason text NULL
+  decision_user_id uuid FK NULL             -- investor-side user once auth scope expanded
+  schema_version int NOT NULL DEFAULT 1
+  -- RLS: org_id-scoped from originator side; investor-side adds scope when role exists
+```
+
 ### Infrastructure tables (existing, unchanged)
 
 `organizations`, `users`, `usage_records`, `audit_log` — keep as-is.
+
+---
+
+## P0 corrections summary (cross-reference to ROADMAP.md → P0)
+
+The following schema changes ship in `00016_p0_corrections.sql` before any new feature work:
+
+1. **`org_id` denormalization** onto `entity_checks`, `track_record_entries`, `gc_validations`, `litigation_checks` (with backfill from `borrower_validations.org_id`).
+2. **Timestamps** added to `track_record_entries` and `gc_validations`.
+3. **Partial unique indexes** on all signal tables and `borrower_entities` enforcing one active row per logical key.
+4. **`monitor_runs` INSERT RLS policy** added explicitly; service-role bypass documented.
+5. **`risk_factors.expires_at`** column added; per-factor expiry rules in application code.
+6. **`schema_version`** integer column added to every JSONB column system-wide; Zod schemas in `src/lib/schemas/`.
+7. **Trigger preventing `lenders.org_id` org→NULL transitions** (escalation guard).
+
+After P0 lands, the new universal-infra tables (X1-X3) and outcome layer (E1) come next. Everything else in the Expansion plan composes on these primitives.
 
 ---
 
