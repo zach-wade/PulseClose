@@ -24,7 +24,9 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  GitCompare,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Validation {
   id: string;
@@ -68,6 +70,19 @@ export default function DashboardPage() {
   // Without this, both render as the empty state and a real outage looks
   // like a fresh tenant during a live demo.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Selection state for the Compare action. Only 2 IDs allowed at a time
+  // because /api/validations/compare returns a side-by-side diff.
+  const [selected, setSelected] = useState<string[]>([]);
+  const router = useRouter();
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      // Cap at 2; replace the older selection on the third click.
+      if (prev.length >= 2) return [prev[1], id];
+      return [...prev, id];
+    });
+  }
 
   useEffect(() => {
     async function load() {
@@ -136,6 +151,7 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead>Borrower</TableHead>
                   <TableHead>Entity</TableHead>
                   <TableHead>Status</TableHead>
@@ -150,6 +166,7 @@ export default function DashboardPage() {
               <TableBody>
                 {Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-36" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
@@ -201,11 +218,42 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
+          {selected.length > 0 && (
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-4 py-2 shadow-sm">
+              <p className="text-sm">
+                <span className="font-medium">{selected.length}</span> selected
+                {selected.length === 1 && (
+                  <span className="text-muted-foreground"> — pick one more to compare</span>
+                )}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected([])}
+                >
+                  Clear
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={selected.length !== 2}
+                  onClick={() =>
+                    router.push(`/dashboard/compare?a=${selected[0]}&b=${selected[1]}`)
+                  }
+                >
+                  <GitCompare className="mr-2 h-4 w-4" />
+                  Compare selected
+                </Button>
+              </div>
+            </div>
+          )}
         <Card>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead>Borrower</TableHead>
                   <TableHead>Entity</TableHead>
                   <TableHead>Status</TableHead>
@@ -219,7 +267,16 @@ export default function DashboardPage() {
               </TableHeader>
               <TableBody>
                 {validations.map((v) => (
-                  <TableRow key={v.id} className="cursor-pointer">
+                  <TableRow key={v.id} className={selected.includes(v.id) ? "bg-muted/50" : ""}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-input cursor-pointer accent-primary"
+                        checked={selected.includes(v.id)}
+                        onChange={() => toggleSelect(v.id)}
+                        aria-label={`Select ${v.borrower_name} for compare`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Link
                         href={`/dashboard/validations/${v.id}`}
@@ -282,6 +339,7 @@ export default function DashboardPage() {
             </Table>
           </CardContent>
         </Card>
+        </>
       )}
     </div>
   );
