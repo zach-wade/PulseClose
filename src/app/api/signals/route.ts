@@ -27,6 +27,7 @@ import {
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 import { parseSignalValueV1 } from "@/lib/schemas";
 import { withErrorLog } from "@/lib/async/with-error-log";
+import { emitActivity } from "@/lib/events/emit";
 
 type Scope = "borrower" | "property" | "borrower_property" | "entity";
 
@@ -180,6 +181,17 @@ export async function POST(request: Request) {
     entity_type: scope,
     entity_id: borrower_id || property_id || entity_id,
     details: { signal_key, signal_value, reason },
+  });
+
+  // User-facing activity feed (X3). Distinct from audit_log above which is
+  // security/compliance — both rows intentionally coexist.
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "applied_signal",
+    subjectType: scope === "borrower_property" ? "signal" : (scope as "borrower" | "property" | "entity"),
+    subjectId: (borrower_id || property_id || entity_id) as string,
+    metadata: { signal_key, scope },
   });
 
   // Fan out re-derivation. Any validation whose factor compute could be

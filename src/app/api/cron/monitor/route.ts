@@ -14,6 +14,7 @@ import {
   rateLimitedRunAt,
   anyRateLimited,
 } from "@/lib/monitor/runner";
+import { emitActivity } from "@/lib/events/emit";
 
 export const maxDuration = 300;
 
@@ -74,6 +75,23 @@ export async function GET(request: Request) {
         .insert(runInsertPayload)
         .select("id")
         .single();
+
+      if (runRow) {
+        // System-emitted (no actor) — surfaces in the activity feed for the
+        // org so users see "Monitor ran on X — found 2 changes".
+        void emitActivity(supabase, {
+          orgId: sub.org_id,
+          actorUserId: null,
+          verb: "ran_monitor",
+          subjectType: "validation",
+          subjectId: sub.validation_id,
+          metadata: {
+            subscription_id: sub.id,
+            changes_count: result.changes.length,
+            status: result.status,
+          },
+        });
+      }
 
       // Log usage records for the per-validation API calls (matches
       // existing usage-metering convention).

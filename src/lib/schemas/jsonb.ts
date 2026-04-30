@@ -269,3 +269,93 @@ export const adapterResultsV1 = z.object({
 });
 export type AdapterResultsV1 = z.infer<typeof adapterResultsV1>;
 export const parseAdapterResultsV1 = safe(adapterResultsV1);
+
+// ── activity_events.metadata (X3) ─────────────────────────────────────────
+// Free-form jsonb keyed by verb. Caller stamps a small subset of well-known
+// shapes; everything else passes through. Validate the shapes that callers
+// actually rely on so the activity feed UI can render predictably.
+
+const tierEnum = z.enum(["low", "medium", "high"]);
+
+export const activityMetadataByVerb = {
+  changed_tier: z.object({
+    from_tier: tierEnum.nullable(),
+    to_tier: tierEnum,
+    triggering_signal_id: z.string().uuid().optional(),
+  }),
+  applied_signal: z.object({
+    signal_key: z.string(),
+    scope: z.enum(["borrower", "property", "borrower_property", "entity"]),
+    affected_validations: z.number().int().nonnegative().optional(),
+  }),
+  ran_monitor: z.object({
+    subscription_id: z.string().uuid(),
+    changes_count: z.number().int().nonnegative(),
+    status: z.enum(["clean", "changes_found", "error"]),
+  }),
+  uploaded_document: z.object({
+    purpose: z.string(),
+    related_entity_type: z.string().optional(),
+    related_entity_id: z.string().uuid().optional(),
+  }),
+  compared: z.object({
+    against_validation_id: z.string().uuid(),
+  }),
+  evaluated_deal: z.object({
+    deal_evaluation_id: z.string().uuid(),
+    investors_evaluated: z.number().int().nonnegative(),
+    pass_count: z.number().int().nonnegative().optional(),
+  }),
+  sent_handoff: z.object({
+    artifact: z.enum(["excel", "pdf", "html"]),
+  }),
+} as const;
+
+export function parseActivityMetadata(
+  verb: string,
+  metadata: unknown,
+): { data: unknown; error: z.ZodError | null; known: boolean } {
+  const shape = activityMetadataByVerb[verb as keyof typeof activityMetadataByVerb];
+  if (!shape) return { data: metadata, error: null, known: false };
+  const result = shape.safeParse(metadata);
+  if (result.success) return { data: result.data, error: null, known: true };
+  return { data: null, error: result.error, known: true };
+}
+
+// ── notification_preferences (X2) ─────────────────────────────────────────
+// The columns themselves enforce shape via CHECK; we still expose Zod
+// schemas for API request/response handlers.
+
+export const notificationChannelV1 = z.enum(["email", "slack", "teams", "sms", "webhook"]);
+export const notificationEventTypeV1 = z.enum([
+  "monitor_change",
+  "tier_changed",
+  "signal_applied",
+  "deal_evaluated",
+  "photo_uploaded",
+  "bank_statement_uploaded",
+  "inbox_submission",
+  "handoff_sent",
+  "expected_close_reminder",
+  "consensus_match",
+]);
+
+export const upsertNotificationPreferenceBodyV1 = z.object({
+  channel: notificationChannelV1,
+  event_type: notificationEventTypeV1,
+  enabled: z.boolean(),
+  target_address: z.string().min(1),
+});
+export type UpsertNotificationPreferenceBodyV1 = z.infer<typeof upsertNotificationPreferenceBodyV1>;
+
+// ── documents.ai_extraction (X1) ──────────────────────────────────────────
+// Discriminated by purpose. Each consumer writes its own extraction shape.
+// We keep the top-level catch-all loose because new purposes ride along
+// without redeploys.
+
+export const documentAiExtractionV1 = z
+  .object({
+    schema_version: schemaVersion.optional(),
+  })
+  .catchall(z.unknown());
+export type DocumentAiExtractionV1 = z.infer<typeof documentAiExtractionV1>;

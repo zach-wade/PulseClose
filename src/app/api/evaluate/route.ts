@@ -12,6 +12,7 @@ import {
   evaluateDealForInvestor,
   type DealParams,
 } from "@/lib/evaluate/engine";
+import { emitActivity } from "@/lib/events/emit";
 
 export async function GET() {
   const profile = await getUserProfile();
@@ -175,6 +176,20 @@ export async function POST(request: Request) {
       reasoning: r.reasoning,
     })),
   );
+
+  const passCount = results.filter((r) => r.result === "pass").length;
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "evaluated_deal",
+    subjectType: "deal_evaluation",
+    subjectId: evaluation.id,
+    metadata: {
+      deal_evaluation_id: evaluation.id,
+      investors_evaluated: investorList.length,
+      pass_count: passCount,
+    },
+  });
 
   return NextResponse.json({
     evaluation_id: evaluation.id,

@@ -19,6 +19,7 @@ import {
 } from "@/lib/domain/upsert";
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
 import { withErrorLog } from "@/lib/async/with-error-log";
+import { emitActivity } from "@/lib/events/emit";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -573,6 +574,20 @@ export async function POST(request: Request) {
         state: entity_state,
         status: overallStatus,
         checks_run: usageRecords.length,
+      },
+    });
+
+    // User-facing activity feed (X3).
+    void emitActivity(supabase, {
+      orgId: profile.org_id,
+      actorUserId: profile.id,
+      verb: "created",
+      subjectType: "validation",
+      subjectId: validation.id,
+      metadata: {
+        borrower_name,
+        entity_name: borrower_entity_name,
+        status: overallStatus,
       },
     });
 

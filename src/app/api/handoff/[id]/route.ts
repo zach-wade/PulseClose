@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { handoffUpdateBodyV1, parseHandoffDataV1Strict } from "@/lib/schemas";
+import { emitActivity } from "@/lib/events/emit";
 
 export async function PUT(
   request: Request,
@@ -57,6 +58,14 @@ export async function PUT(
     .update({ handoff_data: stamped, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "updated",
+    subjectType: "handoff",
+    subjectId: id,
+  });
 
   return NextResponse.json({ id });
 }
