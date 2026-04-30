@@ -274,10 +274,20 @@ export default function ValidationDetailPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => window.print()}>
-          <FileDown className="mr-2 h-4 w-4" />
-          Export PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => window.open(`/validations/${data.id}/risk-methodology`, "_blank")}
+            title="One-page printable showing the deterministic factor decomposition, severity, and signal-override audit trail."
+          >
+            <FileDown className="mr-2 h-4 w-4" />
+            Print risk methodology
+          </Button>
+          <Button variant="outline" onClick={() => window.print()}>
+            <FileDown className="mr-2 h-4 w-4" />
+            Export PDF
+          </Button>
+        </div>
       </div>
 
       {/* Input warnings — surface mismatched/odd inputs at the top */}
