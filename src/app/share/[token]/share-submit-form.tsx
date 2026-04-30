@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,6 +24,7 @@ import {
   Home,
   XCircle,
   HelpCircle,
+  FileUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/components/dashboard/shared-types";
@@ -77,6 +78,39 @@ export function ShareSubmitForm({ token, borrowerName, entityName, initialFlips 
   const [addresses, setAddresses] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [flips, setFlips] = useState<VerifiedFlip[]>(initialFlips);
+  const [extracting, setExtracting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileUpload(file: File) {
+    setExtracting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/share/${token}/extract-addresses`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `Upload failed (${res.status})`);
+      }
+      const { addresses: extracted } = (await res.json()) as { addresses: string[] };
+      if (extracted.length === 0) {
+        toast.warning("No addresses found in the document.");
+        return;
+      }
+      setAddresses((prev) => {
+        const existing = prev.trim();
+        const joined = extracted.join("\n");
+        return existing ? `${existing}\n${joined}` : joined;
+      });
+      toast.success(`Extracted ${extracted.length} address${extracted.length === 1 ? "" : "es"} — review before submitting.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Extraction failed");
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   async function handleSubmit() {
     const lines = addresses
@@ -142,6 +176,37 @@ export function ShareSubmitForm({ token, borrowerName, entityName, initialFlips 
             Format: street + city + state + zip on each line, e.g.{" "}
             <code className="text-xs bg-muted px-1 py-0.5 rounded">123 Main St, Sunnyvale, CA 94089</code>
           </p>
+        </div>
+
+        <div className="rounded-md border border-dashed p-3 flex items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground">
+            Have a list in a PDF, Excel, or CSV? Drop it here and we&apos;ll pull addresses for you.
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={extracting || submitting}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {extracting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileUp className="mr-2 h-4 w-4" />
+            )}
+            {extracting ? "Extracting…" : "Upload file"}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.xlsx,.xls,.csv,.txt,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFileUpload(f);
+              e.target.value = "";
+            }}
+          />
         </div>
 
         <textarea

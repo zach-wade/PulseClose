@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { DocIngest, type IngestExtraction } from "@/components/dashboard/doc-ingest";
 
 export default function NewValidationPage() {
   const router = useRouter();
@@ -38,6 +39,28 @@ export default function NewValidationPage() {
   const [gcState, setGcState] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function applyExtraction(data: IngestExtraction) {
+    if (data.borrower_name) setBorrowerName(data.borrower_name);
+    if (data.borrower_entity_name) setEntityName(data.borrower_entity_name);
+    if (data.entity_state) setEntityState(data.entity_state);
+    if (data.guarantor_name) setGuarantorName(data.guarantor_name);
+    if (data.gc_name) setGcName(data.gc_name);
+    if (data.gc_license_number) setGcLicense(data.gc_license_number);
+    if (data.gc_state) setGcState(data.gc_state);
+    const filledCount = [
+      data.borrower_name,
+      data.borrower_entity_name,
+      data.entity_state,
+      data.guarantor_name,
+      data.gc_name,
+    ].filter(Boolean).length;
+    if (filledCount > 0) {
+      toast.success(`Pre-filled ${filledCount} field${filledCount === 1 ? "" : "s"} from the document. Review before running.`);
+    } else {
+      toast.warning("Document parsed but no fields could be extracted with confidence.");
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +118,8 @@ export default function NewValidationPage() {
           </p>
         </div>
       </div>
+
+      <DocIngest onExtracted={applyExtraction} />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
