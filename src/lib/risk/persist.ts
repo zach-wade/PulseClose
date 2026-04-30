@@ -190,51 +190,32 @@ export async function recomputeRiskFactorsForValidation(
   const factors = computeRiskFactors({ entity, litigation, sanctions, gc, properties });
   const tier = deriveTier(factors);
 
-  // Replace existing risk_factors for this validation. Cascade FKs aren't
-  // an issue — risk_factors is a leaf table with no children.
-  //
-  // TODO(PR 4): replace with `recompute_risk_factors_atomic()` RPC so the
-  // delete+insert is one transaction. Until the RPC ships, surface errors
-  // explicitly instead of silently swallowing them — a silent insert
-  // failure here would leave the validation with zero factors and a
-  // misleading LOW tier.
-  const { error: deleteError } = await supabase
-    .from("risk_factors")
-    .delete()
-    .eq("validation_id", validationId);
-  if (deleteError) {
-    throw new Error(`risk_factors delete failed for ${validationId}: ${deleteError.message}`);
-  }
-  if (factors.length > 0) {
-    const { error: insertError } = await supabase.from("risk_factors").insert(
-      factors.map((f) => ({
-        validation_id: validationId,
-        factor_key: f.factor_key,
-        severity: f.severity,
-        excluded: f.excluded,
-        exclusion_reason: f.exclusion_reason,
-        contributing_data: f.contributing_data,
-        explanation: f.explanation,
-      })),
-    );
-    if (insertError) {
-      throw new Error(`risk_factors insert failed for ${validationId}: ${insertError.message}`);
-    }
-  }
-
-  // Refresh the cached flag_count on the validation. The dashboard list
-  // reads this column without joining risk_factors; without the refresh,
-  // the count drifts after overrides (the "Truong example" — summary
-  // showed 2 while the bullet list had 4). Count = active factors with
-  // moderate/critical/minor severity. Excluded + informational + none
-  // don't count as flags.
+  // flag_count = active factors at moderate/critical/minor severity.
+  // Excluded + informational + none don't count.
   const flagCount = factors.filter(
     (f) => !f.excluded && (f.severity === "critical" || f.severity === "moderate" || f.severity === "minor"),
   ).length;
-  await supabase
-    .from("borrower_validations")
-    .update({ flag_count: flagCount, updated_at: new Date().toISOString() })
-    .eq("id", validationId);
+
+  // Atomic recompute via the recompute_risk_factors_atomic RPC (00016 §9).
+  // Wraps delete + insert + flag_count update in one transaction so a
+  // mid-stream failure can't leave a validation with zero factors and a
+  // misleading LOW tier. The function stamps schema_version=1 on each
+  // factor's contributing_data jsonb to satisfy the 00016 §6 CHECK.
+  const { error } = await supabase.rpc("recompute_risk_factors_atomic", {
+    p_validation_id: validationId,
+    p_factors: factors.map((f) => ({
+      factor_key: f.factor_key,
+      severity: f.severity,
+      excluded: f.excluded,
+      exclusion_reason: f.exclusion_reason,
+      contributing_data: f.contributing_data,
+      explanation: f.explanation,
+    })),
+    p_flag_count: flagCount,
+  });
+  if (error) {
+    throw new Error(`recompute_risk_factors_atomic failed for ${validationId}: ${error.message}`);
+  }
 
   return { factors, tier };
 }
