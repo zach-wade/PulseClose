@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FileSpreadsheet, FileText, Save } from "lucide-react";
+import { toast } from "sonner";
 
 interface HandoffData {
   overall_narrative?: string | null;
@@ -27,7 +28,15 @@ export function HandoffCard({ validationId, initial }: Props) {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function save() {
+  // Dirty tracking — disables downloads until edits are persisted, preventing
+  // an investor from receiving an Excel/PDF that doesn't reflect the
+  // narrative/preparer info the lender just typed.
+  const dirty =
+    narrative.trim() !== (initial?.overall_narrative ?? "").trim() ||
+    preparerName.trim() !== (initial?.preparer_name ?? "").trim() ||
+    preparerEmail.trim() !== (initial?.preparer_email ?? "").trim();
+
+  async function save(): Promise<boolean> {
     setSaving(true);
     setError(null);
     try {
@@ -42,13 +51,37 @@ export function HandoffCard({ validationId, initial }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      if (!res.ok) {
+        const msg = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(msg.error ?? `Save failed (${res.status})`);
+      }
       setSavedAt(new Date());
+      // Mutate the captured initial so dirty calculation goes back to clean.
+      // Cheap workaround for a re-fetch round-trip.
+      if (initial) {
+        initial.overall_narrative = body.overall_narrative;
+        initial.preparer_name = body.preparer_name;
+        initial.preparer_email = body.preparer_email;
+      }
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveAndOpen(url: string) {
+    if (dirty) {
+      const ok = await save();
+      if (!ok) {
+        toast.error("Couldn't save changes — fix the error above and try again.");
+        return;
+      }
+      toast.success("Saved. Opening…");
+    }
+    window.open(url, "_blank");
   }
 
   return (
@@ -63,18 +96,22 @@ export function HandoffCard({ validationId, initial }: Props) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => window.open(`/api/handoff/${validationId}/excel`, "_blank")}
+              disabled={saving}
+              title={dirty ? "Unsaved changes — saving before download" : undefined}
+              onClick={() => saveAndOpen(`/api/handoff/${validationId}/excel`)}
             >
               <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Download Excel
+              {dirty ? "Save & download Excel" : "Download Excel"}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => window.open(`/handoff/${validationId}`, "_blank")}
+              disabled={saving}
+              title={dirty ? "Unsaved changes — saving before opening" : undefined}
+              onClick={() => saveAndOpen(`/handoff/${validationId}`)}
             >
               <FileText className="mr-2 h-4 w-4" />
-              Open PDF view
+              {dirty ? "Save & open PDF view" : "Open PDF view"}
             </Button>
           </div>
         </CardTitle>
@@ -123,9 +160,9 @@ export function HandoffCard({ validationId, initial }: Props) {
               Saved {savedAt.toLocaleTimeString()}
             </span>
           )}
-          <Button size="sm" onClick={save} disabled={saving}>
+          <Button size="sm" onClick={() => save()} disabled={saving || !dirty}>
             <Save className="mr-2 h-4 w-4" />
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : dirty ? "Save" : "Saved"}
           </Button>
         </div>
       </CardContent>

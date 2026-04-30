@@ -91,8 +91,8 @@ export function ShareSubmitForm({ token, borrowerName, entityName, initialFlips 
         body: fd,
       });
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `Upload failed (${res.status})`);
+        const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        throw new Error(err.message ?? err.error ?? `Upload failed (${res.status})`);
       }
       const { addresses: extracted } = (await res.json()) as { addresses: string[] };
       if (extracted.length === 0) {

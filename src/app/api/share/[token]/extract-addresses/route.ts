@@ -111,13 +111,36 @@ export async function POST(
     const text = response.content[0]?.type === "text" ? response.content[0].text : "";
     const arrMatch = text.match(/\[[\s\S]*\]/);
     if (!arrMatch) {
-      return NextResponse.json({ addresses: [], raw: text });
+      // Don't return 200 with empty list — the borrower form silently
+      // submitted nothing. 422 lets the UI show "We couldn't read this
+      // document — try pasting addresses manually below."
+      return NextResponse.json(
+        { error: "no_addresses_found", message: "Could not parse addresses from document.", raw: text },
+        { status: 422 },
+      );
     }
-    const arr = JSON.parse(arrMatch[0]);
+    let arr: unknown;
+    try {
+      arr = JSON.parse(arrMatch[0]);
+    } catch {
+      return NextResponse.json(
+        { error: "parse_failed", message: "Document parsed but addresses didn't form valid JSON." },
+        { status: 422 },
+      );
+    }
     if (!Array.isArray(arr)) {
-      return NextResponse.json({ addresses: [] });
+      return NextResponse.json(
+        { error: "unexpected_shape", message: "Address extraction returned a non-list shape." },
+        { status: 422 },
+      );
     }
-    const addresses = arr.map((s) => String(s).trim()).filter(Boolean);
+    const addresses = (arr as unknown[]).map((s) => String(s).trim()).filter(Boolean);
+    if (addresses.length === 0) {
+      return NextResponse.json(
+        { error: "empty_list", message: "No addresses found in the document." },
+        { status: 422 },
+      );
+    }
     return NextResponse.json({ addresses });
   } catch (err) {
     console.error("Share-link address extraction failed:", err);

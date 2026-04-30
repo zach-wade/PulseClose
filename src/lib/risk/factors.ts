@@ -300,6 +300,28 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
     });
   }
 
+  // Properties with an AVM but no zip-median lookup — ZHVI dataset doesn't
+  // cover every zip (e.g. new construction, manual zip edits). Surface the
+  // gap as an informational factor so we don't silently miss outliers.
+  const unavailableZips = input.properties
+    .filter((p) => p.current_avm != null && p.zip_median_value == null)
+    .map((p) => ({
+      property_id: p.property_id,
+      property_address: p.property_address,
+      zip: p.zip,
+      avm: p.current_avm,
+    }));
+  if (unavailableZips.length > 0) {
+    factors.push({
+      factor_key: "market_outlier_unavailable",
+      severity: "informational",
+      excluded: false,
+      exclusion_reason: null,
+      contributing_data: { properties: unavailableZips },
+      explanation: `AVM not comparable for ${unavailableZips.length} property — zip not in the Zillow ZHVI dataset. Outlier detection skipped.`,
+    });
+  }
+
   // ── Foreclosure / distress ───────────────────────────────────────────
   const distressed = input.properties.filter((p) => {
     const raw = p.raw_response as Record<string, unknown> | null;

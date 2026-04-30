@@ -171,13 +171,16 @@ export default function ValidationDetailPage() {
 
     // Poll for AI analysis if it isn't ready yet. AI runs after the
     // initial response so the page often loads before it's persisted.
-    // Stop polling once it lands or after ~90s (15 polls × 6s).
+    // Stop polling once it lands or after ~3 minutes (30 polls × 6s).
+    // Bumped from 90s to 180s — Claude regularly takes 30-60s but a busy
+    // model or rate-limit retry can push it past the old 90s window,
+    // making the demo look broken when the memo would have arrived.
     function schedulePoll() {
       pollTimer = setTimeout(async () => {
         if (cancelled) return;
         pollCount++;
         const next = await load(true);
-        if (next?.ai_analysis || pollCount >= 15) return;
+        if (next?.ai_analysis || pollCount >= 30) return;
         schedulePoll();
       }, 6000);
     }

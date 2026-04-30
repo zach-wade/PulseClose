@@ -64,14 +64,22 @@ function StatusBadge({ status }: { status: string }) {
 export default function DashboardPage() {
   const [validations, setValidations] = useState<Validation[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguish "no validations exist yet" from "the API failed to load".
+  // Without this, both render as the empty state and a real outage looks
+  // like a fresh tenant during a live demo.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch("/api/validations");
-        if (res.ok) {
-          setValidations(await res.json());
+        if (!res.ok) {
+          setLoadError(`Couldn't load validations (${res.status}). Refresh the page to retry.`);
+          return;
         }
+        setValidations(await res.json());
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Network error loading validations");
       } finally {
         setLoading(false);
       }
@@ -157,19 +165,39 @@ export default function DashboardPage() {
             </Table>
           </CardContent>
         </Card>
+      ) : loadError ? (
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <AlertTriangle className="h-12 w-12 text-destructive/70 mb-4" />
+            <h3 className="text-lg font-semibold">Couldn&apos;t load validations</h3>
+            <p className="text-muted-foreground text-sm mt-1 max-w-md text-center">
+              {loadError}
+            </p>
+            <Button
+              className="mt-6"
+              variant="outline"
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </Button>
+          </CardContent>
+        </Card>
       ) : validations.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Shield className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold">No validations yet</h3>
             <p className="text-muted-foreground text-sm mt-1 max-w-md text-center">
-              Run your first borrower validation to check entity status, track
-              record, contractor credentials, and litigation history.
+              Start by entering a borrower&apos;s name and entity — we&apos;ll
+              run entity, track-record, litigation, and sanctions checks in
+              parallel and have a report ready in 30-60 seconds.
             </p>
-            <Button className="mt-6" render={<Link href="/dashboard/new" />}>
-              <Plus className="mr-2 h-4 w-4" />
-              Run First Validation
-            </Button>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <Button render={<Link href="/dashboard/new" />}>
+                <Plus className="mr-2 h-4 w-4" />
+                Run First Validation
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (

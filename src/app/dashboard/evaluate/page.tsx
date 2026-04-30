@@ -82,6 +82,7 @@ function ResultBadge({ result }: { result: "pass" | "conditional" | "fail" }) {
 export default function EvaluatePage() {
   const [recent, setRecent] = useState<RecentEvaluation[]>([]);
   const [investorCount, setInvestorCount] = useState<number | null>(null);
+  const [investorLoadError, setInvestorLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<EligibilityResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,12 +105,21 @@ export default function EvaluatePage() {
 
   useEffect(() => {
     (async () => {
-      const [evals, invs] = await Promise.all([
-        fetch("/api/evaluate").then((r) => (r.ok ? r.json() : [])),
-        fetch("/api/investors").then((r) => (r.ok ? r.json() : [])),
+      // Track investor-fetch failure separately so the empty state below
+      // can differentiate "you have 0 investors configured" from "API
+      // failed to load" — without this, both render as "No investors yet"
+      // and a real outage looks like a fresh tenant during a live demo.
+      const [evalsRes, invsRes] = await Promise.all([
+        fetch("/api/evaluate"),
+        fetch("/api/investors"),
       ]);
-      setRecent(evals);
-      setInvestorCount(invs.length);
+      if (evalsRes.ok) setRecent(await evalsRes.json());
+      if (invsRes.ok) {
+        const invs = await invsRes.json();
+        setInvestorCount(invs.length);
+      } else {
+        setInvestorLoadError(`Couldn't load investors (${invsRes.status})`);
+      }
     })();
   }, []);
 
@@ -186,7 +196,14 @@ export default function EvaluatePage() {
         </Button>
       </div>
 
-      {investorCount === 0 && (
+      {investorLoadError ? (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 text-sm">
+            <strong>{investorLoadError}.</strong> Refresh the page to retry.
+            This is an API problem, not an empty configuration.
+          </CardContent>
+        </Card>
+      ) : investorCount === 0 ? (
         <Card className="border-amber-300 bg-amber-50/50">
           <CardContent className="p-4 text-sm">
             No investors configured yet. Add one or more in{" "}
@@ -196,7 +213,7 @@ export default function EvaluatePage() {
             (or run <code className="text-xs bg-muted px-1 rounded">npx tsx scripts/seed-sample-investors.ts</code> to load three example investor configs).
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       <form onSubmit={handleEvaluate}>
         <Card>

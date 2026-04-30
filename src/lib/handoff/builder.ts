@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveTier } from "@/lib/risk/factors";
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
+import { normalizeAddress } from "@/lib/domain/upsert";
 
 export interface HandoffPropertyRow {
   property_id: string | null;
@@ -208,8 +209,12 @@ export async function buildHandoffDocument(
     hold_months: number | null;
     profit: number | null;
   }>) {
-    const key = (vf.resolved_address ?? vf.submitted_address).toLowerCase();
-    verifiedByAddress.set(key, vf);
+    // Use the same normalization as upsertProperty so addresses match
+    // regardless of casing / whitespace / punctuation differences. The
+    // raw .toLowerCase() approach missed mixed-case Realie addresses like
+    // "1310 Rosalia Ave" vs. "1310 Rosalia Ave." (different period).
+    const key = normalizeAddress(vf.resolved_address ?? vf.submitted_address);
+    if (key) verifiedByAddress.set(key, vf);
   }
 
   const properties: HandoffPropertyRow[] = tracks.map((t) => {
@@ -218,7 +223,7 @@ export async function buildHandoffDocument(
 
     // Verified-flip override on dates/prices when available — deed-chain
     // confirmed beats Realie's current-snapshot inference.
-    const vf = verifiedByAddress.get(t.property_address.toLowerCase());
+    const vf = verifiedByAddress.get(normalizeAddress(t.property_address) ?? "");
     const acquisition_date = vf?.acquisition_date ?? t.acquisition_date;
     const acquisition_price = vf?.acquisition_price ?? t.acquisition_price;
     const disposition_date = vf?.disposition_date ?? t.disposition_date;
