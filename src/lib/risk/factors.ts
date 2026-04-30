@@ -40,6 +40,10 @@ export interface FactorPropertyView {
   lender_classification: "bank" | "bridge" | "private_credit" | "unknown" | null;
   is_primary_residence: boolean;
   raw_response: Record<string, unknown> | null;
+  // Property-level pricing context used by market_outlier factor
+  zip: string | null;
+  zip_median_value: number | null;  // ZHVI typical-home value for this zip
+  current_avm: number | null;        // Realie modelValue
 }
 
 export interface FactorEntityView {
@@ -81,6 +85,12 @@ const EXTENDED_HOLD_MONTHS = 18;
 
 // Lender concentration threshold (count of properties sharing one lender).
 const LENDER_CONCENTRATION_MIN = 3;
+
+// ZHVI deviation thresholds — how far a property's AVM has to be from
+// the zip's typical home value to flag. The signal is informational
+// (high-end deals legitimately exceed zip-medians); never tier-changing.
+const MARKET_OUTLIER_HIGH_RATIO = 2.0;   // 2x+ the zip median
+const MARKET_OUTLIER_LOW_RATIO = 0.5;    // 50% or less of the zip median
 
 export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
   const factors: RiskFactor[] = [];
@@ -252,6 +262,44 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
     });
   }
 
+  // ── Market outlier (ZHVI deviation) ──────────────────────────────────
+  // Compare each property's AVM (Realie modelValue) to the zip's ZHVI
+  // median. >2x or <0.5x flags as informational — high-end deals
+  // legitimately exceed medians, but the deviation is worth surfacing
+  // for the lender's manual sanity check (Damon's "would be amazing"
+  // ask on the 4/28 call).
+  const outliers = input.properties
+    .map((p) => {
+      if (p.current_avm == null || p.zip_median_value == null || p.zip_median_value <= 0) return null;
+      const ratio = p.current_avm / p.zip_median_value;
+      const isHigh = ratio >= MARKET_OUTLIER_HIGH_RATIO;
+      const isLow = ratio <= MARKET_OUTLIER_LOW_RATIO;
+      if (!isHigh && !isLow) return null;
+      return {
+        property_id: p.property_id,
+        property_address: p.property_address,
+        zip: p.zip,
+        avm: p.current_avm,
+        zip_median: p.zip_median_value,
+        ratio,
+        direction: isHigh ? "above" : "below",
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+  if (outliers.length > 0) {
+    factors.push({
+      factor_key: "market_outlier",
+      severity: "informational",
+      excluded: false,
+      exclusion_reason: null,
+      contributing_data: {
+        properties: outliers,
+        thresholds: { high_ratio: MARKET_OUTLIER_HIGH_RATIO, low_ratio: MARKET_OUTLIER_LOW_RATIO },
+      },
+      explanation: `${outliers.length} property AVM${outliers.length === 1 ? "" : "s"} deviate${outliers.length === 1 ? "s" : ""} significantly from zip median (Zillow ZHVI) — informational, not necessarily fraud.`,
+    });
+  }
+
   // ── Foreclosure / distress ───────────────────────────────────────────
   const distressed = input.properties.filter((p) => {
     const raw = p.raw_response as Record<string, unknown> | null;
@@ -298,6 +346,7 @@ export function humanizeFactorKey(key: string): string {
     extended_hold: "Extended hold period",
     lender_concentration: "Lender concentration",
     foreclosure_distress: "Foreclosure / distress",
+    market_outlier: "Market outlier (vs. zip median)",
   };
   return map[key] ?? key.replace(/_/g, " ");
 }

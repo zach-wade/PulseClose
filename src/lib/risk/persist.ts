@@ -88,10 +88,36 @@ export async function recomputeRiskFactorsForValidation(
     lenders: Array.isArray(t.lenders) ? (t.lenders[0] ?? null) : t.lenders ?? null,
   }));
 
+  const propertyIds = tracks.map((t) => t.property_id).filter((id): id is string => !!id);
+
+  // Fetch property zips + ZHVI medians for the market_outlier factor.
+  // The track rows don't carry zip directly; we read from the canonical
+  // properties row (where the upsert helpers stored it).
+  const propertyZipMap = new Map<string, string>();
+  if (propertyIds.length > 0) {
+    const { data: propRows } = await supabase
+      .from("properties")
+      .select("id, zip")
+      .in("id", propertyIds);
+    for (const p of (propRows ?? []) as Array<{ id: string; zip: string | null }>) {
+      if (p.zip) propertyZipMap.set(p.id, p.zip);
+    }
+  }
+  const zips = Array.from(new Set([...propertyZipMap.values()].map((z) => z.slice(0, 5))));
+  const zhviByZip = new Map<string, number>();
+  if (zips.length > 0) {
+    const { data: zhviRows } = await supabase
+      .from("zhvi_zips")
+      .select("zip, median_value")
+      .in("zip", zips);
+    for (const r of (zhviRows ?? []) as Array<{ zip: string; median_value: number }>) {
+      zhviByZip.set(r.zip, r.median_value);
+    }
+  }
+
   // Resolve active borrower_property_signals for the primary borrower across
   // every property in the validation. Used to evaluate exclusions
   // (e.g., is_primary_residence on extended_hold).
-  const propertyIds = tracks.map((t) => t.property_id).filter((id): id is string => !!id);
   let primaryResidenceSet = new Set<string>();
   if (validation.primary_borrower_id && propertyIds.length > 0) {
     const { data: signals } = await supabase
@@ -108,18 +134,28 @@ export async function recomputeRiskFactorsForValidation(
     );
   }
 
-  const properties: FactorPropertyView[] = tracks.map((t) => ({
-    property_id: t.property_id,
-    property_address: t.property_address,
-    hold_months: t.hold_months,
-    acquisition_date: t.acquisition_date,
-    disposition_date: t.disposition_date,
-    lender_id: t.lender_id,
-    lender_classification:
-      (t.lenders?.classification as FactorPropertyView["lender_classification"] | undefined) ?? null,
-    is_primary_residence: t.property_id ? primaryResidenceSet.has(t.property_id) : false,
-    raw_response: t.raw_response,
-  }));
+  const properties: FactorPropertyView[] = tracks.map((t) => {
+    const zip = t.property_id ? propertyZipMap.get(t.property_id) ?? null : null;
+    const zip5 = zip ? zip.slice(0, 5) : null;
+    const zipMedian = zip5 ? zhviByZip.get(zip5) ?? null : null;
+    const raw = (t.raw_response ?? {}) as Record<string, unknown>;
+    const currentAvm = typeof raw.modelValue === "number" ? raw.modelValue : null;
+    return {
+      property_id: t.property_id,
+      property_address: t.property_address,
+      hold_months: t.hold_months,
+      acquisition_date: t.acquisition_date,
+      disposition_date: t.disposition_date,
+      lender_id: t.lender_id,
+      lender_classification:
+        (t.lenders?.classification as FactorPropertyView["lender_classification"] | undefined) ?? null,
+      is_primary_residence: t.property_id ? primaryResidenceSet.has(t.property_id) : false,
+      raw_response: t.raw_response,
+      zip,
+      zip_median_value: zipMedian,
+      current_avm: currentAvm,
+    };
+  });
 
   const entity: FactorEntityView | null = entityRes.data
     ? {
