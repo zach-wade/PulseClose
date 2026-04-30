@@ -5,183 +5,213 @@
 >
 > **Read these in order on session start:**
 > - This file (you're here)
-> - `docs/ROADMAP.md` — Now / Pre-NPLA / Post-NPLA / Backlog with Decisions Log
-> - `docs/DATA-MODEL.md` — target schema, signals/overrides design, migration plan
+> - `docs/ROADMAP.md` — P0 Corrections + Expansion plan (S/A/B/C/D/E/F tiers)
+> - `docs/DATA-MODEL.md` — full schema incl. the new universal infra tables
 > - `STRATEGY.md` — vision, market, long-shot bets
-> - `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md` — index of durable preferences and project facts
+> - `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`
 
 ---
 
 ## Where we are right now
 
 **Standalone borrower validation platform for bridge lenders.** Multi-tenant
-SaaS at app.pulseclose.com. One design partner: Insignia Capital Corp.
-Forcing function: **NPLA conference June 22-23, 2026** (attendee mode via
-Damon's warm intros). Win = 3 of {fund intros, lender intros, demos,
-consulting leads}.
+SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
+22-23, 2026; ~7 weeks out).
 
-**Insignia partnership structure is being shaped** — leaning toward a JV-type
-venture or JV-fund where the tech goes in-house and Zach holds equity, with
-the SaaS option staying live as a parallel track. Zach owns all PulseClose IP
-regardless. See `docs/ROADMAP.md` North Star section + memory
-`project_insignia_partnership_paths.md`.
-
-**Validation tables empty** — fresh run-ready. Domain entities, lenders,
-investors, and ZHVI medians are all seeded.
+**P0 corrections + Tier S demo wow are SHIPPED end-to-end** in two big
+pushes. Demo path is now qualitatively different from anything else in
+the bridge-lending tool space.
 
 ---
 
-## What was completed in the last big push (2026-04-29)
+## What was completed in the last big push (2026-04-30)
 
-The Now lane and the entire code-buildable Pre-NPLA lane shipped end-to-end
-in a single sustained run. Highlights:
+### P0 — Corrections (5 PRs)
 
-**Data-model refactor (Sessions 2 + 3):**
-- All four creation paths (validations, share verify, /api/checks/track-record, /api/checks/litigation) now populate every domain FK on creation via `src/lib/domain/upsert.ts` helpers.
-- `borrower_entities` M:M populated with role tagging.
-- FDIC ingestion: ~4,300 banks classified as `bank` plus 15 known-bridge entries (Insignia, Velocity, Lima One, RCN, Anchor, Kiavi, Yabi, Roc, Genesis, CoreVest, Temple View, Sharestates, Patch of Land, PeerStreet, Colchis).
-- `POST /api/signals` for borrower / property / borrower×property / entity scopes with prior-active superseding.
+- **PR 1 (75f83ad):** App bug fixes — FK consistency on entity + GC creation
+  paths, monitor cron error handling (per-adapter status + 1h backoff on
+  rate limits + email-failure tracking), defensive risk-recompute,
+  linkBorrowerToEntity race-condition guard.
+- **PR 2 (25530f3):** Foundations — `zod` ^4.4.1, schemas in
+  `src/lib/schemas/{jsonb,api}.ts`, `src/lib/async/with-error-log.ts`.
+- **PR 3 (2e0760d):** Pre-flight cleanup script + Zod adoption at JSONB
+  write sites (signals, handoff, ai_analysis) + investor JSON validator
+  with key-by-key errors.
+- **PR 4 (45a649c + 630082a + b251743):** Migration `00016_p0_corrections.sql`
+  — `org_id` denormalization on snapshot tables, missing timestamps,
+  UNIQUE partial indexes on signal tables, `risk_factors.expires_at`,
+  JSONB schema_version + CHECK constraints, lender escalation guard,
+  `monitor_runs.adapter_results / email_status`, `recompute_risk_factors_atomic`
+  RPC. `MONITOR_RUN_RESULTS_ENABLED=true` flipped on Vercel.
+- **PR 5 (93be452):** UX polish — handoff save-then-download, empty states,
+  ZHVI null fallback factor, address-extraction 422, AI memo poll 90→180s.
 
-**Risk tier rebuild (Session 3):**
-- Pure compute in `src/lib/risk/factors.ts` over 9 named factors with Bridge ICP exclusions (extended_hold excludes primary-residence + bank-financed per memory).
-- Tier rule: any active critical → HIGH; ≥2 active moderate → MEDIUM; else LOW.
-- AI memo prompt rebuilt to receive factor list + tier; `risk_rating` is hard-overwritten server-side from the computed tier so the AI literally cannot disagree with the math.
-- "Why this rating?" UI panel with inline `Mark as primary residence` overrides per affected property; signal POST fans out re-derivation + AI memo regen via `after()`.
-- `flag_count` now derived from active risk_factors (Truong-style drift fixed).
+### Universal infra + Tier S demo wow (6 PRs)
 
-**Module 1 — Evaluate Deal v1:**
-- Multi-investor eligibility engine adapted from the archive to the JSONB `investor_criteria` schema.
-- normalize → basic checks → leverage matrix → rate adjusters pipeline.
-- `/dashboard/evaluate` form-and-results page, `/dashboard/evaluate/[id]` deep-link, `/dashboard/evaluate/investors` admin with JSON criteria editor.
-- 3 sample investor configs seeded against prod (Colchis-style, Oakhurst-style, Mandalay-style).
-
-**Investor handoff (the NPLA centerpiece):**
-- `src/lib/handoff/builder.ts` assembles a HandoffDocument from the validation graph (with verified_flips overlaying track_record where deed-confirmed).
-- exceljs Cover + Properties workbook (`/api/handoff/[id]/excel`).
-- Server-rendered printable HTML (`/handoff/[id]`) with @page rules + branded styling.
-- `HandoffCard` on validation detail with preparer info + narrative editor + Excel/PDF buttons.
-- Manual fields stored on `borrower_validations.handoff_data` jsonb (00013).
-
-**Continuous monitoring:**
-- `monitor_subscriptions` + `monitor_runs` (00014).
-- Vercel cron daily at 09:00 UTC; per-subscription cadence (daily/weekly/monthly).
-- Re-runs Cobalt entity, CourtListener, OpenSanctions/OFAC; diffs against latest snapshot; emails recipients via Resend on `changes_found`.
-- `MonitorCard` on validation detail with toggle + cadence + recipient management + run history.
-
-**Doc ingestion:**
-- `/api/ingest/borrower-doc` (lender side) — PDF / Excel / CSV → Claude extraction → `/dashboard/new` form pre-fill.
-- `/api/share/[token]/extract-addresses` (borrower side) — same file types, extracts a deduped address list into the share-link textarea.
-
-**Zillow ZHVI deviation:**
-- 26,283 zip medians ingested from the public Zillow ZHVI bulk CSV.
-- `market_outlier` informational risk factor when AVM is ≥2x or ≤0.5x the zip median.
-
-**AI rerun on verified flips:**
-- Share-link `/verify` route fires `regenerateAiMemoForValidation` via `after()` once verified_flips land.
-- AI prompt has a dedicated VERIFIED TRACK RECORD block when flips are present.
+- **PR 6 (dc34fd5):** Migration `00017_universal_infra.sql` — `documents`
+  table + Supabase storage bucket + `notification_preferences` +
+  `activity_events`. Helpers: `src/lib/events/emit.ts`,
+  `src/lib/notifications/dispatch.ts`, `src/lib/documents/store.ts`.
+  Activity emission retrofitted across signals / validations / monitor
+  cron / handoff / evaluate.
+- **PR 7 (9774386):** S1 Comparative borrower view —
+  `GET /api/validations/compare?ids=a,b` + `/dashboard/compare?a=&b=`.
+  Dashboard list gains checkbox column + sticky "Compare selected" bar.
+- **PR 8 (b311552):** S2 Story Mode AI memo — `ai_analysis` schema v2
+  (summary + strengths[] + risks[] + recommendations[]) with dual renderer
+  (`src/components/dashboard/ai-memo.tsx`). Old validations stay v1
+  forever; new ones write v2. v2 risks have "Why this rating? →" anchor
+  that scrolls to the WhyThisRating panel.
+- **PR 9 (27716ca):** S3 Litigation case cards — migration `00018_litigation_cases.sql`
+  + `src/lib/litigation/{extract,materialize}.ts` + cards UI with filter
+  chips (Bankruptcy/Civil/Foreclosure/Lien/Tax + Last 5 years + Pending
+  only). Materialization wired into validation create + monitor cron.
+  Falls back to legacy `LitigationGrid` when materialized cases empty.
+- **PR 10 (5235cc6):** S4 GC inline summary on dashboard — migration
+  `00019_gc_summary.sql` + `src/lib/gc/summary.ts` + chip component.
+  Color-coded (green/amber/red/gray). Desktop column + mobile chip
+  inline next to borrower name.
+- **PR 11 (ac7ee9e):** S5 Risk methodology PDF — server-rendered
+  `/validations/[id]/risk-methodology` with print CSS, factor decomposition
+  in canonical order, signal-override audit trail. "Print risk methodology"
+  button on validation detail header.
 
 ---
 
 ## Database state (as of 2026-04-30)
 
-**Migrations applied (15 total):**
+**Migrations applied (19 total):**
 ```
-00001_foundation                   Core tables
-00002_handle_new_user              Auto-create user/org on signup
-00003_ai_analysis                  ai_analysis JSONB column
-00004_stripe_billing               Subscription fields
-00005_sanctions_screening          sanctions_checks table
-00006_input_warnings               input_warnings JSONB on validations
-00007_validation_summary_counts    Cached property_count + flag_count
-00008_verified_flips               Trust-but-verify results table
-00009_share_token                  Borrower share-link token
-00010_domain_entities              Path B refactor — 15 new tables + nullable FKs
-00011_backfill_domain_entities     Backfill (no-op post-wipe but in history)
-00012_fix_validation_entity_fk     Corrective FK update (also moot post-wipe)
-00013_handoff_data                 borrower_validations.handoff_data jsonb
-00014_monitoring                   monitor_subscriptions + monitor_runs
-00015_zhvi_zips                    Zillow ZHVI by-zip median value lookup
+00001 foundation                        Core tables
+00002 handle_new_user                   Auto-create user/org on signup
+00003 ai_analysis                       ai_analysis JSONB
+00004 stripe_billing                    Subscription fields
+00005 sanctions_screening               sanctions_checks
+00006 input_warnings                    input_warnings JSONB
+00007 validation_summary_counts         property_count + flag_count cache
+00008 verified_flips                    Trust-but-verify results
+00009 share_token                       Borrower share-link
+00010 domain_entities                   Path B refactor — 15 tables
+00011 backfill_domain_entities
+00012 fix_validation_entity_fk
+00013 handoff_data                      handoff_data jsonb
+00014 monitoring                        monitor_subscriptions + monitor_runs
+00015 zhvi_zips                         Zillow ZHVI medians
+00016 p0_corrections                    org_id denorm, UNIQUE indexes,
+                                        schema_version, RPC, etc.
+00017 universal_infra                   documents + notification_preferences
+                                        + activity_events + storage bucket
+00018 litigation_cases                  Materialized litigation cards
+00019 gc_summary                        Cached GC chip column
 ```
 
-**Row counts:**
+**Row counts (still mostly empty per pre-NPLA validation pause):**
 - `organizations` = 1, `users` = 1
-- `lenders` = ~4,300 global (FDIC banks + known-bridge denylist, org_id=null)
-- `investors` = 3 sample configs in the dev org
-- `zhvi_zips` = 26,283 zips with median values
-- All validation/domain tables are empty until the next real run.
+- `lenders` = ~4,300 global (FDIC + known-bridge denylist)
+- `investors` = 3 sample configs
+- `zhvi_zips` = 26,283
+- All validation/domain tables empty until next real run.
+- `documents`, `activity_events`, `notification_preferences`, `litigation_cases`
+  all created but empty.
 
 ---
 
-## What's shipped
+## Manual items the user should do (collected from this push)
+
+1. **Click through the demo path in a real browser.** Sign in, run a
+   validation (or load a sample), check:
+   - Validation detail page renders Story Mode AI memo
+   - "Why this rating? →" anchor on a risk row scrolls to the factor
+   - Litigation case cards expand + "Open in CourtListener" link works
+   - Dashboard list checkbox + Compare bar + `/dashboard/compare?a=&b=`
+   - GC chip on dashboard list (desktop column + mobile inline)
+   - "Print risk methodology" → `/validations/[id]/risk-methodology` →
+     Cmd+P → physically print or save-as-PDF and verify the page-break
+     rules look right on real paper. **This was deferred from PR 5; PR 11
+     is the first real surface that needs it.**
+
+2. **Dry-run a comparison demo with Damon.** Pick two pre-loaded demo
+   validations (one strong, one weak). Walk through:
+   - Dashboard → select both → Compare
+   - Open Story Mode memo on each → click "Why this rating?" risk
+   - Print risk methodology for the weak one
+   This is the canonical 5-minute coffee-meeting demo.
+
+3. **NPLA pre-flight, ~1 week out:** verify all migrations idempotent on a
+   fresh tenant by spinning up a test org. The `00017` storage bucket
+   creation has `on conflict do nothing`; the `00018` partial UNIQUE
+   indexes need cleanup-script if any duplicates exist (none in prod
+   today).
+
+4. **Storage bucket policies on Supabase dashboard** (optional verification):
+   `documents` bucket should be private, 10MB cap, allowed MIME types
+   PDF/Excel/CSV/text/JPEG/PNG/HEIC/WebP. Storage RLS policies on
+   `storage.objects` are scoped through the `documents` row's `org_id`.
+
+5. **`MONITOR_RUN_RESULTS_ENABLED=true`** is already set on Vercel
+   production. Verify in `vercel env ls production` if anything looks off
+   in monitor runs (the new columns get written when this is `true`).
+
+---
+
+## What's shipped (master table)
 
 | Feature | Status | Notes |
 |---|---|---|
-| Auth (Supabase) | Working | Signup/login |
-| Validation flow | Working | Create → 4 parallel checks + sanctions sequential → detail report; populates all domain FKs |
-| Entity check (Cobalt) | Working | 50-state SOS, 429 retry, cached fallback |
-| Track record (Realie + Regrid + ATTOM) | Working | Owner-name search + transfer history + sale enrichment |
-| Trust-but-verify (Realie) | Working | Per-address deed-chain; flips through verified_flips |
-| Borrower share link | Working | Paste-or-upload addresses; AI extracts from PDF/Excel/CSV |
-| GC validation (CSLB) | Working | CA only; "NOT AUTOMATED" for other states |
-| Litigation (CourtListener) | Working | Federal bankruptcy + civil |
-| Sanctions / PEP (OpenSanctions + OFAC SDN) | Working | Trial key expires 2026-05-28 |
-| AI risk memo (Claude) | Working — rules-driven | Receives factor list + deterministic tier; risk_rating hard-overwritten server-side |
-| Risk-tier rebuild (Why this rating?) | Working | Deterministic factors, override-and-rerun via POST /api/signals; signal write triggers memo regen |
-| Module 1 — Evaluate Deal | Working | Multi-investor eligibility engine, JSONB criteria_value rules, leverage matrix + adjusters |
-| Investor handoff (Excel + PDF) | Working | exceljs workbook + printable HTML at /handoff/[id]; manual fields editable on validation detail |
-| Continuous monitoring | Working | Vercel cron daily 09:00 UTC; per-sub cadence; emails on changes_found via Resend |
-| Doc ingestion (lender side) | Working | PDF/Excel/CSV → Claude extraction → /dashboard/new pre-fill |
-| Share-link upload | Working | Borrower can upload PDF/Excel/CSV → addresses extracted into textarea |
-| Zillow ZHVI deviation | Working | market_outlier informational factor when AVM is 2x+ or 0.5x- the zip median |
-| Input sanity warnings | Working | LLC suffix on borrower, borrower not in officers |
-| Stripe billing | Working | $299/$499/$799 |
-| Rate limiting | Working | Token-bucket on API routes |
-| Usage metering | Working | Every vendor API call logged |
+| Auth (Supabase) | Working | |
+| Validation flow (4 pillars + sanctions) | Working | Populates all domain FKs |
+| Entity / Track-record / GC / Litigation / Sanctions adapters | Working | |
+| Trust-but-verify (Realie deed-chain) | Working | Address normalization fixed |
+| Borrower share link (paste or upload) | Working | 422 on extraction failure |
+| AI risk memo — Story Mode v2 | Working | Dual renderer, schema-versioned |
+| Risk-tier rebuild + override-and-rerun | Working | Atomic recompute via RPC |
+| Module 1 — Evaluate Deal | Working | Investor criteria w/ key-by-key validator |
+| Investor handoff (Excel + PDF) | Working | Save-then-download, dirty tracking |
+| Continuous monitoring | Working | Per-adapter status, 1h rate-limit backoff |
+| Doc ingestion (lender side) | Working | |
+| Share-link upload | Working | |
+| Zillow ZHVI deviation + unavailable factor | Working | |
+| Comparative borrower view (S1) | Working | `/dashboard/compare` |
+| Story Mode AI memo (S2) | Working | v2 with strengths/risks/recommendations |
+| Litigation case cards (S3) | Working | Materialized + filter chips + CourtListener link |
+| GC inline summary (S4) | Working | Chip on dashboard column + mobile inline |
+| Risk methodology PDF (S5) | Working | `/validations/[id]/risk-methodology` |
+| Stripe billing | Working | $299 / $499 / $799 |
+| Rate limiting | Working | |
+| Usage metering | Working | |
 
 ---
 
 ## Next session — what to pick up
 
-The Now lane and every code-buildable Pre-NPLA item is shipped and deployed.
-What's left is external- or content-bound:
+Per [docs/ROADMAP.md](docs/ROADMAP.md) Expansion plan, the next batch in
+priority order is **Tier A — capital-provider stickiness** (the
+distribution-thesis lever). Suggested PRs 12-15:
 
-**Pre-NPLA, blocked-or-content:**
-- **Insignia testimonial / case study.** Ask Damon for a quotable line —
-  hours saved per loan, false positives caught, deal-quality signals
-  surfaced. Distribution-multiplier per the strategy thesis (every NPLA
-  meeting opens with "Insignia uses this and says X"). Highest-leverage
-  thing left.
-- **Demo deal preparation.** Pre-load 2-3 polished borrower validations
-  (real or synthetic but realistic) that produce rich, clean output across
-  all pillars. Must work flawlessly — no Cobalt rate limits, no missing
-  data, no "trust me, normally it works." These are the demos walked into
-  NPLA meetings.
-- **Demo collateral.** Three talk tracks (lender / fund / consulting),
-  one-page PDF leave-behind, trial-start mechanic.
-- **TransUnion address validation.** Adapter is ~1 day once Noah's logins
-  land. Keep watching for them.
-- **Background-check provider scoping.** LexisNexis / Westlaw / Unicourt
-  eval. Don't sign anything pre-NPLA — just identify the candidate so we
-  can claim "state-court coverage coming."
+- **A1 — Investor PDF parser** (3 days). Upload investor guidelines PDF →
+  Claude structured extraction → preview → save as `investor_criteria` rows.
+  Uses `documents` table (X1, shipped). Highest-leverage Tier A win for
+  NPLA — Damon can demo this live with a real fund's PDF.
+- **A2 — Counter-offer / repricing calculator** (2 days). When a deal fails
+  an investor's box, compute the minimum delta on each constraint
+  (loan, ARV, equity) that would clear it.
+- **A3 — Borrower-facing capital-availability PDF** (1.5 days). Once a deal
+  evaluates eligible, generate a borrower-facing one-pager.
+- **E1 — Deal outcomes capture** (1 day, blocker for A4). Post-close status
+  form (Pending/Withdrawn/Funded/Extended/Repaid/Defaulted). Schema +
+  capture form. Foundation for A4 investor performance dashboard,
+  E2 borrower reputation, E3 cross-tenant consensus.
 
-**Post-NPLA / structure-dependent:** Module 1 expansion with named investor
-PDFs (need actual Colchis/Oakhurst PDFs from Damon), Nexys LOS write-back
-(blocked on Nexys API), state-court litigation provider integration
-($500-2K/mo), multi-state GC adapters.
+Or jump to **Tier B retention** for daily-driver features (watchlist,
+portfolio dashboard, search, "have we seen this borrower", activity feed
+UI, validation diff over time). Activity events are already being emitted
+across all state-change endpoints (PR 6) so B5 activity feed UI is just a
+read + render layer.
 
-**Backlog ideas worth picking up if a session opens:**
-- Auto-recommend supplemental conditions (e.g., "Bitcoin source + loan
-  > $10M → recommend personal tax transcript"). Small rules layer on
-  top of existing data.
-- Operating-agreement collection adapter (for the brokered channel).
-- State-specific endorsement validator (per-state research; bigger).
-- ICP picker (Bridge / Bank / DSCR / Brokered / Private credit) — defer
-  until a non-Bridge customer asks.
-
-If the user opens with "what's next?" and there's no specific ask, the
-right answer is to push for **Insignia testimonial collection** + locking
-in 2-3 polished demo deals — those two unblock NPLA more than any
-additional code.
+If asked "what's next?" without a specific direction, **A1 investor PDF
+parser** is the highest leverage — it's a demo wow moment AND the
+distribution-thesis lever AND it directly exercises the universal
+`documents` table we shipped.
 
 ---
 
@@ -198,90 +228,108 @@ src/lib/adapters/
   attom.ts           Sale history enrichment
   courtlistener.ts   Federal litigation
   cslb.ts            CA GC license
-  opensanctions.ts   Sanctions / PEP screening
-  ofac.ts            OFAC SDN direct CSV (free fallback)
+  opensanctions.ts   Sanctions / PEP
+  ofac.ts            OFAC SDN direct
   index.ts           Factory + orchestrator
 ```
 
 | Check Type | Primary | Fallback | Env Var | Status |
 |---|---|---|---|---|
-| Entity | Cobalt | Cached (`liveData=false`) | `COBALT_INTELLIGENCE_API_KEY` | Working |
+| Entity | Cobalt | Cached | `COBALT_INTELLIGENCE_API_KEY` | Working |
 | Track Record (search) | Realie | Regrid → stub | `REALIE_API_KEY`, `REGRID_API_TOKEN` | Working |
 | Track Record (enrichment) | ATTOM | Skip | `ATTOM_API_KEY` | Working |
-| Track Record (verify by address) | Realie | (none) | `REALIE_API_KEY` | Working |
-| GC | CSLB (CA only) | NOT AUTOMATED for others | None | Honest |
+| Track Record (verify) | Realie | (none) | `REALIE_API_KEY` | Working |
+| GC | CSLB (CA) | NOT AUTOMATED for others | None | Working |
 | Litigation | CourtListener | Stub | `COURTLISTENER_API_TOKEN` | Federal only |
-| Sanctions / PEP | OpenSanctions | OFAC SDN direct (free) | `OPENSANCTIONS_API_KEY` | Trial expires 2026-05-28 |
+| Sanctions / PEP | OpenSanctions | OFAC SDN direct | `OPENSANCTIONS_API_KEY` | Trial expires 2026-05-28 |
 
 ## Other key library modules
 
 ```
-src/lib/domain/upsert.ts      borrower/entity/property/lender + linkBorrowerToEntity
-src/lib/risk/factors.ts       Pure compute: 9 named factors + tier rule
-src/lib/risk/persist.ts       Fetch + join + compute + store risk_factors
-src/lib/ai/analysis.ts        AI memo prompt; receives factors+tier; risk_rating overwritten server-side
-src/lib/ai/regenerate.ts      Memo regen helper (used by signal POST + share verify)
-src/lib/evaluate/engine.ts    Module 1 — multi-investor eligibility engine
-src/lib/handoff/builder.ts    HandoffDocument assembly from validation graph
-src/lib/handoff/excel.ts      exceljs workbook generator
-src/lib/monitor/runner.ts     Continuous monitoring runSubscription + diff + email
-src/lib/email/resend.ts       Tiny fetch-based Resend wrapper
+src/lib/domain/upsert.ts          borrower/entity/property/lender + linkBorrowerToEntity
+src/lib/risk/factors.ts           Pure compute: 9 factors + tier rule
+src/lib/risk/persist.ts           Atomic recompute via RPC
+src/lib/ai/analysis.ts            v2 Story Mode prompt
+src/lib/ai/regenerate.ts          Memo regen helper
+src/lib/evaluate/engine.ts        Module 1 — multi-investor eligibility
+src/lib/handoff/builder.ts        HandoffDocument assembly
+src/lib/handoff/excel.ts          exceljs workbook generator
+src/lib/monitor/runner.ts         Continuous monitoring + adapter_results tracking
+src/lib/email/resend.ts           Resend wrapper
+src/lib/litigation/extract.ts     CourtListener raw → ExtractedCase
+src/lib/litigation/materialize.ts Upsert litigation_cases for a validation
+src/lib/gc/summary.ts             buildGCSummary for the dashboard chip
+src/lib/events/emit.ts            activity_events emission
+src/lib/notifications/dispatch.ts notification_preferences fan-out
+src/lib/documents/store.ts        Supabase storage upload + documents row
+src/lib/schemas/jsonb.ts          Zod schemas for every JSONB column
+src/lib/schemas/api.ts            Zod schemas for API request bodies
+src/lib/async/with-error-log.ts   Helper for after()-callback bodies
 ```
 
 ## Scripts
 
 ```
-scripts/ingest-fdic-lenders.ts      ~4,300 banks → global lenders rows
-scripts/ingest-zhvi-zips.ts         ~26K zip medians from Zillow ZHVI
-scripts/seed-sample-investors.ts    3 sample investor configs for Module 1 demo
+scripts/ingest-fdic-lenders.ts          ~4,300 banks → global lenders
+scripts/ingest-zhvi-zips.ts             ~26K zip medians from Zillow ZHVI
+scripts/seed-sample-investors.ts        3 sample investor configs
+scripts/cleanup-active-duplicates.ts    Pre-flight for 00016 UNIQUE indexes
+scripts/preflight-00016.ts              Read-only orphan + duplicate scan
+scripts/verify-00016.ts                 Post-apply verification
+scripts/verify-00017.ts                 Verify universal infra
+scripts/verify-rollback.ts              Used post-failed-migration probe
+scripts/check-storage-bucket.ts         List Supabase storage buckets
+scripts/backfill-litigation-cases.ts    Idempotent litigation_cases backfill
 ```
-
----
-
-## Vercel cron + monitoring
-
-- `vercel.json` declares a daily `0 9 * * *` cron at `/api/cron/monitor`.
-- The route reads due `monitor_subscriptions` (next_run_at <= now,
-  enabled=true), batches up to 25/run, dispatches `runSubscription`,
-  emails recipients via Resend on changes_found.
-- Set `CRON_SECRET` env if Vercel injects it; route accepts no auth header
-  if env is unset, but rejects mismatched bearer if env is set.
-- Set `RESEND_API_KEY` and optionally `RESEND_FROM_EMAIL` for emails.
-- Set `NEXT_PUBLIC_APP_URL` for the validation link in monitoring emails.
-
----
-
-## Reference paths
-
-- **Module 1 archive (already ported, retained for reference):** `/Users/zachwade/code/archive/pulseclose-archived` — `evaluate-engine.ts`, `eligibility-tab.tsx`, API + tests, design spec at `bridge-platform/modules/investor-eligibility.md`, HTML prototype.
-- **Original archive (pre-PulseClose):** `/Users/zachwade/BridgeFlow_archived`
-- **Active repo:** `/Users/zachwade/code/active/pulseclose`
-- **Production URL:** https://app.pulseclose.com
-- **Vercel project ref:** pulseclose. Auto-deploy on push to main is wired up. Push to main = production deploy. CLI `vercel --prod --yes` available as manual fallback.
-- **Supabase project ref:** `oazwscmgyqknwatqgtyc`
-- **GitHub:** https://github.com/zach-wade/PulseClose
-
----
-
-## Operations notes
-
-- **OpenSanctions trial expires 2026-05-28.** After that it falls back to OFAC SDN direct (free). Renew or upgrade before then.
-- **Cobalt key** rotation: current key `CgiH9xQq…` (40 chars). Rotate when usage cap hits. Test with curl before assuming a new key works — Cobalt's dashboard counter is unreliable.
-- **Deploys:** `git push origin main` triggers a production deploy automatically. CLI `vercel --prod --yes` available as manual fallback.
-- **Supabase migrations:** `supabase db push` after creating new files in `supabase/migrations/`. CLI installed via Homebrew at `/opt/homebrew/bin/supabase`. Login persists per machine (`supabase login`).
-- **Database wipes** (if needed during dev): REST API DELETEs in dependency order — `borrower_validations` first cascades most children. See session-2026-04-29 transcript for the curl pattern.
-- **Test Co counter** reset: see `~/.claude/projects/-Users-zachwade-PulseClose/memory/reference_supabase_lookup.md` for one-liner. Org id `9e580f59-b01d-4cbd-a950-76dd4f32ee6c`.
-- **Refresh ZHVI** monthly (~16th when Zillow republishes): `set -a; source .env.local; set +a; npx tsx scripts/ingest-zhvi-zips.ts`.
 
 ---
 
 ## Critical context for next session
 
-- **Path B data model is committed to.** Borrowers, entities, properties, lenders are first-class persistent entities. Validations are snapshots. Don't propose collapsing back to text-column-only model.
-- **Override-and-rerun is the product, not a workaround.** "Why this rating?" panel includes inline override actions ("Mark as primary residence") that re-derive factors and re-run the AI memo. This is shipped — don't propose alternative architectures to the same end.
-- **AI never picks the tier.** The prompt says so explicitly, and `risk_rating` is hard-overwritten server-side from the deterministic tier. If a request feels like "let the AI decide tier," it's wrong; route it back through factors.ts.
-- **No outside-Damon outreach pre-NPLA.** All lender/fund customer development goes through Damon. Don't propose cold outreach plans, lender interviews, or pre-NPLA marketing campaigns.
-- **Capacity is unconstrained on Zach's side.** Don't sandbag estimates on capacity assumptions. The bottleneck is structure clarity (Insignia partnership), external blocks (Nexys API access, TransUnion logins, real Insignia investor PDFs from Damon), and content tasks (testimonial, demo deals), not throughput.
-- **Architecture decisions over short-term shipping.** When a fast-ship choice and a clean-refactor choice present, default to clean. Product is new, legacy weight is small.
-- **Investor handoff Excel/PDF is the strategic deliverable.** It's shipped, but validate against a real Insignia handoff via Damon if possible — current shape follows the 4/28 description, not a real reference.
-- **Ship straight to prod via `git push origin main`** (auto-deploy). No `npm run dev` proposals.
+- **Velocity is days, not weeks.** Eleven PRs (P0 + Tier S + universal
+  infra) shipped end-to-end in one extended session. Trust the proven pace.
+- **Path B data model is committed to.** Every new feature references
+  borrowers/entities/properties/lenders by FK.
+- **JSONB columns are schema-versioned.** Every object-shaped JSONB carries
+  `schema_version` and a CHECK constraint enforcing it. New shapes go
+  through `src/lib/schemas/jsonb.ts`.
+- **Universal infra is live.** Use `documents` for every file upload,
+  `activity_events` for every state change, `notification_preferences` for
+  every outbound alert. No per-feature reinventions.
+- **AI Story Mode v2 is the default for new validations.** Old v1 reads
+  fall back through the dual renderer. Don't migrate v1 rows backward.
+- **Override-and-rerun is the product.** Risk factors recompute atomically
+  via the `recompute_risk_factors_atomic` RPC.
+- **AI never picks the tier.** `risk_rating` is hard-overwritten server-side
+  from the deterministic tier post-AI parse.
+- **Ship straight to prod via `git push origin main`** (auto-deploy).
+  `supabase db push` for migrations. `MONITOR_RUN_RESULTS_ENABLED=true`
+  is set on Vercel.
+
+---
+
+## Reference paths
+
+- **Active repo:** `/Users/zachwade/code/active/pulseclose`
+- **Production URL:** https://app.pulseclose.com
+- **Vercel project:** `buildfolios-projects-e8f9d80e/pulseclose`
+- **Supabase project ref:** `oazwscmgyqknwatqgtyc`
+- **GitHub:** https://github.com/zach-wade/PulseClose
+- **Module 1 archive (already ported):** `/Users/zachwade/code/archive/pulseclose-archived`
+- **Original archive (pre-PulseClose):** `/Users/zachwade/BridgeFlow_archived`
+
+---
+
+## Operations notes
+
+- **OpenSanctions trial expires 2026-05-28.** After that it falls back to
+  OFAC SDN direct (free). Renew or upgrade before then.
+- **Cobalt key:** rotate when usage cap hits.
+- **Deploys:** `git push origin main` triggers production auto-deploy.
+  Manual fallback: `vercel deploy --prod --yes`.
+- **Supabase migrations:** `supabase db push` after creating new files in
+  `supabase/migrations/`.
+- **Database wipes** (if needed during dev): REST API DELETEs in dependency
+  order — `borrower_validations` first cascades most children.
+- **Refresh ZHVI** monthly (~16th when Zillow republishes):
+  `set -a; source .env.local; set +a; npx tsx scripts/ingest-zhvi-zips.ts`.
