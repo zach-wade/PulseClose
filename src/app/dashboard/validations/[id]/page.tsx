@@ -33,6 +33,7 @@ import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
 import { WhyThisRating } from "@/components/dashboard/why-this-rating";
 import { HandoffCard } from "@/components/dashboard/handoff-card";
+import { MonitorCard } from "@/components/dashboard/monitor-card";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -482,6 +483,9 @@ export default function ValidationDetailPage() {
 
       {/* Investor handoff — Excel + PDF export */}
       <HandoffCard validationId={data.id} initial={data.handoff_data} />
+
+      {/* Continuous monitoring */}
+      <MonitorCard validationId={data.id} />
 
       {/* Entity Checks */}
       {data.entity_checks.map((ec) => (
