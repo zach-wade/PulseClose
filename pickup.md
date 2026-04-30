@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-04-29)
+# PulseClose — Session Pickup (2026-04-29 EOD)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
@@ -72,7 +72,7 @@ Substantial session that moved the product from "ad-hoc roadmap" to
 
 ## Database state (as of 2026-04-29 EOD)
 
-**Migrations applied (12 total):**
+**Migrations applied (15 total):**
 ```
 00001_foundation                   Core tables
 00002_handle_new_user              Auto-create user/org on signup
@@ -86,13 +86,21 @@ Substantial session that moved the product from "ad-hoc roadmap" to
 00010_domain_entities              Path B refactor — 15 new tables + nullable FKs
 00011_backfill_domain_entities     Backfill (moot after wipe but in history)
 00012_fix_validation_entity_fk     Corrective FK update (also moot post-wipe)
+00013_handoff_data                 borrower_validations.handoff_data jsonb
+00014_monitoring                   monitor_subscriptions + monitor_runs
+00015_zhvi_zips                    Zillow ZHVI by-zip median value lookup (~26K zips)
 ```
 
-**Row counts:** all validation/domain tables empty. `organizations` = 1, `users` = 1.
+**Row counts:** validation/domain tables ready for fresh data.
+- `organizations` = 1, `users` = 1
+- `lenders` = ~4,300 (FDIC banks + 15 known-bridge entries via global rows, org_id=null)
+- `investors` = 3 sample configs (Colchis-style, Oakhurst-style, Mandalay-style)
+- `zhvi_zips` = 26,283 zips with median values
 
-**Schema is ready for fresh validations** to flow through the new model. New
-code in Session 2 needs upsert-or-find helpers that populate the FKs on
-validation creation.
+**Sessions 2 + 3 of the data-model refactor shipped end-to-end.** New
+validations populate every FK on creation; signal POST re-derives risk
+factors and regenerates the AI memo; "Why this rating?" UI surfaces the
+override loop.
 
 ---
 
@@ -109,7 +117,14 @@ validation creation.
 | GC validation (CSLB) | Working | CA only; "NOT AUTOMATED" for other states |
 | Litigation (CourtListener) | Working | Federal bankruptcy + civil |
 | Sanctions / PEP (OpenSanctions + OFAC SDN) | Working | Trial key expires 2026-05-28 |
-| AI risk memo (Claude) | Working — *being rebuilt in Session 3* | Currently produces opaque tier; rules-driven rebuild pending |
+| AI risk memo (Claude) | Working — rules-driven | Receives factor list + deterministic tier; risk_rating hard-overwritten server-side from computed tier |
+| Risk-tier rebuild (Why this rating?) | Working | Deterministic factors, override-and-rerun via POST /api/signals; signal write triggers memo regen |
+| Module 1 — Evaluate Deal | Working | Multi-investor eligibility engine, JSONB criteria_value rules, leverage matrix + adjusters |
+| Investor handoff (Excel + PDF) | Working | exceljs workbook + printable HTML at /handoff/[id]; manual fields editable on validation detail |
+| Continuous monitoring | Working | Vercel cron daily 9 UTC; per-sub cadence; emails on changes_found via Resend |
+| Doc ingestion (lender side) | Working | PDF/Excel/CSV → Claude extraction → /dashboard/new pre-fill |
+| Share-link upload | Working | Borrower can upload PDF/Excel/CSV → addresses extracted into textarea |
+| Zillow ZHVI deviation | Working | market_outlier informational factor when AVM is 2x+ or 0.5x- the zip median |
 | Input sanity warnings | Working | LLC suffix on borrower, borrower not in officers |
 | Stripe billing | Working | $299/$499/$799 |
 | Rate limiting | Working | Token-bucket on API routes |
@@ -117,32 +132,55 @@ validation creation.
 
 ---
 
-## Next session — Session 2 of data-model refactor
+## Next session — what to pick up
 
-**Goal:** rewire the API and UI to read/write through the new domain-entity model. Without this, new validations don't populate the FKs, the new tables stay empty, and the override/risk-tier work in Session 3 has nothing to grip.
+The Now lane and the code-buildable Pre-NPLA items are all shipped and
+deployed. What's left is external- or content-bound:
 
-**Build steps:**
-1. **Upsert-or-find helpers** — `src/lib/domain/upsert.ts` with `upsertBorrower`, `upsertEntity`, `upsertProperty`, `upsertLender`. Each takes (org_id, identifying-fields) and returns the existing record or inserts a new one.
-2. **Wire validation creation** — `src/app/api/validations/route.ts` POST handler should call `upsertBorrower` + `upsertEntity` and set `primary_borrower_id` + `primary_entity_id` on the new validation row alongside the existing text fields.
-3. **Wire vendor result handlers** — when entity_check / track_record_entries / litigation_check rows are written, also populate the FKs (`entity_id`, `property_id`, `lender_id`, etc.) by calling the upsert helpers.
-4. **FDIC lender ingestion** — download the FDIC institutions CSV (`https://banks.data.fdic.gov/api/institutions`, free, ~6,000 records), populate `lenders` classifications. One-time + periodic refresh.
-5. **Signal-write API** — endpoint `POST /api/signals` that takes `{borrower_id, property_id?, signal_key, signal_value, reason}` and inserts a `borrower_property_signals` (or appropriate table) row. Triggers re-derivation in Session 3.
-6. **UI updates (light touch)** — switch reads from text columns to FK joins where it materially helps (e.g., entity badge with FK-derived SOS data; lender classification badge). The existing text columns stay populated for transition; we drop them later.
+**Pre-NPLA, blocked-or-content:**
+- **Insignia testimonial / case study.** Ask Damon for a quotable line.
+  Distribution-multiplier per the strategy thesis.
+- **Demo collateral.** Three talk tracks (lender / fund / consulting),
+  one-page PDF leave-behind, trial-start mechanic.
+- **TransUnion address validation.** Adapter is ~1 day once Noah's
+  logins land. Keep watching for them.
+- **Background-check provider scoping.** LexisNexis / Westlaw /
+  Unicourt eval. Don't sign anything pre-NPLA — just identify the
+  candidate so we can claim "state-court coverage coming."
+- **Demo deal preparation.** Pre-load 2-3 polished borrower validations
+  (real or synthetic) that produce rich, clean output across all
+  pillars. These are the demos walked into NPLA meetings — must work
+  flawlessly.
 
-**Out-of-scope for Session 2:** the risk-tier rebuild itself (Session 3), the "Why this rating?" UI (Session 3), the override-rerun trigger logic (Session 3).
+**Post-NPLA / structure-dependent:** Module 1 expansion with named
+investor PDFs (need actual Colchis/Oakhurst PDFs from Damon), Nexys
+LOS write-back (blocked on Nexys API), state-court litigation
+provider integration ($500-2K/mo), multi-state GC adapters.
 
-**After Session 2 + 3 complete:** Module 1 archive port, investor handoff Excel/PDF, continuous monitoring, doc ingestion, etc. — see `docs/ROADMAP.md` Pre-NPLA lane.
+**Backlog ideas worth picking up if a session opens:**
+- Auto-recommend supplemental conditions (e.g., "Bitcoin source +
+  loan > $10M → recommend personal tax transcript"). Small rules
+  layer on top of existing data.
+- Operating-agreement collection adapter (for the brokered channel).
+- State-specific endorsement validator (per-state research; bigger).
+- ICP picker (Bridge/Bank/DSCR/Brokered/Private credit) — defer until
+  a non-Bridge customer asks.
+
+If the user opens with "what's next?" and there's no specific ask, the
+right answer is to push for **Insignia testimonial collection** — it's
+the single highest-leverage thing left before NPLA, and it's a Damon
+ask, not a code task.
 
 ---
 
-## Vendor adapter chain (unchanged from prior session)
+## Vendor adapter chain
 
 ```
 src/lib/adapters/
   types.ts           Interface definitions (ValidationAdapter)
   extract.ts         Client-side extraction from raw_response JSONB
   stub.ts            Demo data adapter
-  cobalt.ts          Entity + orchestrator
+  cobalt.ts          SOS entity adapter
   realie.ts          Property search + lookupPropertyByAddress
   regrid.ts          Property search — fallback
   attom.ts           Sale history enrichment
@@ -150,7 +188,30 @@ src/lib/adapters/
   cslb.ts            CA GC license
   opensanctions.ts   Sanctions / PEP screening
   ofac.ts            OFAC SDN direct CSV (free fallback)
-  index.ts           Factory
+  index.ts           Factory + orchestrator
+```
+
+## Other key library modules
+
+```
+src/lib/domain/upsert.ts      borrower/entity/property/lender + linkBorrowerToEntity
+src/lib/risk/factors.ts       Pure compute: 9 named factors + tier rule
+src/lib/risk/persist.ts       Fetch + join + compute + store risk_factors
+src/lib/ai/analysis.ts        AI memo prompt; receives factors+tier; risk_rating overwritten server-side
+src/lib/ai/regenerate.ts      Memo regen helper (used by signal POST + share verify)
+src/lib/evaluate/engine.ts    Module 1 — multi-investor eligibility engine
+src/lib/handoff/builder.ts    HandoffDocument assembly from validation graph
+src/lib/handoff/excel.ts      exceljs workbook generator
+src/lib/monitor/runner.ts     Continuous monitoring runSubscription + diff + email
+src/lib/email/resend.ts       Tiny fetch-based Resend wrapper
+```
+
+## Scripts
+
+```
+scripts/ingest-fdic-lenders.ts      ~4,300 banks → global lenders rows
+scripts/ingest-zhvi-zips.ts         ~26K zip medians from Zillow ZHVI
+scripts/seed-sample-investors.ts    3 sample investor configs for Module 1 demo
 ```
 
 | Check Type | Primary | Fallback | Env Var | Status |
@@ -187,6 +248,17 @@ src/lib/adapters/
 - **Test Co counter** reset: see `~/.claude/projects/-Users-zachwade-PulseClose/memory/reference_supabase_lookup.md` for one-liner. Org id `9e580f59-b01d-4cbd-a950-76dd4f32ee6c` (probably need to re-create after wipe).
 
 ---
+
+## Vercel cron + monitoring
+
+- `vercel.json` declares a daily `0 9 * * *` cron at `/api/cron/monitor`.
+- The route reads due `monitor_subscriptions` (next_run_at <= now,
+  enabled=true), batches up to 25/run, dispatches `runSubscription`,
+  emails recipients via Resend on changes_found.
+- Set `CRON_SECRET` env if Vercel injects it; route accepts no auth
+  (404s if you forget) but rejects mismatched bearer if env is set.
+- Set `RESEND_API_KEY` and optionally `RESEND_FROM_EMAIL` for emails.
+- Set `NEXT_PUBLIC_APP_URL` for the link in monitoring emails.
 
 ## Critical context for next session
 
