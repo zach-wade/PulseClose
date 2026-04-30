@@ -27,6 +27,7 @@ import {
   GitCompare,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { GCStatusChip, type GCSummaryView } from "@/components/dashboard/gc-status-chip";
 
 interface Validation {
   id: string;
@@ -38,6 +39,7 @@ interface Validation {
   property_count: number | null;
   flag_count: number | null;
   ai_analysis: unknown;
+  gc_summary: GCSummaryView | null;
   validation_date: string | null;
   created_at: string;
 }
@@ -159,6 +161,7 @@ export default function DashboardPage() {
                   <TableHead className="text-right">Tier</TableHead>
                   <TableHead className="text-right">Props</TableHead>
                   <TableHead className="text-right">Flags</TableHead>
+                  <TableHead className="hidden md:table-cell">GC</TableHead>
                   <TableHead>AI</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
@@ -174,6 +177,7 @@ export default function DashboardPage() {
                     <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                    <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-14" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   </TableRow>
@@ -261,6 +265,7 @@ export default function DashboardPage() {
                   <TableHead className="text-right">Tier</TableHead>
                   <TableHead className="text-right">Props</TableHead>
                   <TableHead className="text-right">Flags</TableHead>
+                  <TableHead className="hidden md:table-cell">GC</TableHead>
                   <TableHead>AI</TableHead>
                   <TableHead>Date</TableHead>
                 </TableRow>
@@ -278,12 +283,18 @@ export default function DashboardPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Link
-                        href={`/dashboard/validations/${v.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {v.borrower_name}
-                      </Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href={`/dashboard/validations/${v.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {v.borrower_name}
+                        </Link>
+                        {/* Mobile-only GC chip — desktop has its own column. */}
+                        <span className="md:hidden">
+                          <GCStatusChip summary={v.gc_summary} />
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {v.borrower_entity_name}
@@ -306,6 +317,9 @@ export default function DashboardPage() {
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <GCStatusChip summary={v.gc_summary} />
                     </TableCell>
                     <TableCell>
                       {v.ai_analysis ? (

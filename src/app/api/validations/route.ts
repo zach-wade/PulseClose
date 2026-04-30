@@ -21,6 +21,7 @@ import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
 import { withErrorLog } from "@/lib/async/with-error-log";
 import { emitActivity } from "@/lib/events/emit";
 import { materializeLitigationCases } from "@/lib/litigation/materialize";
+import { buildGCSummary } from "@/lib/gc/summary";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -509,7 +510,8 @@ export async function POST(request: Request) {
     // 9. Update the validation record with check results immediately.
     // Cache property count so the dashboard list can render it without a
     // join. flag_count is set by recomputeRiskFactorsForValidation above
-    // so the dashboard count matches the active factor list.
+    // so the dashboard count matches the active factor list. gc_summary
+    // gets the cached chip shape for the dashboard column.
     await supabase
       .from("borrower_validations")
       .update({
@@ -520,6 +522,7 @@ export async function POST(request: Request) {
         // for schema_version skips array-shaped JSONB columns.
         input_warnings: inputWarnings,
         property_count: properties.length,
+        gc_summary: buildGCSummary(gcResult),
         validation_date: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

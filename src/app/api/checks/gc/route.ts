@@ -4,6 +4,7 @@ import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { upsertBorrower } from "@/lib/domain/upsert";
+import { buildGCSummary } from "@/lib/gc/summary";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -46,6 +47,9 @@ export async function POST(request: Request) {
     // table per DATA-MODEL.md is a future addition).
     const primaryBorrowerId = await upsertBorrower(supabase, profile.org_id, gc_name);
 
+    // Cached GC summary for the dashboard list chip.
+    const gcSummary = buildGCSummary(result);
+
     // Create a lightweight validation record for FK
     const { data: validation } = await supabase
       .from("borrower_validations")
@@ -57,6 +61,7 @@ export async function POST(request: Request) {
         confidence_score: 0,
         created_by: profile.id,
         primary_borrower_id: primaryBorrowerId,
+        gc_summary: gcSummary,
       })
       .select("id")
       .single();
