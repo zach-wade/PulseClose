@@ -19,6 +19,14 @@ export async function POST(request: Request) {
   if (!planConfig) {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
   }
+  // `internal` plan has no Stripe price IDs — set via SQL only, never via
+  // checkout. Reject early so the type narrowing below isn't ambiguous.
+  if (!planConfig.monthlyPriceId || !planConfig.annualPriceId) {
+    return NextResponse.json(
+      { error: "Plan is not purchasable via checkout" },
+      { status: 400 },
+    );
+  }
 
   const supabase = createAdminClient();
 

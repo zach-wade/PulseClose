@@ -202,6 +202,15 @@ export default function SettingsPage() {
                 Your organization is on the{" "}
                 <span className="font-medium capitalize">{data.org?.plan}</span>{" "}
                 plan.
+                {data.org?.plan === "internal" && (
+                  <>
+                    {" "}
+                    <span className="text-muted-foreground">
+                      (Internal — unlimited checks; not billable. Not shown in
+                      the upgrade matrix below.)
+                    </span>
+                  </>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -8,7 +8,7 @@ import {
   getSanctionsDataSource,
 } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
-import { getCheckLimit } from "@/lib/stripe/server";
+import { getCheckLimit, isUnlimitedPlan } from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   upsertBorrower,
@@ -87,8 +87,15 @@ export async function POST(request: Request) {
   const checksUsed = org?.checks_used_this_period ?? 0;
   const checkLimit = getCheckLimit(plan);
 
-  // Free tier gets 3 checks to try the product, paid plans get their limit
-  const effectiveLimit = org?.stripe_subscription_id ? checkLimit : 3;
+  // `internal` plan (founder / QA / demo orgs — set via SQL) bypasses both
+  // the monthly cap and the pre-subscription 3-check trial gate. Other
+  // free-tier orgs without a Stripe subscription get 3 checks; paid plans
+  // get their tier's limit.
+  const effectiveLimit = isUnlimitedPlan(plan)
+    ? Number.POSITIVE_INFINITY
+    : org?.stripe_subscription_id
+      ? checkLimit
+      : 3;
 
   if (checksUsed >= effectiveLimit) {
     return NextResponse.json(

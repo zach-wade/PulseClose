@@ -23,7 +23,9 @@ import { BarChart3, DollarSign, Activity, TrendingUp } from "lucide-react";
 interface UsageData {
   org_name: string;
   plan: string;
-  plan_limit: number;
+  // null when the org is on the `internal` plan (unlimited).
+  plan_limit: number | null;
+  plan_unlimited: boolean;
   total_checks: number;
   total_cost_cents: number;
   by_type: Record<string, { count: number; cost_cents: number }>;
@@ -93,10 +95,16 @@ export default function UsagePage() {
 
   if (!data) return null;
 
-  const usagePercent = Math.min(
-    100,
-    Math.round((data.total_checks / data.plan_limit) * 100),
-  );
+  // Internal plan = no cap; render "Unlimited" + suppress the
+  // approaching-limit warning. Avoids div-by-zero from the previous
+  // (total_checks / plan_limit) calc when plan_limit is null.
+  const usagePercent =
+    data.plan_unlimited || data.plan_limit == null || data.plan_limit === 0
+      ? 0
+      : Math.min(
+          100,
+          Math.round((data.total_checks / data.plan_limit) * 100),
+        );
   const maxChecks = Math.max(...data.chart_data.map((d) => d.checks), 1);
 
   return (
@@ -152,7 +160,9 @@ export default function UsagePage() {
                 {data.plan}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {data.total_checks}/{data.plan_limit} checks
+                {data.plan_unlimited
+                  ? `${data.total_checks} checks · unlimited`
+                  : `${data.total_checks}/${data.plan_limit} checks`}
               </span>
             </div>
           </CardContent>
@@ -165,26 +175,35 @@ export default function UsagePage() {
           <CardTitle className="text-base">Plan Usage</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>
-              {data.total_checks} of {data.plan_limit} checks used
-            </span>
-            <span className="text-muted-foreground">{usagePercent}%</span>
-          </div>
-          <Progress
-            value={usagePercent}
-            className={
-              usagePercent > 80
-                ? "[&>[data-slot=indicator]]:bg-destructive"
-                : usagePercent > 60
-                  ? "[&>[data-slot=indicator]]:bg-warning"
-                  : ""
-            }
-          />
-          {usagePercent > 80 && (
-            <p className="text-xs text-amber-600">
-              Approaching plan limit. Consider upgrading to Pro for 50 checks/month.
+          {data.plan_unlimited ? (
+            <p className="text-sm text-muted-foreground">
+              {data.total_checks} checks this period · <strong>Unlimited</strong>{" "}
+              (internal account, no monthly cap).
             </p>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm">
+                <span>
+                  {data.total_checks} of {data.plan_limit} checks used
+                </span>
+                <span className="text-muted-foreground">{usagePercent}%</span>
+              </div>
+              <Progress
+                value={usagePercent}
+                className={
+                  usagePercent > 80
+                    ? "[&>[data-slot=indicator]]:bg-destructive"
+                    : usagePercent > 60
+                      ? "[&>[data-slot=indicator]]:bg-warning"
+                      : ""
+                }
+              />
+              {usagePercent > 80 && (
+                <p className="text-xs text-amber-600">
+                  Approaching plan limit. Consider upgrading to Professional for 50 checks/month.
+                </p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

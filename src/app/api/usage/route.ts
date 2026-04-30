@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { getCheckLimit, isUnlimitedPlan } from "@/lib/stripe/server";
 
 export async function GET() {
   const profile = await getUserProfile();
@@ -59,17 +60,18 @@ export async function GET() {
     chartData.push({ date: key, checks: dailyCounts[key] ?? 0 });
   }
 
-  // Plan limits
-  const planLimits: Record<string, number> = {
-    starter: 20,
-    pro: 50,
-    enterprise: 999,
-  };
+  // Plan limit comes from PLANS config in stripe/server.ts (single source of
+  // truth). The previous duplicated map here drifted (`pro` vs `professional`,
+  // `enterprise: 999` vs `999999`). Internal plan reports plan_limit = null
+  // so the UI can render "Unlimited" instead of a percent that's always 0.
+  const plan = org?.plan ?? "starter";
+  const planLimit = isUnlimitedPlan(plan) ? null : getCheckLimit(plan);
 
   return NextResponse.json({
     org_name: org?.name ?? "Unknown",
-    plan: org?.plan ?? "starter",
-    plan_limit: planLimits[org?.plan ?? "starter"] ?? 20,
+    plan,
+    plan_limit: planLimit,
+    plan_unlimited: isUnlimitedPlan(plan),
     total_checks: totalChecks,
     total_cost_cents: totalCostCents,
     by_type: byType,

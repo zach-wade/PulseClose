@@ -2,8 +2,21 @@ import Stripe from "stripe";
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-// Plan config — maps internal plan names to Stripe price IDs and limits
+// Plan config — maps internal plan names to Stripe price IDs and limits.
+//
+// `internal` is reserved for non-billable accounts (founder/QA/demo orgs).
+// It carries no Stripe price IDs, never goes through checkout, and bypasses
+// both the monthly check cap and the free-tier 3-check pre-subscription
+// gate (see api/validations/route.ts). Set an org to this plan via SQL —
+// it's not exposed in /dashboard/settings.
 export const PLANS = {
+  internal: {
+    name: "Internal",
+    monthlyPriceId: null,
+    annualPriceId: null,
+    checkLimit: Number.POSITIVE_INFINITY,
+    price: 0,
+  },
   starter: {
     name: "Starter",
     monthlyPriceId: process.env.STRIPE_PRICE_STARTER_MONTHLY!,
@@ -28,6 +41,10 @@ export const PLANS = {
 } as const;
 
 export type PlanName = keyof typeof PLANS;
+
+export function isUnlimitedPlan(plan: string): boolean {
+  return plan === "internal";
+}
 
 // Resolve plan name from Stripe price ID
 export function getPlanFromPriceId(priceId: string): PlanName {
