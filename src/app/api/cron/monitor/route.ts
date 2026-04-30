@@ -7,11 +7,21 @@
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { runSubscription, notifyChanges, nextRunAt } from "@/lib/monitor/runner";
+import {
+  runSubscription,
+  notifyChanges,
+  nextRunAt,
+  rateLimitedRunAt,
+  anyRateLimited,
+} from "@/lib/monitor/runner";
 
 export const maxDuration = 300;
 
 const PUBLIC_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.pulseclose.com";
+
+// Gate writes to monitor_runs.adapter_results / email_status until the
+// 00016 migration adds those columns. Flip the env var post-deploy.
+const RUN_RESULTS_ENABLED = process.env.MONITOR_RUN_RESULTS_ENABLED === "true";
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -44,18 +54,24 @@ export async function GET(request: Request) {
     try {
       const result = await runSubscription(supabase, sub);
 
-      // Persist run record
+      // Persist run record. adapter_results / email_status columns ship in
+      // 00016; gate behind env flag so this PR can deploy ahead of the
+      // migration without erroring.
+      const runInsertPayload: Record<string, unknown> = {
+        subscription_id: sub.id,
+        validation_id: sub.validation_id,
+        org_id: sub.org_id,
+        status: result.status,
+        changes: result.changes,
+        error_message: result.error ?? null,
+        cost_cents: result.cost_cents,
+      };
+      if (RUN_RESULTS_ENABLED) {
+        runInsertPayload.adapter_results = result.adapter_results;
+      }
       const { data: runRow } = await supabase
         .from("monitor_runs")
-        .insert({
-          subscription_id: sub.id,
-          validation_id: sub.validation_id,
-          org_id: sub.org_id,
-          status: result.status,
-          changes: result.changes,
-          error_message: result.error ?? null,
-          cost_cents: result.cost_cents,
-        })
+        .insert(runInsertPayload)
         .select("id")
         .single();
 
@@ -73,6 +89,7 @@ export async function GET(request: Request) {
       }
 
       // Notify on changes_found
+      let emailStatus: "sent" | "failed" | "skipped" = "skipped";
       if (result.status === "changes_found" && result.changes.length > 0) {
         const { data: validation } = await supabase
           .from("borrower_validations")
@@ -81,21 +98,32 @@ export async function GET(request: Request) {
           .single();
         if (validation) {
           const sent = await notifyChanges(sub, validation, result.changes, PUBLIC_BASE_URL);
-          if (sent && runRow) {
-            await supabase
-              .from("monitor_runs")
-              .update({ notified_at: new Date().toISOString() })
-              .eq("id", runRow.id);
+          emailStatus = sent ? "sent" : "failed";
+          if (runRow) {
+            const runUpdate: Record<string, unknown> = {};
+            if (sent) runUpdate.notified_at = new Date().toISOString();
+            if (RUN_RESULTS_ENABLED) runUpdate.email_status = emailStatus;
+            if (Object.keys(runUpdate).length > 0) {
+              await supabase.from("monitor_runs").update(runUpdate).eq("id", runRow.id);
+            }
           }
         }
         changesFound++;
+      } else if (RUN_RESULTS_ENABLED && runRow) {
+        await supabase
+          .from("monitor_runs")
+          .update({ email_status: emailStatus })
+          .eq("id", runRow.id);
       }
 
-      // Bump next_run_at + last_run_at on the subscription
+      // Choose next_run_at — back off 1h on rate limits instead of skipping
+      // a full cadence window.
+      const wasRateLimited = anyRateLimited(result.adapter_results);
+      const next = wasRateLimited ? rateLimitedRunAt() : nextRunAt(sub.cadence);
       await supabase
         .from("monitor_subscriptions")
         .update({
-          next_run_at: nextRunAt(sub.cadence).toISOString(),
+          next_run_at: next.toISOString(),
           last_run_at: new Date().toISOString(),
         })
         .eq("id", sub.id);

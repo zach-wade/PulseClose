@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  upsertBorrower,
+  upsertEntity,
+  linkBorrowerToEntity,
+} from "@/lib/domain/upsert";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -35,6 +40,31 @@ export async function POST(request: Request) {
   try {
     const result = await adapter.lookupEntity({ entity_name, state });
 
+    // Resolve borrower + entity to domain rows so the validation row wires
+    // into the same domain graph that /api/validations and signal-driven
+    // re-derivation use. The entity itself acts as borrower for entity-only
+    // lookups (LLC-as-borrower).
+    const primaryBorrowerId = await upsertBorrower(supabase, profile.org_id, entity_name);
+    const primaryEntityId = await upsertEntity(supabase, profile.org_id, {
+      displayName: entity_name,
+      state,
+      entityType: result.entity_type ?? null,
+      formationDate: result.formation_date ?? null,
+      latestSosStatus: result.sos_status ?? null,
+      latestSosCheckAt: new Date().toISOString(),
+      latestRegisteredAgent: result.registered_agent ?? null,
+    });
+    if (primaryBorrowerId && primaryEntityId) {
+      await linkBorrowerToEntity(
+        supabase,
+        primaryBorrowerId,
+        primaryEntityId,
+        "member",
+        "inferred",
+        "low",
+      );
+    }
+
     // Create a lightweight validation record for FK
     const { data: validation } = await supabase
       .from("borrower_validations")
@@ -45,6 +75,8 @@ export async function POST(request: Request) {
         overall_status: "pending",
         confidence_score: 0,
         created_by: profile.id,
+        primary_borrower_id: primaryBorrowerId,
+        primary_entity_id: primaryEntityId,
       })
       .select("id")
       .single();
@@ -52,6 +84,7 @@ export async function POST(request: Request) {
     if (validation) {
       await supabase.from("entity_checks").insert({
         validation_id: validation.id,
+        entity_id: primaryEntityId,
         entity_name: result.entity_name,
         state: result.state,
         entity_type: result.entity_type,

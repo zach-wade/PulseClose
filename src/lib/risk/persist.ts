@@ -192,9 +192,21 @@ export async function recomputeRiskFactorsForValidation(
 
   // Replace existing risk_factors for this validation. Cascade FKs aren't
   // an issue — risk_factors is a leaf table with no children.
-  await supabase.from("risk_factors").delete().eq("validation_id", validationId);
+  //
+  // TODO(PR 4): replace with `recompute_risk_factors_atomic()` RPC so the
+  // delete+insert is one transaction. Until the RPC ships, surface errors
+  // explicitly instead of silently swallowing them — a silent insert
+  // failure here would leave the validation with zero factors and a
+  // misleading LOW tier.
+  const { error: deleteError } = await supabase
+    .from("risk_factors")
+    .delete()
+    .eq("validation_id", validationId);
+  if (deleteError) {
+    throw new Error(`risk_factors delete failed for ${validationId}: ${deleteError.message}`);
+  }
   if (factors.length > 0) {
-    await supabase.from("risk_factors").insert(
+    const { error: insertError } = await supabase.from("risk_factors").insert(
       factors.map((f) => ({
         validation_id: validationId,
         factor_key: f.factor_key,
@@ -205,6 +217,9 @@ export async function recomputeRiskFactorsForValidation(
         explanation: f.explanation,
       })),
     );
+    if (insertError) {
+      throw new Error(`risk_factors insert failed for ${validationId}: ${insertError.message}`);
+    }
   }
 
   // Refresh the cached flag_count on the validation. The dashboard list

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { upsertBorrower } from "@/lib/domain/upsert";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -39,6 +40,12 @@ export async function POST(request: Request) {
       state,
     });
 
+    // Resolve borrower to a domain row so the validation wires into the same
+    // graph that signal-driven re-derivation queries on. GC is treated as a
+    // borrower-only entity for now (no entity row created — the `contractors`
+    // table per DATA-MODEL.md is a future addition).
+    const primaryBorrowerId = await upsertBorrower(supabase, profile.org_id, gc_name);
+
     // Create a lightweight validation record for FK
     const { data: validation } = await supabase
       .from("borrower_validations")
@@ -49,6 +56,7 @@ export async function POST(request: Request) {
         overall_status: "pending",
         confidence_score: 0,
         created_by: profile.id,
+        primary_borrower_id: primaryBorrowerId,
       })
       .select("id")
       .single();

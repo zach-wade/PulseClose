@@ -220,6 +220,9 @@ export async function linkBorrowerToEntity(
   source: "sos" | "user" | "inferred" = "inferred",
   confidence: "high" | "medium" | "low" = "medium",
 ): Promise<void> {
+  // Optimistic pre-check — the partial unique index added in 00016 will be
+  // the actual race guard, but the read is free in the common case where
+  // the link already exists.
   const { data: existing } = await supabase
     .from("borrower_entities")
     .select("id")
@@ -229,13 +232,20 @@ export async function linkBorrowerToEntity(
     .maybeSingle();
   if (existing) return;
 
-  await supabase.from("borrower_entities").insert({
+  const { error } = await supabase.from("borrower_entities").insert({
     borrower_id: borrowerId,
     entity_id: entityId,
     role,
     source,
     confidence,
   });
+
+  // Race winner: the parallel writer's row already satisfies the constraint;
+  // ignore the conflict and let our caller proceed. Other errors are real and
+  // must surface — current code silently swallowed them all.
+  if (error && error.code !== "23505") {
+    throw new Error(`linkBorrowerToEntity failed (${borrowerId}, ${entityId}): ${error.message}`);
+  }
 }
 
 // ── Lenders ────────────────────────────────────────────────────────────

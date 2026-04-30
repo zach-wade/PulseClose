@@ -19,6 +19,38 @@ export interface MonitorChange {
   severity: ChangeSeverity;
 }
 
+export type AdapterStatus = "ok" | "rate_limited" | "failed" | "skipped";
+
+export interface AdapterResult {
+  status: AdapterStatus;
+  error?: string;
+}
+
+export interface MonitorAdapterResults {
+  entity: AdapterResult;
+  litigation: AdapterResult;
+  sanctions: AdapterResult;
+}
+
+// Pragmatic rate-limit detection — vendor adapters don't yet throw typed
+// errors. String-match on the error message; typed errors are P1.
+function classifyError(err: unknown): AdapterResult {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+  if (lower.includes("429") || lower.includes("rate limit") || lower.includes("rate_limit")) {
+    return { status: "rate_limited", error: msg };
+  }
+  return { status: "failed", error: msg };
+}
+
+export function anyRateLimited(results: MonitorAdapterResults): boolean {
+  return (
+    results.entity.status === "rate_limited" ||
+    results.litigation.status === "rate_limited" ||
+    results.sanctions.status === "rate_limited"
+  );
+}
+
 interface SubscriptionRow {
   id: string;
   validation_id: string;
@@ -34,10 +66,24 @@ const CADENCE_MS: Record<SubscriptionRow["cadence"], number> = {
   monthly: 30 * 24 * 60 * 60 * 1000,
 };
 
+export interface RunResult {
+  status: "clean" | "changes_found" | "error";
+  changes: MonitorChange[];
+  error?: string;
+  cost_cents: number;
+  adapter_results: MonitorAdapterResults;
+}
+
 export async function runSubscription(
   supabase: SupabaseClient,
   sub: SubscriptionRow,
-): Promise<{ status: "clean" | "changes_found" | "error"; changes: MonitorChange[]; error?: string; cost_cents: number }> {
+): Promise<RunResult> {
+  const adapter_results: MonitorAdapterResults = {
+    entity: { status: "skipped" },
+    litigation: { status: "skipped" },
+    sanctions: { status: "skipped" },
+  };
+
   const { data: validation } = await supabase
     .from("borrower_validations")
     .select("id, borrower_name, borrower_entity_name")
@@ -45,7 +91,7 @@ export async function runSubscription(
     .single();
 
   if (!validation) {
-    return { status: "error", changes: [], error: "Validation not found", cost_cents: 0 };
+    return { status: "error", changes: [], error: "Validation not found", cost_cents: 0, adapter_results };
   }
 
   // Latest known state
@@ -71,7 +117,13 @@ export async function runSubscription(
   ]);
 
   if (!latestEntity.data) {
-    return { status: "error", changes: [], error: "No prior entity_check to compare against", cost_cents: 0 };
+    return {
+      status: "error",
+      changes: [],
+      error: "No prior entity_check to compare against",
+      cost_cents: 0,
+      adapter_results,
+    };
   }
 
   const adapter = getAdapter();
@@ -138,7 +190,9 @@ export async function runSubscription(
       raw_response: entityResult.raw_response,
     });
     if (process.env.COBALT_INTELLIGENCE_API_KEY) cost_cents += 500;
+    adapter_results.entity = { status: "ok" };
   } catch (err) {
+    adapter_results.entity = classifyError(err);
     console.error("Monitor entity check failed:", err);
   }
 
@@ -182,7 +236,9 @@ export async function runSubscription(
       );
     }
     if (process.env.COURTLISTENER_API_TOKEN) cost_cents += 1000;
+    adapter_results.litigation = { status: "ok" };
   } catch (err) {
+    adapter_results.litigation = classifyError(err);
     console.error("Monitor litigation check failed:", err);
   }
 
@@ -229,7 +285,9 @@ export async function runSubscription(
       raw_response: sanctions.raw_response,
     });
     if (sanctions.source.includes("opensanctions")) cost_cents += 100;
+    adapter_results.sanctions = { status: "ok" };
   } catch (err) {
+    adapter_results.sanctions = classifyError(err);
     console.error("Monitor sanctions check failed:", err);
   }
 
@@ -237,11 +295,19 @@ export async function runSubscription(
     status: changes.length > 0 ? "changes_found" : "clean",
     changes,
     cost_cents,
+    adapter_results,
   };
 }
 
 export function nextRunAt(cadence: SubscriptionRow["cadence"]): Date {
   return new Date(Date.now() + CADENCE_MS[cadence]);
+}
+
+// Rate-limit backoff — when any adapter returns 429, we don't want to advance
+// the full cadence (would skip a real check window) but also don't want to
+// retry immediately (would hammer the vendor). Compromise: 1h.
+export function rateLimitedRunAt(): Date {
+  return new Date(Date.now() + 60 * 60 * 1000);
 }
 
 export function buildEmailHtml(opts: {
