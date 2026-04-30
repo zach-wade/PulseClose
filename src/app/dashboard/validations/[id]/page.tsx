@@ -32,6 +32,7 @@ import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
 import { WhyThisRating } from "@/components/dashboard/why-this-rating";
+import { HandoffCard } from "@/components/dashboard/handoff-card";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -85,6 +86,11 @@ interface ValidationDetail {
   primary_entity_id: string | null;
   risk_factors: RiskFactor[];
   tier: "HIGH" | "MEDIUM" | "LOW";
+  handoff_data: {
+    overall_narrative?: string | null;
+    preparer_name?: string | null;
+    preparer_email?: string | null;
+  } | null;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -473,6 +479,9 @@ export default function ValidationDetailPage() {
         borrowerId={data.primary_borrower_id}
         onSignalApplied={handleSignalApplied}
       />
+
+      {/* Investor handoff — Excel + PDF export */}
+      <HandoffCard validationId={data.id} initial={data.handoff_data} />
 
       {/* Entity Checks */}
       {data.entity_checks.map((ec) => (
