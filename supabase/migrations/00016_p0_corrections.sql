@@ -37,8 +37,9 @@ alter table public.entity_checks
   alter column org_id set not null,
   add constraint entity_checks_org_fk foreign key (org_id)
     references public.organizations(id) on delete cascade;
-create index if not exists idx_entity_checks_org_created
-  on public.entity_checks(org_id, created_at desc);
+-- entity_checks uses `check_date` (not created_at) per 00001_foundation.sql.
+create index if not exists idx_entity_checks_org_checked
+  on public.entity_checks(org_id, check_date desc);
 drop policy if exists entity_checks_via_validation on public.entity_checks;
 create policy "entity_checks_own_org" on public.entity_checks
   for all
@@ -91,8 +92,9 @@ alter table public.litigation_checks
   alter column org_id set not null,
   add constraint litigation_checks_org_fk foreign key (org_id)
     references public.organizations(id) on delete cascade;
-create index if not exists idx_litigation_checks_org_created
-  on public.litigation_checks(org_id, created_at desc);
+-- litigation_checks uses `check_date` (not created_at) per 00001_foundation.sql.
+create index if not exists idx_litigation_checks_org_checked
+  on public.litigation_checks(org_id, check_date desc);
 drop policy if exists litigation_via_validation on public.litigation_checks;
 create policy "litigation_checks_own_org" on public.litigation_checks
   for all
