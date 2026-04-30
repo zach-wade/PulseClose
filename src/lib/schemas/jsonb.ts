@@ -35,9 +35,12 @@ function strict<T extends z.ZodTypeAny>(schema: T, label: string) {
 }
 
 // ── borrower_validations.ai_analysis ──────────────────────────────────────
+// v1 (legacy) and v2 (Story Mode) coexist. New writes are always v2; old
+// rows stay v1 forever. Reads route through parseAiAnalysisAny which
+// accepts either shape and returns a discriminated result.
 
 export const aiAnalysisV1 = z.object({
-  schema_version: schemaVersion,
+  schema_version: z.literal(1).default(1),
   summary: z.string(),
   // risk_rating is hard-overwritten server-side from the deterministic tier;
   // we still validate its enum here so a malformed AI response doesn't
@@ -55,7 +58,59 @@ export const aiAnalysisV1 = z.object({
 });
 export type AiAnalysisV1 = z.infer<typeof aiAnalysisV1>;
 export const parseAiAnalysisV1 = safe(aiAnalysisV1);
-export const parseAiAnalysisV1Strict = strict(aiAnalysisV1, "ai_analysis");
+export const parseAiAnalysisV1Strict = strict(aiAnalysisV1, "ai_analysis_v1");
+
+export const aiAnalysisV2 = z.object({
+  schema_version: z.literal(2),
+  summary: z.string(),
+  risk_rating: z.enum(["low", "medium", "high"]),
+  pillar_assessments: z.object({
+    entity: z.string(),
+    track_record: z.string(),
+    litigation: z.string(),
+    gc: z.string().nullable(),
+    sanctions: z.string().nullable(),
+  }),
+  strengths: z.array(z.object({
+    title: z.string(),
+    narrative: z.string(),
+  })),
+  risks: z.array(z.object({
+    factor_key: z.string(),
+    severity: z.enum(["critical", "moderate", "minor"]),
+    narrative: z.string(),
+  })),
+  recommendations: z.array(z.object({
+    priority: z.enum(["must", "should", "consider"]),
+    narrative: z.string(),
+  })),
+});
+export type AiAnalysisV2 = z.infer<typeof aiAnalysisV2>;
+export const parseAiAnalysisV2 = safe(aiAnalysisV2);
+export const parseAiAnalysisV2Strict = strict(aiAnalysisV2, "ai_analysis_v2");
+
+// Discriminated read helper. Branches on schema_version (defaulting to 1 for
+// rows written before the field existed). UI components consume the result
+// via a type-narrowing switch on the returned `version`.
+export function parseAiAnalysisAny(input: unknown):
+  | { version: 1; data: AiAnalysisV1 }
+  | { version: 2; data: AiAnalysisV2 }
+  | { version: null; error: string } {
+  if (input == null || typeof input !== "object") {
+    return { version: null, error: "ai_analysis is null or non-object" };
+  }
+  const obj = input as { schema_version?: unknown };
+  const version = typeof obj.schema_version === "number" ? obj.schema_version : 1;
+  if (version === 2) {
+    const r = aiAnalysisV2.safeParse(input);
+    if (r.success) return { version: 2, data: r.data };
+    return { version: null, error: `v2 parse failed: ${r.error.message}` };
+  }
+  // Legacy v1 — accept and parse, default schema_version to 1
+  const r = aiAnalysisV1.safeParse({ schema_version: 1, ...obj });
+  if (r.success) return { version: 1, data: r.data };
+  return { version: null, error: `v1 parse failed: ${r.error.message}` };
+}
 
 // ── borrower_validations.input_warnings ───────────────────────────────────
 // Currently a string[] — keep the loose shape but stamp it.

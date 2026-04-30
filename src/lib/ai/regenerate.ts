@@ -165,12 +165,11 @@ export async function regenerateAiMemoForValidation(
   });
 
   if (aiAnalysis) {
-    // Stamp schema_version on the JSONB so 00016's CHECK constraint passes
-    // and future schema-evolution can route reads.
-    const stamped = { schema_version: 1 as const, ...aiAnalysis };
+    // schema_version=2 is stamped server-side by generateValidationAnalysis;
+    // the 00016 CHECK constraint requires the key, which is already present.
     await supabase
       .from("borrower_validations")
-      .update({ ai_analysis: stamped, updated_at: new Date().toISOString() })
+      .update({ ai_analysis: aiAnalysis, updated_at: new Date().toISOString() })
       .eq("id", validationId);
   }
 }

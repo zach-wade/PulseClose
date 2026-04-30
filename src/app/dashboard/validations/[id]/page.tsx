@@ -20,10 +20,6 @@ import {
   Star,
   FileDown,
   Sparkles,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Lightbulb,
 } from "lucide-react";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { TrackRecordTable } from "@/components/dashboard/track-record-table";
@@ -34,6 +30,7 @@ import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-recor
 import { WhyThisRating } from "@/components/dashboard/why-this-rating";
 import { HandoffCard } from "@/components/dashboard/handoff-card";
 import { MonitorCard } from "@/components/dashboard/monitor-card";
+import { AIMemo } from "@/components/dashboard/ai-memo";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -51,20 +48,6 @@ interface RiskFactor {
   explanation: string;
 }
 
-interface AIAnalysis {
-  summary: string;
-  risk_rating: "low" | "medium" | "high";
-  pillar_assessments: {
-    entity: string;
-    track_record: string;
-    litigation: string;
-    gc: string | null;
-    sanctions: string | null;
-  };
-  flags: string[];
-  recommendations: string[];
-}
-
 interface ValidationDetail {
   id: string;
   borrower_name: string;
@@ -75,7 +58,10 @@ interface ValidationDetail {
   experience_tier: number | null;
   validation_date: string | null;
   created_at: string;
-  ai_analysis: AIAnalysis | null;
+  // ai_analysis is one of two shapes (v1 legacy or v2 Story Mode); the
+  // AIMemo component branches on schema_version. Keep `unknown` here so
+  // the page doesn't have to know.
+  ai_analysis: unknown;
   input_warnings: string[] | null;
   entity_checks: EntityCheck[];
   track_record: TrackRecordEntry[];
@@ -390,91 +376,18 @@ export default function ValidationDetailPage() {
           </CardContent>
         </Card>
       )}
-      {data.ai_analysis && (
-        <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-info" />
-              AI Risk Assessment
-              <Badge
-                variant={
-                  data.ai_analysis.risk_rating === "low"
-                    ? "default"
-                    : data.ai_analysis.risk_rating === "high"
-                      ? "destructive"
-                      : "secondary"
-                }
-                className="ml-2"
-              >
-                {data.ai_analysis.risk_rating === "low" && (
-                  <TrendingDown className="mr-1 h-3 w-3" />
-                )}
-                {data.ai_analysis.risk_rating === "medium" && (
-                  <Minus className="mr-1 h-3 w-3" />
-                )}
-                {data.ai_analysis.risk_rating === "high" && (
-                  <TrendingUp className="mr-1 h-3 w-3" />
-                )}
-                {data.ai_analysis.risk_rating.toUpperCase()} RISK
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm leading-relaxed">{data.ai_analysis.summary}</p>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Entity</p>
-                <p className="text-sm">{data.ai_analysis.pillar_assessments.entity}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Track Record</p>
-                <p className="text-sm">{data.ai_analysis.pillar_assessments.track_record}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Litigation</p>
-                <p className="text-sm">{data.ai_analysis.pillar_assessments.litigation}</p>
-              </div>
-              {data.ai_analysis.pillar_assessments.gc && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">GC</p>
-                  <p className="text-sm">{data.ai_analysis.pillar_assessments.gc}</p>
-                </div>
-              )}
-              {data.ai_analysis.pillar_assessments.sanctions && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sanctions / PEP</p>
-                  <p className="text-sm">{data.ai_analysis.pillar_assessments.sanctions}</p>
-                </div>
-              )}
-            </div>
-
-            {data.ai_analysis.flags.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Flags</p>
-                {data.ai_analysis.flags.map((flag, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm text-amber-600">
-                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    {flag}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {data.ai_analysis.recommendations.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recommendations</p>
-                {data.ai_analysis.recommendations.map((rec, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm">
-                    <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-info" />
-                    {rec}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {data.ai_analysis ? (
+        <AIMemo
+          rawAnalysis={data.ai_analysis}
+          onJumpToFactor={(key) => {
+            // Anchor-scroll to the WhyThisRating panel — the "Why this rating?"
+            // link from a Story Mode risk row jumps the credit analyst to the
+            // deterministic factor that drives the tier.
+            const el = document.getElementById(`risk-factor-${key}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }}
+        />
+      ) : null}
 
       {/* Why this rating? — deterministic factor list with inline overrides */}
       <WhyThisRating

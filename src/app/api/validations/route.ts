@@ -540,12 +540,12 @@ export async function POST(request: Request) {
           tier,
         });
         if (aiAnalysis) {
-          // Stamp schema_version so the 00016 CHECK constraint passes.
-          const stamped = { schema_version: 1 as const, ...aiAnalysis };
+          // schema_version=2 is stamped inside generateValidationAnalysis;
+          // the 00016 CHECK constraint requires the key, which is set.
           await supabase
             .from("borrower_validations")
             .update({
-              ai_analysis: stamped,
+              ai_analysis: aiAnalysis,
               updated_at: new Date().toISOString(),
             })
             .eq("id", validationId);

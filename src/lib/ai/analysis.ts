@@ -10,7 +10,11 @@ import { extractRealieDetails } from "@/lib/adapters/extract";
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
 import { humanizeFactorKey } from "@/lib/risk/factors";
 
-export interface ValidationAnalysis {
+// v1 shape — preserved for legacy reads. Old validations keep this forever;
+// new validations write v2 below. Dual-renderer in
+// src/components/dashboard/ai-memo.tsx handles both.
+export interface ValidationAnalysisV1 {
+  schema_version?: 1;
   summary: string;
   // Tier is set deterministically from risk_factors, not by the AI. This
   // field is populated from the computed tier so existing UI keeps working;
@@ -26,6 +30,36 @@ export interface ValidationAnalysis {
   flags: string[];
   recommendations: string[];
 }
+
+// v2 shape — Story Mode. Structured narrative blocks so the UI renders a
+// scrollable opener → strengths → risks (severity callouts) → recommendations
+// instead of a paragraph wall. The handoff PDF reuses these blocks with
+// page-break-inside rules.
+export interface ValidationAnalysisV2 {
+  schema_version: 2;
+  summary: string;
+  risk_rating: "low" | "medium" | "high";  // server-overwritten
+  pillar_assessments: {
+    entity: string;
+    track_record: string;
+    litigation: string;
+    gc: string | null;
+    sanctions: string | null;
+  };
+  strengths: { title: string; narrative: string }[];
+  risks: {
+    factor_key: string;
+    severity: "critical" | "moderate" | "minor";
+    narrative: string;
+  }[];
+  recommendations: {
+    priority: "must" | "should" | "consider";
+    narrative: string;
+  }[];
+}
+
+// Default = v2 for new code. Reads of historical rows must accept either.
+export type ValidationAnalysis = ValidationAnalysisV2;
 
 export interface VerifiedFlipForAI {
   submitted_address: string;
@@ -214,9 +248,10 @@ Classification: ${input.gc_result.license_classification ?? "Unknown"}
 Insurance Verified: ${input.gc_result.insurance_verified ? "Yes" : "No"}
 Disciplinary Actions: ${input.gc_result.disciplinary_actions.length > 0 ? input.gc_result.disciplinary_actions.join("; ") : "None"}` : "No GC provided for this validation."}
 
-Respond with a JSON object matching this exact structure:
+Respond with a JSON object matching this exact structure (Story Mode v2):
 {
-  "summary": "2-3 sentence executive summary that references the deterministic tier (${input.tier}) and the named factors that drove it. Reference real numbers — portfolio size, LTV, hold periods, entity status, sanctions result, and any active litigation. Do NOT cite missing flip history as a risk; that data was not searched.",
+  "schema_version": 2,
+  "summary": "2-3 sentence executive summary that references the deterministic tier (${input.tier}) and the headline factors that drove it. Reference real numbers — portfolio size, LTV, hold periods, entity status, sanctions result, active litigation. Do NOT cite missing flip history as a risk.",
   "risk_rating": "${tierWord}",
   "pillar_assessments": {
     "entity": "1-2 sentences on entity validation findings",
@@ -225,16 +260,38 @@ Respond with a JSON object matching this exact structure:
     "gc": "1-2 sentences on GC validation, or null if no GC was provided",
     "sanctions": "1-2 sentences on sanctions/PEP screening result, or null if not run"
   },
-  "flags": ["Array of specific risk flags. Only include items grounded in the data. Do NOT include 'no completed projects' or 'no flip history' — those are data-scope limits, not borrower risks."],
-  "recommendations": ["Array of specific next steps or conditions. If flip history is needed for underwriting, recommend the borrower submit a list of past addresses for deed verification."]
+  "strengths": [
+    {
+      "title": "Short headline (e.g. 'Active entity standing' or 'Strong portfolio liquidity')",
+      "narrative": "1-2 sentences explaining the strength with specific data points"
+    }
+  ],
+  "risks": [
+    {
+      "factor_key": "MUST be one of the deterministic factor_keys listed above (entity_status, active_fed_litigation, dismissed_litigation, sanctions_hit, gc_license_issue, extended_hold, lender_concentration, foreclosure_distress, market_outlier, market_outlier_unavailable). Use the literal key, not a label.",
+      "severity": "critical | moderate | minor — match what's in the deterministic factors block above",
+      "narrative": "1-2 sentence narrative for this risk grounded in the data, calling out specific properties / cases / lenders by name where relevant"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "must | should | consider",
+      "narrative": "Specific next step or condition. If flip history is needed, recommend deed verification via the borrower share-link."
+    }
+  ]
 }
+
+Rules for the structured output:
+- Only emit a "risks" entry for a factor that's in the deterministic block above and is NOT excluded. Skip excluded factors — the override has already neutralized them.
+- "strengths" should be 2-4 entries minimum when the borrower has any positive signals (active entity, clean sanctions, low LTV, long-tenure portfolio, etc.). Don't pad with platitudes.
+- "recommendations" priority: "must" = blocker, "should" = expected before close, "consider" = optional polish.
 
 Use bridge lending terminology naturally. Be direct and specific — no buzzwords. Reference actual numbers and findings from the data.`;
 
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -248,11 +305,19 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
       return null;
     }
 
-    const analysis = JSON.parse(jsonMatch[0]) as ValidationAnalysis;
+    const analysis = JSON.parse(jsonMatch[0]) as ValidationAnalysisV2;
     // Hard-overwrite risk_rating with the deterministic tier so the AI
     // can never accidentally publish a tier that disagrees with the
     // factor math, even if the prompt instruction is ignored.
-    analysis.risk_rating = tierWord as ValidationAnalysis["risk_rating"];
+    analysis.risk_rating = tierWord as ValidationAnalysisV2["risk_rating"];
+    // Stamp schema_version=2 server-side in case the model omits it.
+    analysis.schema_version = 2;
+    // Defensive defaults — old-shape fall-throughs (Claude omits the new
+    // arrays under load) shouldn't break the UI. Empty arrays render as
+    // "no notable strengths/risks" placeholders.
+    if (!Array.isArray(analysis.strengths)) analysis.strengths = [];
+    if (!Array.isArray(analysis.risks)) analysis.risks = [];
+    if (!Array.isArray(analysis.recommendations)) analysis.recommendations = [];
     return analysis;
   } catch (err) {
     console.error("AI analysis generation failed:", err);

@@ -193,7 +193,8 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, onSignalApplied }
             return (
               <div
                 key={f.id ?? `${f.factor_key}-${i}`}
-                className={`rounded-md border p-3 space-y-2 ${
+                id={`risk-factor-${f.factor_key}`}
+                className={`rounded-md border p-3 space-y-2 scroll-mt-20 ${
                   f.excluded ? "border-muted-foreground/20 opacity-70" : "border-border"
                 }`}
               >
