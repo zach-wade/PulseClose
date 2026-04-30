@@ -17,6 +17,7 @@ import type {
   SanctionsScreenResult,
 } from "@/lib/adapters/types";
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
+import type { VerifiedFlipForAI } from "@/lib/ai/analysis";
 
 export async function regenerateAiMemoForValidation(
   supabase: SupabaseClient,
@@ -35,7 +36,7 @@ export async function regenerateAiMemoForValidation(
   const factors: RiskFactor[] = recompute?.factors ?? [];
   const tier: Tier = recompute?.tier ?? "LOW";
 
-  const [entityRes, trackRes, litigationRes, sanctionsRes, gcRes] = await Promise.all([
+  const [entityRes, trackRes, litigationRes, sanctionsRes, gcRes, verifiedRes] = await Promise.all([
     supabase
       .from("entity_checks")
       .select("*")
@@ -63,6 +64,10 @@ export async function regenerateAiMemoForValidation(
       .select("*")
       .eq("validation_id", validationId)
       .maybeSingle(),
+    supabase
+      .from("verified_flips")
+      .select("submitted_address, resolved_address, match_status, hold_months, profit, acquisition_price, disposition_price")
+      .eq("validation_id", validationId),
   ]);
 
   const entity_result = (entityRes.data
@@ -140,6 +145,8 @@ export async function regenerateAiMemoForValidation(
       }
     : null;
 
+  const verified_flips: VerifiedFlipForAI[] = (verifiedRes.data ?? []) as VerifiedFlipForAI[];
+
   const aiAnalysis = await generateValidationAnalysis({
     borrower_name: validation.borrower_name,
     entity_name: validation.borrower_entity_name ?? "",
@@ -154,6 +161,7 @@ export async function regenerateAiMemoForValidation(
     confidence_score: validation.confidence_score ?? 0,
     risk_factors: factors,
     tier,
+    verified_flips,
   });
 
   if (aiAnalysis) {

@@ -18,7 +18,6 @@ import {
   linkBorrowerToEntity,
 } from "@/lib/domain/upsert";
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
-import { tierLabel } from "@/lib/risk/factors";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -498,12 +497,9 @@ export async function POST(request: Request) {
     confidenceScore = Math.max(10, Math.min(100, confidenceScore));
 
     // 9. Update the validation record with check results immediately.
-    // Cache property + flag counts so the dashboard list can render them
-    // without a join — keeps the home page snappy.
-    const flagCount =
-      entityResult.flags.length +
-      activeLitigation.length +
-      sanctionsResult.matches.length;
+    // Cache property count so the dashboard list can render it without a
+    // join. flag_count is set by recomputeRiskFactorsForValidation above
+    // so the dashboard count matches the active factor list.
     await supabase
       .from("borrower_validations")
       .update({
@@ -512,7 +508,6 @@ export async function POST(request: Request) {
         experience_tier: experienceTier,
         input_warnings: inputWarnings,
         property_count: properties.length,
-        flag_count: flagCount,
         validation_date: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

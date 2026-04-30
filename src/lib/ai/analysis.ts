@@ -27,6 +27,16 @@ export interface ValidationAnalysis {
   recommendations: string[];
 }
 
+export interface VerifiedFlipForAI {
+  submitted_address: string;
+  resolved_address: string | null;
+  match_status: "owned_and_sold" | "owned_and_held" | "never_owned" | "not_found";
+  hold_months: number | null;
+  profit: number | null;
+  acquisition_price: number | null;
+  disposition_price: number | null;
+}
+
 interface AnalysisInput {
   borrower_name: string;
   entity_name: string;
@@ -41,6 +51,7 @@ interface AnalysisInput {
   confidence_score: number;
   risk_factors: RiskFactor[];
   tier: Tier;
+  verified_flips?: VerifiedFlipForAI[];
 }
 
 export async function generateValidationAnalysis(
@@ -92,6 +103,29 @@ export async function generateValidationAnalysis(
   const distressed = input.properties.filter(
     (p) => p.outcome === "distressed" || p.outcome === "foreclosed",
   ).length;
+
+  // Verified-flip block — the borrower-submitted addresses ran through
+  // deed-chain verification. When present, this is the most reliable
+  // track-record signal we have (better than the current-portfolio AVM
+  // snapshot) — surface it explicitly so the memo references it.
+  const flips = input.verified_flips ?? [];
+  const verifiedSold = flips.filter((f) => f.match_status === "owned_and_sold");
+  const verifiedHeld = flips.filter((f) => f.match_status === "owned_and_held");
+  const neverOwned = flips.filter((f) => f.match_status === "never_owned");
+  const notFound = flips.filter((f) => f.match_status === "not_found");
+  const realizedProfit = verifiedSold
+    .filter((f) => f.profit != null)
+    .reduce((sum, f) => sum + (f.profit ?? 0), 0);
+  const verifiedBlock = flips.length > 0
+    ? `--- VERIFIED TRACK RECORD (borrower-submitted, deed-chain confirmed) ---
+Submitted: ${flips.length} addresses
+Confirmed sold: ${verifiedSold.length}
+Confirmed held: ${verifiedHeld.length}
+Never owned: ${neverOwned.length}
+Not found: ${notFound.length}
+Realized profit on confirmed sales: ${realizedProfit !== 0 ? `$${Math.round(realizedProfit).toLocaleString()}` : "Not available"}
+This data IS reliable flip-history (verified against deeds). Reference it in the track-record narrative when present.`
+    : "";
 
   // Risk factor block — the deterministic tier is computed from these,
   // so the AI must explain them rather than re-rate. Excluded factors
@@ -169,6 +203,8 @@ ${input.litigation_results.map((l) => `${l.search_type}: ${l.result}${l.result =
 Note: Coverage is federal only (bankruptcy + federal civil). State-court matters (mechanic's liens, contract disputes, most foreclosures) are not searched. Treat dismissed/terminated cases as informational, not as active risk.
 
 ${sanctionsBlock}
+
+${verifiedBlock}
 
 --- GC VALIDATION ---
 ${input.gc_result ? `Contractor: ${input.gc_result.gc_name}

@@ -171,6 +171,20 @@ export async function recomputeRiskFactorsForValidation(
     );
   }
 
+  // Refresh the cached flag_count on the validation. The dashboard list
+  // reads this column without joining risk_factors; without the refresh,
+  // the count drifts after overrides (the "Truong example" — summary
+  // showed 2 while the bullet list had 4). Count = active factors with
+  // moderate/critical/minor severity. Excluded + informational + none
+  // don't count as flags.
+  const flagCount = factors.filter(
+    (f) => !f.excluded && (f.severity === "critical" || f.severity === "moderate" || f.severity === "minor"),
+  ).length;
+  await supabase
+    .from("borrower_validations")
+    .update({ flag_count: flagCount, updated_at: new Date().toISOString() })
+    .eq("id", validationId);
+
   return { factors, tier };
 }
 

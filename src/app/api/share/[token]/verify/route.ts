@@ -3,11 +3,12 @@
 // addresses without logging in. Validates the share token, runs the
 // same verifyAddresses helper, persists the results.
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
 import { upsertProperty } from "@/lib/domain/upsert";
+import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
 export const maxDuration = 60;
 
@@ -138,6 +139,18 @@ export async function POST(
       .filter((v) => v.match_status === "owned_and_sold" && v.profit != null)
       .reduce((sum, v) => sum + (v.profit ?? 0), 0),
   };
+
+  // Verified flips are the most reliable track-record signal we get
+  // (deed-chain confirmed). Regenerate the AI memo so the lender's
+  // detail page reflects the new evidence, and re-derive risk factors
+  // in case verified data flips any factor (e.g. surfaces a foreclosure).
+  after(async () => {
+    try {
+      await regenerateAiMemoForValidation(supabase, validation.id);
+    } catch (err) {
+      console.error(`AI memo regeneration failed for validation ${validation.id}:`, err);
+    }
+  });
 
   return NextResponse.json({ verified, summary });
 }
