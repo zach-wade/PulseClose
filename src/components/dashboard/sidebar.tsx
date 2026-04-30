@@ -11,6 +11,7 @@ import {
   HardHat,
   Scale,
   BarChart3,
+  Calculator,
   Settings,
   LogOut,
   Menu,
@@ -48,6 +49,12 @@ const navItems = [
     href: "/dashboard/litigation",
     icon: Scale,
     description: "PACER, liens, bankruptcies",
+  },
+  {
+    label: "Evaluate Deal",
+    href: "/dashboard/evaluate",
+    icon: Calculator,
+    description: "Compare a deal across investors",
   },
   {
     label: "Usage",
