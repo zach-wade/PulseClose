@@ -20,6 +20,7 @@ import {
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
 import { withErrorLog } from "@/lib/async/with-error-log";
 import { emitActivity } from "@/lib/events/emit";
+import { materializeLitigationCases } from "@/lib/litigation/materialize";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -333,6 +334,13 @@ export async function POST(request: Request) {
         raw_response: l.raw_response,
         target_entity_id: primaryEntityId,
       })),
+    );
+
+    // 5b. Materialize litigation_cases for the case-card UI. Pure projection
+    // of the raw_response above; idempotent so monitor-cron re-runs don't
+    // duplicate. Best-effort — a failure here doesn't break validation.
+    void withErrorLog(`materializeLitigationCases[${validation.id}]`, () =>
+      materializeLitigationCases(supabase, validation.id, profile.org_id),
     );
 
     // 6. Store GC validation (if applicable)

@@ -17,49 +17,63 @@ export async function GET(
   const supabase = createAdminClient();
 
   // Fetch validation + all related checks in parallel
-  const [validationRes, entityRes, trackRecordRes, litigationRes, gcRes, sanctionsRes, verifiedFlipsRes, riskFactorsRes] =
-    await Promise.all([
-      supabase
-        .from("borrower_validations")
-        .select("*")
-        .eq("id", id)
-        .eq("org_id", profile.org_id)
-        .single(),
-      supabase
-        .from("entity_checks")
-        .select("*")
-        .eq("validation_id", id)
-        .order("check_date", { ascending: false }),
-      supabase
-        .from("track_record_entries")
-        .select("*, lenders ( id, display_name, classification )")
-        .eq("validation_id", id)
-        .order("acquisition_date", { ascending: false }),
-      supabase
-        .from("litigation_checks")
-        .select("*")
-        .eq("validation_id", id)
-        .order("check_date", { ascending: false }),
-      supabase
-        .from("gc_validations")
-        .select("*")
-        .eq("validation_id", id),
-      supabase
-        .from("sanctions_checks")
-        .select("*")
-        .eq("validation_id", id)
-        .order("check_date", { ascending: false }),
-      supabase
-        .from("verified_flips")
-        .select("*")
-        .eq("validation_id", id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("risk_factors")
-        .select("*")
-        .eq("validation_id", id)
-        .order("computed_at", { ascending: false }),
-    ]);
+  const [
+    validationRes,
+    entityRes,
+    trackRecordRes,
+    litigationRes,
+    litigationCasesRes,
+    gcRes,
+    sanctionsRes,
+    verifiedFlipsRes,
+    riskFactorsRes,
+  ] = await Promise.all([
+    supabase
+      .from("borrower_validations")
+      .select("*")
+      .eq("id", id)
+      .eq("org_id", profile.org_id)
+      .single(),
+    supabase
+      .from("entity_checks")
+      .select("*")
+      .eq("validation_id", id)
+      .order("check_date", { ascending: false }),
+    supabase
+      .from("track_record_entries")
+      .select("*, lenders ( id, display_name, classification )")
+      .eq("validation_id", id)
+      .order("acquisition_date", { ascending: false }),
+    supabase
+      .from("litigation_checks")
+      .select("*")
+      .eq("validation_id", id)
+      .order("check_date", { ascending: false }),
+    supabase
+      .from("litigation_cases")
+      .select("*")
+      .eq("validation_id", id)
+      .order("filed_at", { ascending: false, nullsFirst: false }),
+    supabase
+      .from("gc_validations")
+      .select("*")
+      .eq("validation_id", id),
+    supabase
+      .from("sanctions_checks")
+      .select("*")
+      .eq("validation_id", id)
+      .order("check_date", { ascending: false }),
+    supabase
+      .from("verified_flips")
+      .select("*")
+      .eq("validation_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("risk_factors")
+      .select("*")
+      .eq("validation_id", id)
+      .order("computed_at", { ascending: false }),
+  ]);
 
   if (validationRes.error || !validationRes.data) {
     return NextResponse.json(
@@ -76,6 +90,7 @@ export async function GET(
     entity_checks: entityRes.data ?? [],
     track_record: trackRecordRes.data ?? [],
     litigation_checks: litigationRes.data ?? [],
+    litigation_cases: litigationCasesRes.data ?? [],
     gc_validations: gcRes.data ?? [],
     sanctions_checks: sanctionsRes.data ?? [],
     verified_flips: verifiedFlipsRes.data ?? [],

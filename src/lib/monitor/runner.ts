@@ -8,6 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdapter } from "@/lib/adapters";
 import { sendEmail } from "@/lib/email/resend";
+import { materializeLitigationCases } from "@/lib/litigation/materialize";
 
 export type ChangeSeverity = "info" | "warning" | "critical";
 
@@ -237,6 +238,17 @@ export async function runSubscription(
     }
     if (process.env.COURTLISTENER_API_TOKEN) cost_cents += 1000;
     adapter_results.litigation = { status: "ok" };
+
+    // Re-materialize litigation_cases for the case-card UI now that fresh
+    // litigation_checks rows landed. Idempotent — same (validation_id,
+    // case_number) updates in place; truly new cases get inserted.
+    if (litigationResults.length > 0) {
+      try {
+        await materializeLitigationCases(supabase, sub.validation_id, sub.org_id);
+      } catch (err) {
+        console.warn("Monitor litigation_cases materialize failed:", err);
+      }
+    }
   } catch (err) {
     adapter_results.litigation = classifyError(err);
     console.error("Monitor litigation check failed:", err);

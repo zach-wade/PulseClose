@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { TrackRecordTable } from "@/components/dashboard/track-record-table";
-import { LitigationGrid } from "@/components/dashboard/litigation-grid";
+import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
@@ -66,6 +66,7 @@ interface ValidationDetail {
   entity_checks: EntityCheck[];
   track_record: TrackRecordEntry[];
   litigation_checks: LitigationCheck[];
+  litigation_cases: LitigationCaseRow[];
   gc_validations: GCValidation[];
   sanctions_checks: SanctionsCheck[];
   verified_flips: VerifiedFlip[];
@@ -426,9 +427,12 @@ export default function ValidationDetailPage() {
       />
 
       {/* Litigation */}
-      {data.litigation_checks.length > 0 && (
-        <LitigationGrid data={data.litigation_checks} />
-      )}
+      {(data.litigation_cases?.length ?? 0) > 0 || data.litigation_checks.length > 0 ? (
+        <LitigationCases
+          cases={data.litigation_cases ?? []}
+          legacyChecks={data.litigation_checks}
+        />
+      ) : null}
 
       {/* Sanctions / PEP */}
       {data.sanctions_checks?.[0] && (
