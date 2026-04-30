@@ -8,6 +8,32 @@ import {
 import { Shield, AlertTriangle, CheckCircle2, ExternalLink, MinusCircle } from "lucide-react";
 import type { SanctionsCheck } from "./shared-types";
 
+// Pull officer/agent names that were screened by reading the matches'
+// query_name field. Those names came from `additional_persons` in the
+// adapter call (officers + registered agent from the SOS filing). We
+// don't persist additional_persons explicitly yet; this is a best-effort
+// surfacing so the displayed "Names Screened" set matches what was
+// actually queried.
+function extraScreenedNames(data: SanctionsCheck): string[] {
+  const top = new Set(
+    [data.borrower_name, data.entity_name, data.guarantor_name]
+      .filter((s): s is string => Boolean(s))
+      .map((s) => s.toLowerCase()),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of data.matches ?? []) {
+    const q = m.query_name?.trim();
+    if (!q) continue;
+    const key = q.toLowerCase();
+    if (top.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+  }
+  return out;
+}
+
 export function SanctionsCard({ data }: { data: SanctionsCheck }) {
   const isClear = data.result === "clear";
   const isHit = data.result === "potential_match";
@@ -53,6 +79,17 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
                 {data.guarantor_name && data.guarantor_name !== data.borrower_name && (
                   <li>{data.guarantor_name} <span className="text-muted-foreground">(guarantor)</span></li>
                 )}
+                {/* Officers + registered agent from the SOS filing also get
+                    screened — surface them so a reader doesn't see a match
+                    against a name that wasn't disclosed as searched. We
+                    derive these from the matches' query_name field since
+                    additional_persons isn't persisted yet. */}
+                {extraScreenedNames(data).map((name) => (
+                  <li key={name}>
+                    {name}{" "}
+                    <span className="text-muted-foreground">(from entity filing)</span>
+                  </li>
+                ))}
               </ul>
             </div>
             <div>

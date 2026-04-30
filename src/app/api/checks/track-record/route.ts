@@ -9,6 +9,7 @@ import {
   upsertProperty,
   upsertLender,
 } from "@/lib/domain/upsert";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export const maxDuration = 60;
 
@@ -123,29 +124,33 @@ export async function POST(request: Request) {
         }),
       );
 
-      await supabase.from("track_record_entries").insert(
-        enriched.map(({ p, propertyId, lenderId, ownershipId }) => ({
-          validation_id: validation.id,
-          property_address: p.property_address,
-          acquisition_date: p.acquisition_date,
-          disposition_date: p.disposition_date,
-          acquisition_price: p.acquisition_price,
-          disposition_price: p.disposition_price,
-          rehab_cost: null,
-          project_type: p.project_type,
-          outcome: p.outcome,
-          hold_months: p.hold_months,
-          profit: p.profit,
-          source: p.source,
-          confidence: "medium",
-          verified: false,
-          raw_response: p.raw_response,
-          property_id: propertyId,
-          owning_entity_id: primaryEntityId,
-          owning_borrower_id: primaryBorrowerId,
-          lender_id: lenderId,
-          active_ownership_id: p.disposition_date ? null : ownershipId,
-        })),
+      await insertOrThrow(
+        supabase.from("track_record_entries").insert(
+          enriched.map(({ p, propertyId, lenderId, ownershipId }) => ({
+            validation_id: validation.id,
+            org_id: profile.org_id,
+            property_address: p.property_address,
+            acquisition_date: p.acquisition_date,
+            disposition_date: p.disposition_date,
+            acquisition_price: p.acquisition_price,
+            disposition_price: p.disposition_price,
+            rehab_cost: null,
+            project_type: p.project_type,
+            outcome: p.outcome,
+            hold_months: p.hold_months,
+            profit: p.profit,
+            source: p.source,
+            confidence: "medium",
+            verified: false,
+            raw_response: p.raw_response,
+            property_id: propertyId,
+            owning_entity_id: primaryEntityId,
+            owning_borrower_id: primaryBorrowerId,
+            lender_id: lenderId,
+            active_ownership_id: p.disposition_date ? null : ownershipId,
+          })),
+        ),
+        `track_record_entries insert (validation_id=${validation.id}, count=${enriched.length})`,
       );
 
       const dataSource = getPropertyDataSource();

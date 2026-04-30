@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdapter } from "@/lib/adapters";
 import { sendEmail } from "@/lib/email/resend";
 import { materializeLitigationCases } from "@/lib/litigation/materialize";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export type ChangeSeverity = "info" | "warning" | "critical";
 
@@ -175,21 +176,25 @@ export async function runSubscription(
       });
     }
 
-    await supabase.from("entity_checks").insert({
-      validation_id: sub.validation_id,
-      entity_id: null,  // not joined here; the canonical entity row has its own cache
-      entity_name: entityResult.entity_name,
-      state: entityResult.state,
-      entity_type: entityResult.entity_type,
-      sos_status: entityResult.sos_status,
-      formation_date: entityResult.formation_date,
-      last_filing_date: entityResult.last_filing_date,
-      registered_agent: entityResult.registered_agent,
-      source_url: entityResult.source_url,
-      confidence: entityResult.sos_status === "not_found" ? "low" : "medium",
-      flags: entityResult.flags,
-      raw_response: entityResult.raw_response,
-    });
+    await insertOrThrow(
+      supabase.from("entity_checks").insert({
+        validation_id: sub.validation_id,
+        org_id: sub.org_id,
+        entity_id: null,  // not joined here; the canonical entity row has its own cache
+        entity_name: entityResult.entity_name,
+        state: entityResult.state,
+        entity_type: entityResult.entity_type,
+        sos_status: entityResult.sos_status,
+        formation_date: entityResult.formation_date,
+        last_filing_date: entityResult.last_filing_date,
+        registered_agent: entityResult.registered_agent,
+        source_url: entityResult.source_url,
+        confidence: entityResult.sos_status === "not_found" ? "low" : "medium",
+        flags: entityResult.flags,
+        raw_response: entityResult.raw_response,
+      }),
+      `monitor entity_checks insert (validation_id=${sub.validation_id})`,
+    );
     if (process.env.COBALT_INTELLIGENCE_API_KEY) cost_cents += 500;
     adapter_results.entity = { status: "ok" };
   } catch (err) {
@@ -222,18 +227,22 @@ export async function runSubscription(
     }
 
     if (litigationResults.length > 0) {
-      await supabase.from("litigation_checks").insert(
-        litigationResults.map((l) => ({
-          validation_id: sub.validation_id,
-          search_type: l.search_type,
-          entity_name: l.entity_name,
-          result: l.result,
-          details: l.details,
-          case_number: l.case_number,
-          source: l.source,
-          confidence: "medium",
-          raw_response: l.raw_response,
-        })),
+      await insertOrThrow(
+        supabase.from("litigation_checks").insert(
+          litigationResults.map((l) => ({
+            validation_id: sub.validation_id,
+            org_id: sub.org_id,
+            search_type: l.search_type,
+            entity_name: l.entity_name,
+            result: l.result,
+            details: l.details,
+            case_number: l.case_number,
+            source: l.source,
+            confidence: "medium",
+            raw_response: l.raw_response,
+          })),
+        ),
+        `monitor litigation_checks insert (validation_id=${sub.validation_id}, count=${litigationResults.length})`,
       );
     }
     if (process.env.COURTLISTENER_API_TOKEN) cost_cents += 1000;
@@ -285,17 +294,20 @@ export async function runSubscription(
       });
     }
 
-    await supabase.from("sanctions_checks").insert({
-      validation_id: sub.validation_id,
-      borrower_name: validation.borrower_name,
-      entity_name: validation.borrower_entity_name,
-      result: sanctions.result,
-      match_count: sanctions.matches.length,
-      matches: sanctions.matches,
-      sources_searched: sanctions.sources_searched,
-      source: sanctions.source,
-      raw_response: sanctions.raw_response,
-    });
+    await insertOrThrow(
+      supabase.from("sanctions_checks").insert({
+        validation_id: sub.validation_id,
+        borrower_name: validation.borrower_name,
+        entity_name: validation.borrower_entity_name,
+        result: sanctions.result,
+        match_count: sanctions.matches.length,
+        matches: sanctions.matches,
+        sources_searched: sanctions.sources_searched,
+        source: sanctions.source,
+        raw_response: sanctions.raw_response,
+      }),
+      `monitor sanctions_checks insert (validation_id=${sub.validation_id})`,
+    );
     if (sanctions.source.includes("opensanctions")) cost_cents += 100;
     adapter_results.sanctions = { status: "ok" };
   } catch (err) {

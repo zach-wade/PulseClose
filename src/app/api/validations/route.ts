@@ -22,6 +22,7 @@ import { withErrorLog } from "@/lib/async/with-error-log";
 import { emitActivity } from "@/lib/events/emit";
 import { materializeLitigationCases } from "@/lib/litigation/materialize";
 import { buildGCSummary } from "@/lib/gc/summary";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -218,21 +219,25 @@ export async function POST(request: Request) {
       latestRegisteredAgent: entityResult.registered_agent,
     });
 
-    await supabase.from("entity_checks").insert({
-      validation_id: validation.id,
-      entity_id: checkedEntityId ?? primaryEntityId,
-      entity_name: entityResult.entity_name,
-      state: entityResult.state,
-      entity_type: entityResult.entity_type,
-      sos_status: entityResult.sos_status,
-      formation_date: entityResult.formation_date,
-      last_filing_date: entityResult.last_filing_date,
-      registered_agent: entityResult.registered_agent,
-      source_url: entityResult.source_url,
-      confidence: entityResult.sos_status === "not_found" ? "low" : "medium",
-      flags: entityResult.flags,
-      raw_response: entityResult.raw_response,
-    });
+    await insertOrThrow(
+      supabase.from("entity_checks").insert({
+        validation_id: validation.id,
+        org_id: profile.org_id,
+        entity_id: checkedEntityId ?? primaryEntityId,
+        entity_name: entityResult.entity_name,
+        state: entityResult.state,
+        entity_type: entityResult.entity_type,
+        sos_status: entityResult.sos_status,
+        formation_date: entityResult.formation_date,
+        last_filing_date: entityResult.last_filing_date,
+        registered_agent: entityResult.registered_agent,
+        source_url: entityResult.source_url,
+        confidence: entityResult.sos_status === "not_found" ? "low" : "medium",
+        flags: entityResult.flags,
+        raw_response: entityResult.raw_response,
+      }),
+      `entity_checks insert (validation_id=${validation.id})`,
+    );
 
     // Link borrower (and guarantor) to the SOS-canonical entity. Role is
     // 'other' because we don't know member-vs-manager-vs-officer from a
@@ -300,48 +305,56 @@ export async function POST(request: Request) {
         }),
       );
 
-      await supabase.from("track_record_entries").insert(
-        enriched.map(({ p, propertyId, lenderId, ownershipId }) => ({
-          validation_id: validation.id,
-          property_address: p.property_address,
-          acquisition_date: p.acquisition_date,
-          disposition_date: p.disposition_date,
-          acquisition_price: p.acquisition_price,
-          disposition_price: p.disposition_price,
-          rehab_cost: null,
-          project_type: p.project_type,
-          outcome: p.outcome,
-          hold_months: p.hold_months,
-          profit: p.profit,
-          source: p.source,
-          confidence: "medium",
-          verified: false,
-          raw_response: p.raw_response,
-          property_id: propertyId,
-          owning_entity_id: primaryEntityId,
-          owning_borrower_id: primaryBorrowerId,
-          lender_id: lenderId,
-          active_ownership_id: p.disposition_date ? null : ownershipId,
-        })),
+      await insertOrThrow(
+        supabase.from("track_record_entries").insert(
+          enriched.map(({ p, propertyId, lenderId, ownershipId }) => ({
+            validation_id: validation.id,
+            org_id: profile.org_id,
+            property_address: p.property_address,
+            acquisition_date: p.acquisition_date,
+            disposition_date: p.disposition_date,
+            acquisition_price: p.acquisition_price,
+            disposition_price: p.disposition_price,
+            rehab_cost: null,
+            project_type: p.project_type,
+            outcome: p.outcome,
+            hold_months: p.hold_months,
+            profit: p.profit,
+            source: p.source,
+            confidence: "medium",
+            verified: false,
+            raw_response: p.raw_response,
+            property_id: propertyId,
+            owning_entity_id: primaryEntityId,
+            owning_borrower_id: primaryBorrowerId,
+            lender_id: lenderId,
+            active_ownership_id: p.disposition_date ? null : ownershipId,
+          })),
+        ),
+        `track_record_entries insert (validation_id=${validation.id}, count=${enriched.length})`,
       );
     }
 
     // 5. Store litigation checks. We searched against the entity name,
     // so target_entity_id is the validation's primary entity. (Future:
     // when we add per-borrower individual searches, populate target_borrower_id.)
-    await supabase.from("litigation_checks").insert(
-      litigationResults.map((l) => ({
-        validation_id: validation.id,
-        search_type: l.search_type,
-        entity_name: l.entity_name,
-        result: l.result,
-        details: l.details,
-        case_number: l.case_number,
-        source: l.source,
-        confidence: "medium",
-        raw_response: l.raw_response,
-        target_entity_id: primaryEntityId,
-      })),
+    await insertOrThrow(
+      supabase.from("litigation_checks").insert(
+        litigationResults.map((l) => ({
+          validation_id: validation.id,
+          org_id: profile.org_id,
+          search_type: l.search_type,
+          entity_name: l.entity_name,
+          result: l.result,
+          details: l.details,
+          case_number: l.case_number,
+          source: l.source,
+          confidence: "medium",
+          raw_response: l.raw_response,
+          target_entity_id: primaryEntityId,
+        })),
+      ),
+      `litigation_checks insert (validation_id=${validation.id}, count=${litigationResults.length})`,
     );
 
     // 5b. Materialize litigation_cases for the case-card UI. Pure projection
@@ -353,21 +366,25 @@ export async function POST(request: Request) {
 
     // 6. Store GC validation (if applicable)
     if (gcResult) {
-      await supabase.from("gc_validations").insert({
-        validation_id: validation.id,
-        gc_name: gcResult.gc_name,
-        license_number: gcResult.license_number,
-        license_state: gcResult.license_state,
-        license_status: gcResult.license_status,
-        license_classification: gcResult.license_classification,
-        expiration_date: gcResult.expiration_date,
-        disciplinary_actions: gcResult.disciplinary_actions,
-        related_party_flag: false,
-        insurance_verified: gcResult.insurance_verified,
-        source_url: gcResult.source_url,
-        confidence: "medium",
-        raw_response: gcResult.raw_response,
-      });
+      await insertOrThrow(
+        supabase.from("gc_validations").insert({
+          validation_id: validation.id,
+          org_id: profile.org_id,
+          gc_name: gcResult.gc_name,
+          license_number: gcResult.license_number,
+          license_state: gcResult.license_state,
+          license_status: gcResult.license_status,
+          license_classification: gcResult.license_classification,
+          expiration_date: gcResult.expiration_date,
+          disciplinary_actions: gcResult.disciplinary_actions,
+          related_party_flag: false,
+          insurance_verified: gcResult.insurance_verified,
+          source_url: gcResult.source_url,
+          confidence: "medium",
+          raw_response: gcResult.raw_response,
+        }),
+        `gc_validations insert (validation_id=${validation.id})`,
+      );
     }
 
     // 6b. Store sanctions / PEP screen

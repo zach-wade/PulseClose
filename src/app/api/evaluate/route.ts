@@ -13,6 +13,7 @@ import {
   type DealParams,
 } from "@/lib/evaluate/engine";
 import { emitActivity } from "@/lib/events/emit";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export async function GET() {
   const profile = await getUserProfile();
@@ -157,24 +158,27 @@ export async function POST(request: Request) {
   });
 
   // Persist per-investor results
-  await supabase.from("deal_eligibility_results").insert(
-    results.map((r) => ({
-      deal_evaluation_id: evaluation.id,
-      investor_id: r.investor_id,
-      result: r.result,
-      computed_terms: {
-        max_ltv: r.max_ltv,
-        max_ltc: r.max_ltc,
-        max_ltarv: r.max_ltarv,
-        estimated_rate_pct: r.estimated_rate_pct,
-        estimated_points: r.estimated_points,
-        applied_adjusters: r.applied_adjusters,
-        matched_tier_index: r.matched_tier_index,
-        boundary_warnings: r.boundary_warnings,
-        failure_reasons: r.failure_reasons,
-      },
-      reasoning: r.reasoning,
-    })),
+  await insertOrThrow(
+    supabase.from("deal_eligibility_results").insert(
+      results.map((r) => ({
+        deal_evaluation_id: evaluation.id,
+        investor_id: r.investor_id,
+        result: r.result,
+        computed_terms: {
+          max_ltv: r.max_ltv,
+          max_ltc: r.max_ltc,
+          max_ltarv: r.max_ltarv,
+          estimated_rate_pct: r.estimated_rate_pct,
+          estimated_points: r.estimated_points,
+          applied_adjusters: r.applied_adjusters,
+          matched_tier_index: r.matched_tier_index,
+          boundary_warnings: r.boundary_warnings,
+          failure_reasons: r.failure_reasons,
+        },
+        reasoning: r.reasoning,
+      })),
+    ),
+    `deal_eligibility_results insert (deal_evaluation_id=${evaluation.id}, count=${results.length})`,
   );
 
   const passCount = results.filter((r) => r.result === "pass").length;

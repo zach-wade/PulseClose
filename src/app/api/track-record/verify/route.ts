@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export const maxDuration = 60;
 
@@ -87,23 +88,26 @@ export async function POST(request: Request) {
 
   // Replace prior results for this validation.
   await supabase.from("verified_flips").delete().eq("validation_id", validation.id);
-  await supabase.from("verified_flips").insert(
-    verified.map((v) => ({
-      validation_id: validation.id,
-      submitted_address: v.submitted_address,
-      resolved_address: v.resolved_address,
-      match_status: v.match_status,
-      acquisition_date: v.acquisition_date,
-      acquisition_price: v.acquisition_price,
-      disposition_date: v.disposition_date,
-      disposition_price: v.disposition_price,
-      hold_months: v.hold_months,
-      profit: v.profit,
-      current_owner: v.current_owner,
-      grantor_chain: v.grantor_chain,
-      source: "Realie",
-      raw_response: v.error ? { _error: true, _message: v.error } : null,
-    })),
+  await insertOrThrow(
+    supabase.from("verified_flips").insert(
+      verified.map((v) => ({
+        validation_id: validation.id,
+        submitted_address: v.submitted_address,
+        resolved_address: v.resolved_address,
+        match_status: v.match_status,
+        acquisition_date: v.acquisition_date,
+        acquisition_price: v.acquisition_price,
+        disposition_date: v.disposition_date,
+        disposition_price: v.disposition_price,
+        hold_months: v.hold_months,
+        profit: v.profit,
+        current_owner: v.current_owner,
+        grantor_chain: v.grantor_chain,
+        source: "Realie",
+        raw_response: v.error ? { _error: true, _message: v.error } : null,
+      })),
+    ),
+    `verified_flips insert (validation_id=${validation.id}, count=${verified.length})`,
   );
 
   await supabase.from("usage_records").insert(

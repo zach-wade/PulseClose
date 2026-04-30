@@ -5,6 +5,7 @@ import { getAdapter } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { upsertBorrower } from "@/lib/domain/upsert";
 import { buildGCSummary } from "@/lib/gc/summary";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -67,21 +68,25 @@ export async function POST(request: Request) {
       .single();
 
     if (validation) {
-      await supabase.from("gc_validations").insert({
-        validation_id: validation.id,
-        gc_name: result.gc_name,
-        license_number: result.license_number,
-        license_state: result.license_state,
-        license_status: result.license_status,
-        license_classification: result.license_classification,
-        expiration_date: result.expiration_date,
-        disciplinary_actions: result.disciplinary_actions,
-        related_party_flag: false,
-        insurance_verified: result.insurance_verified,
-        source_url: result.source_url,
-        confidence: "medium",
-        raw_response: result.raw_response,
-      });
+      await insertOrThrow(
+        supabase.from("gc_validations").insert({
+          validation_id: validation.id,
+          org_id: profile.org_id,
+          gc_name: result.gc_name,
+          license_number: result.license_number,
+          license_state: result.license_state,
+          license_status: result.license_status,
+          license_classification: result.license_classification,
+          expiration_date: result.expiration_date,
+          disciplinary_actions: result.disciplinary_actions,
+          related_party_flag: false,
+          insurance_verified: result.insurance_verified,
+          source_url: result.source_url,
+          confidence: "medium",
+          raw_response: result.raw_response,
+        }),
+        `gc_validations insert (validation_id=${validation.id})`,
+      );
 
       const isStub = !!(result.raw_response as Record<string, unknown>)?._demo;
       await supabase.from("usage_records").insert({

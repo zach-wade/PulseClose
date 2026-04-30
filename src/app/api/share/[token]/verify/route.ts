@@ -9,6 +9,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
 import { upsertProperty } from "@/lib/domain/upsert";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export const maxDuration = 60;
 
@@ -96,26 +97,29 @@ export async function POST(
     }),
   );
 
-  await supabase.from("verified_flips").insert(
-    verifiedWithFKs.map(({ v, propertyId }) => ({
-      validation_id: validation.id,
-      submitted_address: v.submitted_address,
-      resolved_address: v.resolved_address,
-      match_status: v.match_status,
-      acquisition_date: v.acquisition_date,
-      acquisition_price: v.acquisition_price,
-      disposition_date: v.disposition_date,
-      disposition_price: v.disposition_price,
-      hold_months: v.hold_months,
-      profit: v.profit,
-      current_owner: v.current_owner,
-      grantor_chain: v.grantor_chain,
-      source: "Realie (borrower-submitted via share link)",
-      raw_response: v.error ? { _error: true, _message: v.error } : null,
-      property_id: propertyId,
-      owning_entity_id: validation.primary_entity_id,
-      owning_borrower_id: validation.primary_borrower_id,
-    })),
+  await insertOrThrow(
+    supabase.from("verified_flips").insert(
+      verifiedWithFKs.map(({ v, propertyId }) => ({
+        validation_id: validation.id,
+        submitted_address: v.submitted_address,
+        resolved_address: v.resolved_address,
+        match_status: v.match_status,
+        acquisition_date: v.acquisition_date,
+        acquisition_price: v.acquisition_price,
+        disposition_date: v.disposition_date,
+        disposition_price: v.disposition_price,
+        hold_months: v.hold_months,
+        profit: v.profit,
+        current_owner: v.current_owner,
+        grantor_chain: v.grantor_chain,
+        source: "Realie (borrower-submitted via share link)",
+        raw_response: v.error ? { _error: true, _message: v.error } : null,
+        property_id: propertyId,
+        owning_entity_id: validation.primary_entity_id,
+        owning_borrower_id: validation.primary_borrower_id,
+      })),
+    ),
+    `share verified_flips insert (validation_id=${validation.id}, count=${verifiedWithFKs.length})`,
   );
 
   await supabase.from("usage_records").insert(

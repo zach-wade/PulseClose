@@ -4,6 +4,7 @@ import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { upsertBorrower, upsertEntity } from "@/lib/domain/upsert";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -61,19 +62,23 @@ export async function POST(request: Request) {
       .single();
 
     if (validation) {
-      await supabase.from("litigation_checks").insert(
-        results.map((l) => ({
-          validation_id: validation.id,
-          search_type: l.search_type,
-          entity_name: l.entity_name,
-          result: l.result,
-          details: l.details,
-          case_number: l.case_number,
-          source: l.source,
-          confidence: "medium",
-          raw_response: l.raw_response,
-          target_entity_id: primaryEntityId,
-        })),
+      await insertOrThrow(
+        supabase.from("litigation_checks").insert(
+          results.map((l) => ({
+            validation_id: validation.id,
+            org_id: profile.org_id,
+            search_type: l.search_type,
+            entity_name: l.entity_name,
+            result: l.result,
+            details: l.details,
+            case_number: l.case_number,
+            source: l.source,
+            confidence: "medium",
+            raw_response: l.raw_response,
+            target_entity_id: primaryEntityId,
+          })),
+        ),
+        `litigation_checks insert (validation_id=${validation.id}, count=${results.length})`,
       );
 
       const hasRealData = results.some(

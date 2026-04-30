@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { validateInvestorCriteriaRows } from "@/lib/schemas";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 interface CriterionInput {
   criteria_key: string;
@@ -75,14 +76,17 @@ export async function PUT(
       .is("effective_to", null);
 
     if (criteria.length > 0) {
-      await supabase.from("investor_criteria").insert(
-        criteria.map((c) => ({
-          investor_id: id,
-          criteria_key: c.criteria_key,
-          criteria_value: c.criteria_value,
-          source: c.source ?? "user_input",
-          source_doc_url: c.source_doc_url ?? null,
-        })),
+      await insertOrThrow(
+        supabase.from("investor_criteria").insert(
+          criteria.map((c) => ({
+            investor_id: id,
+            criteria_key: c.criteria_key,
+            criteria_value: c.criteria_value,
+            source: c.source ?? "user_input",
+            source_doc_url: c.source_doc_url ?? null,
+          })),
+        ),
+        `investor_criteria insert (investor_id=${id}, count=${criteria.length})`,
       );
     }
   }

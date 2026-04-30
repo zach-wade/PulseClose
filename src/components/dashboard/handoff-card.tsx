@@ -27,6 +27,15 @@ export function HandoffCard({ validationId, initial }: Props) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Client-side hint when the email field doesn't look like an email — not
+  // a hard block (the server schema is loose), just a heads-up so the user
+  // doesn't ship a handoff PDF with "Damon" where an address belongs.
+  const emailHint =
+    preparerEmail.trim().length > 0 && !preparerEmail.includes("@")
+      ? "Doesn't look like an email — leave blank or fix before saving"
+      : null;
 
   // Dirty tracking — disables downloads until edits are persisted, preventing
   // an investor from receiving an Excel/PDF that doesn't reflect the
@@ -39,6 +48,7 @@ export function HandoffCard({ validationId, initial }: Props) {
   async function save(): Promise<boolean> {
     setSaving(true);
     setError(null);
+    setFieldErrors({});
     try {
       const body: HandoffData = {
         ...initial,
@@ -52,7 +62,18 @@ export function HandoffCard({ validationId, initial }: Props) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const msg = (await res.json().catch(() => ({}))) as { error?: string };
+        const msg = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          details?: Array<{ path: string; message: string }>;
+        };
+        // Surface per-field errors when the server returns them so the user
+        // sees "preparer_email: must be an email" inline instead of the
+        // generic "Invalid handoff body" toast we used to throw.
+        if (msg.details && msg.details.length > 0) {
+          const map: Record<string, string> = {};
+          for (const d of msg.details) map[d.path] = d.message;
+          setFieldErrors(map);
+        }
         throw new Error(msg.error ?? `Save failed (${res.status})`);
       }
       setSavedAt(new Date());
@@ -128,7 +149,11 @@ export function HandoffCard({ validationId, initial }: Props) {
               value={preparerName}
               onChange={(e) => setPreparerName(e.target.value)}
               placeholder="e.g. Damon Fuhriman"
+              aria-invalid={!!fieldErrors.preparer_name}
             />
+            {fieldErrors.preparer_name && (
+              <p className="text-xs text-destructive">{fieldErrors.preparer_name}</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="preparer_email">Prepared by (email)</Label>
@@ -138,7 +163,13 @@ export function HandoffCard({ validationId, initial }: Props) {
               value={preparerEmail}
               onChange={(e) => setPreparerEmail(e.target.value)}
               placeholder="damon@insigniacapitalcorp.com"
+              aria-invalid={!!fieldErrors.preparer_email || !!emailHint}
             />
+            {fieldErrors.preparer_email ? (
+              <p className="text-xs text-destructive">{fieldErrors.preparer_email}</p>
+            ) : emailHint ? (
+              <p className="text-xs text-amber-600">{emailHint}</p>
+            ) : null}
           </div>
         </div>
         <div className="space-y-1.5">

@@ -8,6 +8,7 @@ import {
   upsertEntity,
   linkBorrowerToEntity,
 } from "@/lib/domain/upsert";
+import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -82,21 +83,25 @@ export async function POST(request: Request) {
       .single();
 
     if (validation) {
-      await supabase.from("entity_checks").insert({
-        validation_id: validation.id,
-        entity_id: primaryEntityId,
-        entity_name: result.entity_name,
-        state: result.state,
-        entity_type: result.entity_type,
-        sos_status: result.sos_status,
-        formation_date: result.formation_date,
-        last_filing_date: result.last_filing_date,
-        registered_agent: result.registered_agent,
-        source_url: result.source_url,
-        confidence: result.sos_status === "not_found" ? "low" : "medium",
-        flags: result.flags,
-        raw_response: result.raw_response,
-      });
+      await insertOrThrow(
+        supabase.from("entity_checks").insert({
+          validation_id: validation.id,
+          org_id: profile.org_id,
+          entity_id: primaryEntityId,
+          entity_name: result.entity_name,
+          state: result.state,
+          entity_type: result.entity_type,
+          sos_status: result.sos_status,
+          formation_date: result.formation_date,
+          last_filing_date: result.last_filing_date,
+          registered_agent: result.registered_agent,
+          source_url: result.source_url,
+          confidence: result.sos_status === "not_found" ? "low" : "medium",
+          flags: result.flags,
+          raw_response: result.raw_response,
+        }),
+        `entity_checks insert (validation_id=${validation.id})`,
+      );
 
       const isStub = !!(result.raw_response as Record<string, unknown>)?._demo;
       await supabase.from("usage_records").insert({

@@ -96,7 +96,11 @@ export type UpsertInvestorBodyV1 = z.infer<typeof upsertInvestorBodyV1>;
 export const handoffUpdateBodyV1 = z.object({
   overall_narrative: z.string().optional(),
   preparer_name: z.string().optional(),
-  preparer_email: z.string().email().optional().or(z.literal("")),
+  // Loose on purpose. Strict email validation rejected a bare name typed
+  // by mistake and surfaced as a confusing "Invalid handoff body" toast.
+  // The UI hints at email format inline; the server stores whatever is
+  // typed so half-typed values don't lose a save.
+  preparer_email: z.string().optional(),
   properties: z
     .record(
       z.string(), // property_id
