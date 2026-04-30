@@ -25,6 +25,8 @@ import {
   findValidationsAffectedBySignal,
 } from "@/lib/risk/persist";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
+import { parseSignalValueV1 } from "@/lib/schemas";
+import { withErrorLog } from "@/lib/async/with-error-log";
 
 type Scope = "borrower" | "property" | "borrower_property" | "entity";
 
@@ -135,9 +137,25 @@ export async function POST(request: Request) {
     .match(scopeMatch)
     .is("superseded_at", null);
 
+  // Validate signal_value against the known shape for this signal_key.
+  // Unknown keys pass through (forward-compat with new override types).
+  const validated = parseSignalValueV1(signal_key, signal_value);
+  if (validated.error) {
+    return NextResponse.json(
+      {
+        error: `Invalid signal_value for "${signal_key}"`,
+        details: validated.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+        })),
+      },
+      { status: 400 },
+    );
+  }
+
   const insertRow: Record<string, unknown> = {
     signal_key,
-    signal_value,
+    signal_value: validated.data,
     source: "user",
     confidence: "high",
     set_by_user_id: profile.id,
@@ -176,15 +194,15 @@ export async function POST(request: Request) {
   await Promise.all(affected.map((vid) => recomputeRiskFactorsForValidation(supabase, vid)));
 
   if (affected.length > 0) {
-    after(async () => {
-      for (const vid of affected) {
-        try {
-          await regenerateAiMemoForValidation(supabase, vid);
-        } catch (err) {
-          console.error(`AI memo regeneration failed for validation ${vid}:`, err);
+    after(() =>
+      withErrorLog("signals.regenerateAiMemo", async () => {
+        for (const vid of affected) {
+          await withErrorLog(`signals.regenerateAiMemo[${vid}]`, () =>
+            regenerateAiMemoForValidation(supabase, vid),
+          );
         }
-      }
-    });
+      }),
+    );
   }
 
   return NextResponse.json(

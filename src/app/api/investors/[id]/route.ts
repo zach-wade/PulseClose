@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { validateInvestorCriteriaRows } from "@/lib/schemas";
 
 interface CriterionInput {
   criteria_key: string;
@@ -53,6 +54,20 @@ export async function PUT(
   // Replace criteria: supersede existing active rows, insert new active set.
   // We don't hard-delete so the audit trail stays intact.
   if (Array.isArray(criteria)) {
+    // Validate each criterion's value against its key's known shape. Unknown
+    // keys pass through (forward-compat with adding new dimensions without
+    // shipping a build). Returns key-by-key errors so the UI can highlight.
+    const validation = validateInvestorCriteriaRows(criteria);
+    if (!validation.ok) {
+      return NextResponse.json(
+        {
+          error: "Invalid investor_criteria",
+          criteria_errors: validation.errors,
+        },
+        { status: 400 },
+      );
+    }
+
     await supabase
       .from("investor_criteria")
       .update({ effective_to: new Date().toISOString().slice(0, 10) })

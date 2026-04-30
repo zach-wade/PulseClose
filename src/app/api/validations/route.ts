@@ -18,6 +18,7 @@ import {
   linkBorrowerToEntity,
 } from "@/lib/domain/upsert";
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
+import { withErrorLog } from "@/lib/async/with-error-log";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -506,6 +507,8 @@ export async function POST(request: Request) {
         overall_status: overallStatus,
         confidence_score: confidenceScore,
         experience_tier: experienceTier,
+        // input_warnings stays a flat string[] for now; the 00016 CHECK
+        // for schema_version skips array-shaped JSONB columns.
         input_warnings: inputWarnings,
         property_count: properties.length,
         validation_date: new Date().toISOString(),
@@ -518,8 +521,8 @@ export async function POST(request: Request) {
     // fire-and-forget promise was getting killed when the function returned,
     // which is why some validations were missing AI memos.
     const validationId = validation.id;
-    after(async () => {
-      try {
+    after(() =>
+      withErrorLog(`validations.aiAnalysis[${validationId}]`, async () => {
         const aiAnalysis = await generateValidationAnalysis({
           borrower_name,
           entity_name: borrower_entity_name,
@@ -536,20 +539,20 @@ export async function POST(request: Request) {
           tier,
         });
         if (aiAnalysis) {
+          // Stamp schema_version so the 00016 CHECK constraint passes.
+          const stamped = { schema_version: 1 as const, ...aiAnalysis };
           await supabase
             .from("borrower_validations")
             .update({
-              ai_analysis: aiAnalysis,
+              ai_analysis: stamped,
               updated_at: new Date().toISOString(),
             })
             .eq("id", validationId);
         } else {
           console.warn(`AI analysis returned null for validation ${validationId}`);
         }
-      } catch (err) {
-        console.error(`AI analysis failed for validation ${validationId}:`, err);
-      }
-    });
+      }),
+    );
 
     // 11. Increment usage counter
     await supabase
