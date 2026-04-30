@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { deriveTier, type RiskFactor } from "@/lib/risk/factors";
 
 // GET /api/validations/[id] — full validation with all check results
 export async function GET(
@@ -16,7 +17,7 @@ export async function GET(
   const supabase = createAdminClient();
 
   // Fetch validation + all related checks in parallel
-  const [validationRes, entityRes, trackRecordRes, litigationRes, gcRes, sanctionsRes, verifiedFlipsRes] =
+  const [validationRes, entityRes, trackRecordRes, litigationRes, gcRes, sanctionsRes, verifiedFlipsRes, riskFactorsRes] =
     await Promise.all([
       supabase
         .from("borrower_validations")
@@ -31,7 +32,7 @@ export async function GET(
         .order("check_date", { ascending: false }),
       supabase
         .from("track_record_entries")
-        .select("*")
+        .select("*, lenders ( id, display_name, classification )")
         .eq("validation_id", id)
         .order("acquisition_date", { ascending: false }),
       supabase
@@ -53,6 +54,11 @@ export async function GET(
         .select("*")
         .eq("validation_id", id)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("risk_factors")
+        .select("*")
+        .eq("validation_id", id)
+        .order("computed_at", { ascending: false }),
     ]);
 
   if (validationRes.error || !validationRes.data) {
@@ -62,6 +68,9 @@ export async function GET(
     );
   }
 
+  const riskFactors = (riskFactorsRes.data ?? []) as RiskFactor[];
+  const tier = deriveTier(riskFactors);
+
   return NextResponse.json({
     ...validationRes.data,
     entity_checks: entityRes.data ?? [],
@@ -70,5 +79,7 @@ export async function GET(
     gc_validations: gcRes.data ?? [],
     sanctions_checks: sanctionsRes.data ?? [],
     verified_flips: verifiedFlipsRes.data ?? [],
+    risk_factors: riskFactors,
+    tier,
   });
 }

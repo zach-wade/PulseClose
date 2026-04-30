@@ -10,6 +10,15 @@ import {
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
 import { getCheckLimit } from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  upsertBorrower,
+  upsertEntity,
+  upsertProperty,
+  upsertLender,
+  linkBorrowerToEntity,
+} from "@/lib/domain/upsert";
+import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
+import { tierLabel } from "@/lib/risk/factors";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -97,7 +106,17 @@ export async function POST(request: Request) {
     );
   }
 
-  // 1. Create the validation record (pending)
+  // 1. Resolve domain entities (borrower, guarantor, entity) and create
+  // the validation record with FKs populated from the start.
+  const primaryBorrowerId = await upsertBorrower(supabase, profile.org_id, borrower_name);
+  const guarantorBorrowerId = guarantor_name
+    ? await upsertBorrower(supabase, profile.org_id, guarantor_name)
+    : null;
+  const primaryEntityId = await upsertEntity(supabase, profile.org_id, {
+    displayName: borrower_entity_name,
+    state: entity_state,
+  });
+
   const { data: validation, error: createError } = await supabase
     .from("borrower_validations")
     .insert({
@@ -108,6 +127,9 @@ export async function POST(request: Request) {
       overall_status: "pending",
       confidence_score: 0,
       created_by: profile.id,
+      primary_borrower_id: primaryBorrowerId,
+      primary_entity_id: primaryEntityId,
+      guarantor_borrower_id: guarantorBorrowerId,
     })
     .select()
     .single();
@@ -171,9 +193,24 @@ export async function POST(request: Request) {
       additional_persons: additionalPersons,
     });
 
-    // 3. Store entity check
+    // 3. Store entity check + refresh cached SOS state on the entity row.
+    // Cobalt may return a different canonical name than the user input
+    // (e.g. "TT INVESTMENT PROPERTIES, LLC" vs "TT Investment Properties");
+    // upsert again with the SOS-returned name so the cached state lands
+    // on the canonical record and the original input also maps to it.
+    const checkedEntityId = await upsertEntity(supabase, profile.org_id, {
+      displayName: entityResult.entity_name,
+      state: entityResult.state || entity_state,
+      entityType: entityResult.entity_type,
+      formationDate: entityResult.formation_date,
+      latestSosStatus: entityResult.sos_status,
+      latestSosCheckAt: new Date().toISOString(),
+      latestRegisteredAgent: entityResult.registered_agent,
+    });
+
     await supabase.from("entity_checks").insert({
       validation_id: validation.id,
+      entity_id: checkedEntityId ?? primaryEntityId,
       entity_name: entityResult.entity_name,
       state: entityResult.state,
       entity_type: entityResult.entity_type,
@@ -187,10 +224,74 @@ export async function POST(request: Request) {
       raw_response: entityResult.raw_response,
     });
 
-    // 4. Store track record entries
+    // Link borrower (and guarantor) to the SOS-canonical entity. Role is
+    // 'other' because we don't know member-vs-manager-vs-officer from a
+    // bare SOS lookup; future passes can refine via Cobalt's officers list.
+    const linkEntityId = checkedEntityId ?? primaryEntityId;
+    if (primaryBorrowerId && linkEntityId) {
+      await linkBorrowerToEntity(supabase, primaryBorrowerId, linkEntityId, "other", "user", "medium");
+    }
+    if (guarantorBorrowerId && linkEntityId) {
+      await linkBorrowerToEntity(supabase, guarantorBorrowerId, linkEntityId, "guarantor", "user", "high");
+    }
+
+    // 4. Store track record entries — first resolve each property and its
+    // lender to domain rows, then create one property_ownership episode
+    // per entry, then insert the snapshot rows with FKs.
     if (properties.length > 0) {
+      const enriched = await Promise.all(
+        properties.map(async (p) => {
+          const raw = (p.raw_response ?? {}) as Record<string, unknown>;
+          const city = typeof raw.city === "string" ? raw.city : null;
+          const state = typeof raw.state === "string" ? raw.state : null;
+          const zip = typeof raw.zipCode === "string" ? raw.zipCode : null;
+          const modelValue = typeof raw.modelValue === "number" ? raw.modelValue : null;
+          const lenderName = typeof raw.lenderName === "string" ? raw.lenderName : null;
+
+          const propertyId = await upsertProperty(supabase, profile.org_id, {
+            addressDisplay: p.property_address,
+            city,
+            state,
+            zip,
+            latestAvm: modelValue,
+            latestAvmCheckAt: modelValue !== null ? new Date().toISOString() : null,
+          });
+
+          const lenderId = lenderName
+            ? await upsertLender(supabase, profile.org_id, { displayName: lenderName })
+            : null;
+
+          // One property_ownership episode per track-record row. For
+          // currently-held properties (no disposition_date), this row
+          // becomes the active ownership.
+          let ownershipId: string | null = null;
+          if (propertyId) {
+            const { data: ownership } = await supabase
+              .from("property_ownership")
+              .insert({
+                property_id: propertyId,
+                owning_entity_id: primaryEntityId,
+                owning_borrower_id: primaryBorrowerId,
+                acquired_at: p.acquisition_date,
+                disposed_at: p.disposition_date,
+                acquisition_price: p.acquisition_price,
+                disposition_price: p.disposition_price,
+                lender_id: lenderId,
+                lender_name_observed: lenderName,
+                source: p.source.toLowerCase().includes("realie") || p.source.toLowerCase().includes("regrid") ? "deed" : "inferred",
+                confidence: "medium",
+              })
+              .select("id")
+              .single();
+            ownershipId = ownership?.id ?? null;
+          }
+
+          return { p, propertyId, lenderId, ownershipId };
+        }),
+      );
+
       await supabase.from("track_record_entries").insert(
-        properties.map((p) => ({
+        enriched.map(({ p, propertyId, lenderId, ownershipId }) => ({
           validation_id: validation.id,
           property_address: p.property_address,
           acquisition_date: p.acquisition_date,
@@ -206,11 +307,18 @@ export async function POST(request: Request) {
           confidence: "medium",
           verified: false,
           raw_response: p.raw_response,
+          property_id: propertyId,
+          owning_entity_id: primaryEntityId,
+          owning_borrower_id: primaryBorrowerId,
+          lender_id: lenderId,
+          active_ownership_id: p.disposition_date ? null : ownershipId,
         })),
       );
     }
 
-    // 5. Store litigation checks
+    // 5. Store litigation checks. We searched against the entity name,
+    // so target_entity_id is the validation's primary entity. (Future:
+    // when we add per-borrower individual searches, populate target_borrower_id.)
     await supabase.from("litigation_checks").insert(
       litigationResults.map((l) => ({
         validation_id: validation.id,
@@ -222,6 +330,7 @@ export async function POST(request: Request) {
         source: l.source,
         confidence: "medium",
         raw_response: l.raw_response,
+        target_entity_id: primaryEntityId,
       })),
     );
 
@@ -256,7 +365,17 @@ export async function POST(request: Request) {
       sources_searched: sanctionsResult.sources_searched,
       source: sanctionsResult.source,
       raw_response: sanctionsResult.raw_response,
+      primary_borrower_id: primaryBorrowerId,
+      primary_entity_id: primaryEntityId,
     });
+
+    // 6c. Compute risk factors + tier from the snapshot we just wrote.
+    // This reads back the rows + joins on lender classifications + active
+    // borrower-property signals (none yet for a fresh validation, but the
+    // override-and-rerun loop reuses the same function).
+    const riskResult = await recomputeRiskFactorsForValidation(supabase, validation.id);
+    const factors = riskResult?.factors ?? [];
+    const tier = riskResult?.tier ?? "LOW";
 
     // 7. Log usage records
     const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
@@ -418,6 +537,8 @@ export async function POST(request: Request) {
           experience_tier: experienceTier,
           overall_status: overallStatus,
           confidence_score: confidenceScore,
+          risk_factors: factors,
+          tier,
         });
         if (aiAnalysis) {
           await supabase

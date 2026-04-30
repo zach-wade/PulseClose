@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { getAdapter } from "@/lib/adapters";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { upsertBorrower, upsertEntity } from "@/lib/domain/upsert";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -38,6 +39,11 @@ export async function POST(request: Request) {
       borrower_name: borrower_name || entity_name,
     });
 
+    const primaryBorrowerId = await upsertBorrower(supabase, profile.org_id, borrower_name || entity_name);
+    const primaryEntityId = await upsertEntity(supabase, profile.org_id, {
+      displayName: entity_name,
+    });
+
     // Create a lightweight validation record for FK
     const { data: validation } = await supabase
       .from("borrower_validations")
@@ -48,6 +54,8 @@ export async function POST(request: Request) {
         overall_status: "pending",
         confidence_score: 0,
         created_by: profile.id,
+        primary_borrower_id: primaryBorrowerId,
+        primary_entity_id: primaryEntityId,
       })
       .select("id")
       .single();
@@ -64,6 +72,7 @@ export async function POST(request: Request) {
           source: l.source,
           confidence: "medium",
           raw_response: l.raw_response,
+          target_entity_id: primaryEntityId,
         })),
       );
 

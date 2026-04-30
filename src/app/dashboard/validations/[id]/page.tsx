@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -31,12 +31,23 @@ import { LitigationGrid } from "@/components/dashboard/litigation-grid";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
+import { WhyThisRating } from "@/components/dashboard/why-this-rating";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
 import type { GCValidation } from "@/components/dashboard/shared-types";
 import type { SanctionsCheck } from "@/components/dashboard/shared-types";
 import type { VerifiedFlip } from "@/components/dashboard/shared-types";
+
+interface RiskFactor {
+  id?: string;
+  factor_key: string;
+  severity: "critical" | "moderate" | "minor" | "informational" | "none";
+  excluded: boolean;
+  exclusion_reason: string | null;
+  contributing_data: Record<string, unknown>;
+  explanation: string;
+}
 
 interface AIAnalysis {
   summary: string;
@@ -70,6 +81,10 @@ interface ValidationDetail {
   gc_validations: GCValidation[];
   sanctions_checks: SanctionsCheck[];
   verified_flips: VerifiedFlip[];
+  primary_borrower_id: string | null;
+  primary_entity_id: string | null;
+  risk_factors: RiskFactor[];
+  tier: "HIGH" | "MEDIUM" | "LOW";
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -111,6 +126,19 @@ export default function ValidationDetailPage() {
   const [data, setData] = useState<ValidationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/validations/${params.id}`);
+      if (!res.ok) throw new Error("Failed to load validation");
+      const next = (await res.json()) as ValidationDetail;
+      setData(next);
+      return next;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+      return null;
+    }
+  }, [params.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +185,16 @@ export default function ValidationDetailPage() {
       if (pollTimer) clearTimeout(pollTimer);
     };
   }, [params.id]);
+
+  // After an override is applied: refetch immediately to pick up new
+  // risk_factors + tier, then schedule one more refetch in ~5s to catch
+  // the AI memo regeneration that runs via after().
+  const handleSignalApplied = useCallback(async () => {
+    await refetch();
+    setTimeout(() => {
+      refetch();
+    }, 5000);
+  }, [refetch]);
 
   if (loading) {
     return (
@@ -427,6 +465,14 @@ export default function ValidationDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Why this rating? — deterministic factor list with inline overrides */}
+      <WhyThisRating
+        tier={data.tier}
+        riskFactors={data.risk_factors ?? []}
+        borrowerId={data.primary_borrower_id}
+        onSignalApplied={handleSignalApplied}
+      />
 
       {/* Entity Checks */}
       {data.entity_checks.map((ec) => (

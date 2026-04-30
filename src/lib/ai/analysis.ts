@@ -7,9 +7,14 @@ import type {
   SanctionsScreenResult,
 } from "@/lib/adapters/types";
 import { extractRealieDetails } from "@/lib/adapters/extract";
+import type { RiskFactor, Tier } from "@/lib/risk/factors";
+import { humanizeFactorKey } from "@/lib/risk/factors";
 
 export interface ValidationAnalysis {
   summary: string;
+  // Tier is set deterministically from risk_factors, not by the AI. This
+  // field is populated from the computed tier so existing UI keeps working;
+  // the AI is told to NOT pick the tier and to never disagree with it.
   risk_rating: "low" | "medium" | "high";
   pillar_assessments: {
     entity: string;
@@ -34,6 +39,8 @@ interface AnalysisInput {
   experience_tier: number;
   overall_status: string;
   confidence_score: number;
+  risk_factors: RiskFactor[];
+  tier: Tier;
 }
 
 export async function generateValidationAnalysis(
@@ -86,6 +93,21 @@ export async function generateValidationAnalysis(
     (p) => p.outcome === "distressed" || p.outcome === "foreclosed",
   ).length;
 
+  // Risk factor block — the deterministic tier is computed from these,
+  // so the AI must explain them rather than re-rate. Excluded factors
+  // (e.g., extended_hold on a primary residence) are listed but flagged
+  // as excluded so the narrative reflects the override.
+  const factorBlock = input.risk_factors.length > 0
+    ? input.risk_factors
+        .map((f) => {
+          const status = f.excluded
+            ? `excluded${f.exclusion_reason ? ` — ${f.exclusion_reason}` : ""}`
+            : `severity: ${f.severity}`;
+          return `- ${humanizeFactorKey(f.factor_key)} (${status}): ${f.explanation}`;
+        })
+        .join("\n")
+    : "(no factors flagged)";
+
   const sanctionsBlock = input.sanctions_result
     ? `--- SANCTIONS / PEP SCREENING ---
 Result: ${input.sanctions_result.result === "clear" ? "Clear (no matches)" : "POTENTIAL MATCH"}
@@ -100,7 +122,19 @@ ${input.sanctions_result.matches.length > 0
   : ""}`
     : "--- SANCTIONS / PEP SCREENING ---\nNot run.";
 
+  const tierWord = input.tier.toLowerCase();
+
   const prompt = `You are a senior credit analyst at a bridge lending firm. Analyze this borrower validation data and produce a structured risk assessment.
+
+CRITICAL INSTRUCTION — risk tier is NOT yours to set.
+The risk tier is computed deterministically from the named factors below
+and has already been assigned: ${input.tier}. Do NOT disagree with it,
+re-rank it, or argue against it. Your job is to explain the factors in
+narrative form so the lender understands the WHY behind the tier. The
+"risk_rating" field in your JSON output must be exactly "${tierWord}".
+
+DETERMINISTIC RISK FACTORS:
+${factorBlock}
 
 BORROWER: ${input.borrower_name}
 ENTITY: ${input.entity_name}${input.guarantor_name ? `\nGUARANTOR: ${input.guarantor_name}` : ""}
@@ -146,8 +180,8 @@ Disciplinary Actions: ${input.gc_result.disciplinary_actions.length > 0 ? input.
 
 Respond with a JSON object matching this exact structure:
 {
-  "summary": "2-3 sentence executive summary. Reference real numbers — portfolio size, LTV, hold periods, entity status, sanctions result, and any active litigation. Do NOT cite missing flip history as a risk; that data was not searched.",
-  "risk_rating": "low" | "medium" | "high",
+  "summary": "2-3 sentence executive summary that references the deterministic tier (${input.tier}) and the named factors that drove it. Reference real numbers — portfolio size, LTV, hold periods, entity status, sanctions result, and any active litigation. Do NOT cite missing flip history as a risk; that data was not searched.",
+  "risk_rating": "${tierWord}",
   "pillar_assessments": {
     "entity": "1-2 sentences on entity validation findings",
     "track_record": "1-2 sentences on the CURRENT PORTFOLIO. Reference value, equity, LTV, hold periods, lender concentration. If completed-flip history was not searched, state that explicitly rather than treating it as a negative.",
@@ -179,6 +213,10 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
     }
 
     const analysis = JSON.parse(jsonMatch[0]) as ValidationAnalysis;
+    // Hard-overwrite risk_rating with the deterministic tier so the AI
+    // can never accidentally publish a tier that disagrees with the
+    // factor math, even if the prompt instruction is ignored.
+    analysis.risk_rating = tierWord as ValidationAnalysis["risk_rating"];
     return analysis;
   } catch (err) {
     console.error("AI analysis generation failed:", err);

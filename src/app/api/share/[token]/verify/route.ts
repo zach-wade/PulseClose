@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
+import { upsertProperty } from "@/lib/domain/upsert";
 
 export const maxDuration = 60;
 
@@ -47,7 +48,7 @@ export async function POST(
 
   const { data: validation, error: vErr } = await supabase
     .from("borrower_validations")
-    .select("id, org_id, borrower_name, borrower_entity_name")
+    .select("id, org_id, borrower_name, borrower_entity_name, primary_borrower_id, primary_entity_id")
     .eq("share_token", token)
     .single();
 
@@ -80,8 +81,22 @@ export async function POST(
   });
 
   await supabase.from("verified_flips").delete().eq("validation_id", validation.id);
+
+  // Resolve each verified address to a property_id so the verified_flip
+  // row joins back into the domain layer. Use resolved_address (Realie's
+  // canonical form) when available, else the borrower's submitted text.
+  const verifiedWithFKs = await Promise.all(
+    verified.map(async (v) => {
+      const address = v.resolved_address ?? v.submitted_address;
+      const propertyId = address
+        ? await upsertProperty(supabase, validation.org_id, { addressDisplay: address })
+        : null;
+      return { v, propertyId };
+    }),
+  );
+
   await supabase.from("verified_flips").insert(
-    verified.map((v) => ({
+    verifiedWithFKs.map(({ v, propertyId }) => ({
       validation_id: validation.id,
       submitted_address: v.submitted_address,
       resolved_address: v.resolved_address,
@@ -96,6 +111,9 @@ export async function POST(
       grantor_chain: v.grantor_chain,
       source: "Realie (borrower-submitted via share link)",
       raw_response: v.error ? { _error: true, _message: v.error } : null,
+      property_id: propertyId,
+      owning_entity_id: validation.primary_entity_id,
+      owning_borrower_id: validation.primary_borrower_id,
     })),
   );
 
