@@ -388,20 +388,23 @@ export async function POST(request: Request) {
     }
 
     // 6b. Store sanctions / PEP screen
-    await supabase.from("sanctions_checks").insert({
-      validation_id: validation.id,
-      borrower_name,
-      entity_name: borrower_entity_name,
-      guarantor_name: guarantor_name || null,
-      result: sanctionsResult.result,
-      match_count: sanctionsResult.matches.length,
-      matches: sanctionsResult.matches,
-      sources_searched: sanctionsResult.sources_searched,
-      source: sanctionsResult.source,
-      raw_response: sanctionsResult.raw_response,
-      primary_borrower_id: primaryBorrowerId,
-      primary_entity_id: primaryEntityId,
-    });
+    await insertOrThrow(
+      supabase.from("sanctions_checks").insert({
+        validation_id: validation.id,
+        borrower_name,
+        entity_name: borrower_entity_name,
+        guarantor_name: guarantor_name || null,
+        result: sanctionsResult.result,
+        match_count: sanctionsResult.matches.length,
+        matches: sanctionsResult.matches,
+        sources_searched: sanctionsResult.sources_searched,
+        source: sanctionsResult.source,
+        raw_response: sanctionsResult.raw_response,
+        primary_borrower_id: primaryBorrowerId,
+        primary_entity_id: primaryEntityId,
+      }),
+      `sanctions_checks insert (validation_id=${validation.id})`,
+    );
 
     // 6c. Compute risk factors + tier from the snapshot we just wrote.
     // This reads back the rows + joins on lender classifications + active
