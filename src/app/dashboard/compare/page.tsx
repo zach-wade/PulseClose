@@ -6,7 +6,7 @@
 // list's checkbox + "Compare selected" button. Reusable UX pattern for
 // validation diff over time (B6) — same component, different ID source.
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,7 +81,32 @@ function fmtCurrency(n: number | null): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
+// Next 16 requires `useSearchParams()` consumers to be wrapped in a
+// Suspense boundary so the prerender pass doesn't bail out on the
+// CSR-only hook. This was causing every Vercel build to fail since PR 7
+// shipped (production was stuck on a 9h-old deploy until this fix).
 export default function ComparePage() {
+  return (
+    <Suspense fallback={<ComparePageSkeleton />}>
+      <ComparePageInner />
+    </Suspense>
+  );
+}
+
+function ComparePageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-9 w-48" />
+      <div className="grid grid-cols-2 gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+      </div>
+      <Skeleton className="h-96" />
+    </div>
+  );
+}
+
+function ComparePageInner() {
   const params = useSearchParams();
   const router = useRouter();
   const a = params.get("a");
