@@ -28,6 +28,7 @@ import {
   Link2,
   Copy,
   Check,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, formatDate } from "./shared-types";
@@ -87,6 +88,12 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Send-to-borrower form state — collapsed by default; click "Send" to expand.
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendEmail, setSendEmail] = useState("");
+  const [sendName, setSendName] = useState("");
+  const [sendMessage, setSendMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const flips = initial;
 
   async function handleGenerateLink() {
@@ -126,6 +133,41 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
       toast.success("Copied");
     } catch {
       toast.error("Could not copy — select and copy manually");
+    }
+  }
+
+  async function handleSendToBorrower() {
+    const recipient = sendEmail.trim();
+    if (!recipient) {
+      toast.error("Recipient email required");
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch(`/api/validations/${validationId}/send-share-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient_email: recipient,
+          recipient_name: sendName.trim() || undefined,
+          custom_message: sendMessage.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+      const { share_url } = (await res.json()) as { share_url: string };
+      setShareUrl(share_url);
+      toast.success(`Share link sent to ${recipient}`);
+      setSendOpen(false);
+      setSendEmail("");
+      setSendName("");
+      setSendMessage("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send share link");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -209,26 +251,37 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
         {/* Borrower share link — analyst sends this to the borrower so they
             can self-submit addresses without needing a PulseClose login. */}
         <div className="rounded-md border bg-muted/30 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Borrower share link</p>
               <p className="text-xs text-muted-foreground">
                 Generate a private URL the borrower can use to submit addresses themselves.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerateLink}
-              disabled={generatingLink}
-            >
-              {generatingLink ? (
-                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Link2 className="mr-2 h-3.5 w-3.5" />
-              )}
-              {shareUrl ? "Refresh link" : "Generate link"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateLink}
+                disabled={generatingLink}
+              >
+                {generatingLink ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Link2 className="mr-2 h-3.5 w-3.5" />
+                )}
+                {shareUrl ? "Refresh link" : "Generate link"}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setSendOpen((p) => !p)}
+                disabled={sending}
+              >
+                <Send className="mr-2 h-3.5 w-3.5" />
+                Send to borrower
+              </Button>
+            </div>
           </div>
           {shareUrl && (
             <div className="flex items-center gap-2 mt-2">
@@ -242,6 +295,53 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
+            </div>
+          )}
+          {sendOpen && (
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Send share link via email
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="email"
+                  className="rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none disabled:opacity-50"
+                  placeholder="borrower@example.com"
+                  value={sendEmail}
+                  onChange={(e) => setSendEmail(e.target.value)}
+                  disabled={sending}
+                  required
+                />
+                <input
+                  type="text"
+                  className="rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none disabled:opacity-50"
+                  placeholder="Recipient name (optional)"
+                  value={sendName}
+                  onChange={(e) => setSendName(e.target.value)}
+                  disabled={sending}
+                />
+              </div>
+              <textarea
+                className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none disabled:opacity-50"
+                placeholder="Optional personal message (appears in the email body)"
+                value={sendMessage}
+                onChange={(e) => setSendMessage(e.target.value)}
+                disabled={sending}
+                maxLength={1000}
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSendToBorrower} disabled={sending || !sendEmail.trim()}>
+                  {sending ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  Send
+                </Button>
+              </div>
             </div>
           )}
         </div>

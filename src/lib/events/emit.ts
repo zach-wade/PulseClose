@@ -28,6 +28,7 @@ export type ActivityVerb =
   | "ran_monitor"
   | "changed_tier"
   | "sent_handoff"
+  | "sent_share_link"
   | "downloaded_handoff"
   | "evaluated_deal"
   | "extracted_doc"
