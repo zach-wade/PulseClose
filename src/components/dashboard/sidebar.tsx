@@ -6,12 +6,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Shield,
-  Search,
-  Building2,
-  HardHat,
-  Scale,
   BarChart3,
   Calculator,
+  Briefcase,
   Settings,
   LogOut,
   Menu,
@@ -19,42 +16,28 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+// Nav reflects the lender's journey, not a menu of modules. Standalone
+// single-check pages (/dashboard/{entity,gc,litigation,track-record}) are
+// not surfaced here — the unified validation flow is the canonical path.
+// Those routes still exist for back-compat but aren't promoted.
 const navItems = [
   {
     label: "Validations",
     href: "/dashboard",
     icon: Shield,
-    description: "All borrower validations",
-  },
-  {
-    label: "Entity Search",
-    href: "/dashboard/entity",
-    icon: Search,
-    description: "SOS & entity lookups",
-  },
-  {
-    label: "Track Record",
-    href: "/dashboard/track-record",
-    icon: Building2,
-    description: "Property & project history",
-  },
-  {
-    label: "GC Validation",
-    href: "/dashboard/gc",
-    icon: HardHat,
-    description: "Contractor credentials",
-  },
-  {
-    label: "Litigation",
-    href: "/dashboard/litigation",
-    icon: Scale,
-    description: "PACER, liens, bankruptcies",
+    description: "Borrower validations — pipeline view",
   },
   {
     label: "Evaluate Deal",
     href: "/dashboard/evaluate",
     icon: Calculator,
-    description: "Compare a deal across investors",
+    description: "Match deals to investor criteria",
+  },
+  {
+    label: "Investors",
+    href: "/dashboard/evaluate/investors",
+    icon: Briefcase,
+    description: "Configure investor criteria",
   },
   {
     label: "Usage",

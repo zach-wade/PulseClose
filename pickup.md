@@ -1,11 +1,13 @@
-# PulseClose — Session Pickup (2026-05-01)
+# PulseClose — Session Pickup (2026-05-02)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
 >
 > **Read these in order on session start:**
 > - This file (you're here)
-> - `docs/ROADMAP.md` — P0 Corrections + Expansion plan (S/A/B/C/D/E/F tiers)
+> - `docs/ROADMAP.md` — **journey-organized** (Stage 1 Intake → Stage 8
+>   Outcome) with all old tier features (S/A/B/C/D/E/F) re-slotted into
+>   stages and 11 explicit UX gaps (G1.1-G8.1) as first-class items
 > - `docs/DATA-MODEL.md` — full schema incl. universal infra tables
 > - `STRATEGY.md` — vision, market, long-shot bets
 > - `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`
@@ -19,8 +21,20 @@ SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
 22-23, 2026; ~7 weeks out).
 
 **P0 corrections + universal infra + Tier S demo wow + recovery PRs are
-SHIPPED end-to-end.** Production is healthy as of 2026-05-01 — see
+SHIPPED end-to-end.** Production is healthy as of 2026-05-02. See
 "What was completed" below for the recovery story.
+
+**2026-05-02 — Roadmap reorganized + UX cohesion fixes shipped.** ROADMAP.md
+rewrote primary navigation around the 8-stage lender journey (Intake → Run
+→ Investigate → Decide → Route → Hand off → Monitor → Outcome) instead of
+S/A/B/C/D/E/F tiers; surfaced 11 UX disconnects as first-class items
+(G1.1-G8.1); single ordered batch sequence replaces parallel tier
+schedules. Sidebar nav simplified — 4 standalone single-check tools
+(Entity / Track Record / GC / Litigation) removed from primary nav since
+they contradicted the unified-validation flow (G3.5). Recommended next
+work: **Batch 1** (close the journey: G1.1 doc-addresses → verified flips,
+G3.1 VerifiedTrackRecord above fold, G5.1 evaluate CTA, G6.2 handoff CTA,
+B5 activity feed UI).
 
 ---
 
@@ -89,9 +103,38 @@ SHIPPED end-to-end.** Production is healthy as of 2026-05-01 — see
   Cobalt does on our behalf — we don't have our own scraper) can take 14s+;
   15s budget was right at the wire.
 
+### 2026-05-02 follow-ups
+
+- **AI memo blank-out fix (8ae2884):** v2 schema's `risks[].severity` enum
+  was too narrow (`critical | moderate | minor`). The deterministic
+  `risk_factors` table emits 5 severities (`critical | moderate | minor |
+  informational | none`); the prompt tells Claude to copy the factor
+  block's severity verbatim, so `informational` (e.g. `market_outlier`)
+  legitimately appears in v2 memos and rejected the whole shape.
+  Widened enum + interface + prompt to accept `informational`; added
+  defensive coercion in `analysis.ts` (any unknown severity → `minor`)
+  so future drift can't blank the memo. Renderer shows informational
+  rows with sky-blue accent + Info icon (distinct from amber/red risks).
+- **Sidebar cohesion fix (this commit):** Removed 4 standalone single-check
+  tool nav items (Entity Search / Track Record / GC Validation /
+  Litigation) per G3.5. The unified validation flow is the canonical
+  path; module-shaped sidebar contradicted the journey. Page files at
+  `/dashboard/{entity,gc,litigation,track-record}/page.tsx` kept (unlinked)
+  pending decision to delete.
+- **Runbook reconciliation (`~/.claude/plans/ok-so-now-what-delightful-lark.md`):**
+  Caught 2 fictional UI claims — "Property addresses" input on `/dashboard/new`
+  (doesn't exist; Realie auto-discovers via owner-name search) and
+  "GC: manual" chip for no-GC validations (renders em-dash; "manual"
+  only appears when GC ran for non-CA state). Fixed both + added a new
+  Phase 1.5 for the `VerifiedTrackRecord` deed-verify path.
+- **ROADMAP reorganized around the journey (this commit):** see
+  [docs/ROADMAP.md](docs/ROADMAP.md). 8 stages × 4 cross-cutting surfaces;
+  every prior tier feature kept its tier code; 11 UX gaps surfaced as
+  G1.1-G8.1; one ordered batch sequence.
+
 ---
 
-## Database state (as of 2026-05-01)
+## Database state (as of 2026-05-02)
 
 **Migrations applied (20 total):**
 ```
@@ -166,24 +209,29 @@ real-world test for the lender intake flow.
 
 ## Manual items the user should do
 
-1. **Re-run a validation against the fixed code path** (PR 13 only reached
-   production after PR 14 unblocked the build). Use:
+1. **Re-run a validation post AI-memo-fix** to confirm Story Mode v2
+   renders cleanly with `informational` severity rows. Use:
    - Borrower: `Kim An Truong`
    - Entity: `TT Investment Properties, LLC` ← use the FULL name
    - State: `CA`
-   - Verify pillar tables (`entity_checks`, `track_record_entries`,
-     `litigation_checks`, `gc_validations`) actually populate this time
+   - Verify pillar tables populate AND the AI memo renders all 4 risk
+     rows (one of them — `market_outlier` — should be sky-blue
+     informational, distinct from amber/red).
 2. **Test doc ingestion with the xlsx** above — drop into upload zone on
-   `/dashboard/new`. Verifies the Excel parser path end-to-end.
+   `/dashboard/new`. Today only the borrower/entity/GC fields pre-fill.
+   Once Batch 1 G1.1 ships, the property addresses will also pre-fill
+   and run through deed verification automatically.
 3. **Walk the demo runbook** at
    `/Users/zachwade/.claude/plans/ok-so-now-what-delightful-lark.md`
-   (Phase 1-7). Includes the deferred print test for `/handoff/[id]` and
-   `/validations/[id]/risk-methodology` — physically print to verify
-   page-break / margin / color rules.
-4. **NPLA pre-flight, ~1 week out:** verify all migrations idempotent on a
-   fresh tenant.
+   (Phase 1-7, updated 2026-05-02). Includes the deferred print test for
+   `/handoff/[id]` and `/validations/[id]/risk-methodology` — physically
+   print to verify page-break / margin / color rules.
+4. **NPLA pre-flight, ~1 week out:** verify all migrations idempotent on
+   a fresh tenant.
 5. **Decide on AI/data privacy stance** before serious lender outreach
-   (see "Open decisions" below).
+   AND before A1 ships (A1 adds another Claude consumer). Recommended:
+   ship the 2-day bundle (PII redaction + depersonalized prompt + per-org
+   `ai_extraction_enabled` toggle) before any non-Insignia outreach.
 
 ---
 
@@ -241,26 +289,41 @@ real-world test for the lender intake flow.
 
 ## Next session — what to pick up
 
-Per [docs/ROADMAP.md](docs/ROADMAP.md) Expansion plan, the next batch in
-priority order is **Tier A — capital-provider stickiness** (the
-distribution-thesis lever):
+Per [docs/ROADMAP.md](docs/ROADMAP.md) Recommended sequence, the next batch
+in priority order is **Batch 1 — close the journey** (5-6 days). One
+continuous flow from intake to handoff, instead of 5 disconnected screens.
 
-- **A1 — Investor PDF parser** (3 days). Upload investor guidelines PDF →
-  Claude structured extraction → preview → save as `investor_criteria`
-  rows. Uses `documents` table (X1, shipped). Highest-leverage Tier A
-  win for NPLA — Damon can demo this live with a real fund's PDF.
-- **A2 — Counter-offer / repricing calculator** (2 days).
-- **A3 — Borrower-facing capital-availability PDF** (1.5 days).
-- **E1 — Deal outcomes capture** (1 day, blocker for A4).
+- **G1.1 + G2.1 — Doc-ingest addresses → Verified Track Record at run
+  time** (0.5d). DocIngest already extracts `property_addresses: string[]`
+  but the form ignores it. Wire it through so deed-chain runs alongside
+  the 4 pillars on first submit. Closes the address paradox + sets up
+  the demo "drop xlsx → see deed-verified flips" wow.
+- **G3.1 — VerifiedTrackRecord above the fold** (0.5d). Pull the card up
+  next to the Track Record pillar; auto-populate from intake doc.
+- **G5.1 — "Evaluate against my investors →" CTA** on validation detail
+  (0.5d). Routes to `/dashboard/evaluate` with this validation pre-loaded.
+- **G6.2 — "Generate handoff for top-match investor" CTA** on evaluate
+  results (0.5d).
+- **G3.5 — Drop standalone tool pages from sidebar** ✅ (shipped 2026-05-02).
+  Page files unlinked but kept in `/dashboard/{entity,gc,litigation,track-record}/`
+  for now — delete in a follow-up if confirmed unused.
+- **B5 — Activity feed UI** (2d). Universal `activity_events` already
+  populating; this is just the read+render layer. New page `/dashboard/activity`
+  + per-detail-page strip showing borrower-side events (G3.3).
+- **G3.2 — "Send share link" CTA** on detail page (0.5d). Resend template +
+  copy-link modal. Activity event `sent_share_link`.
 
-Or **Tier B retention** — activity events are already being emitted across
-all state-change endpoints (PR 6) so B5 activity feed UI is just a
-read + render layer.
+Then **Batch 2 — Tier A capital stickiness + outcome substrate** (8-10d):
+- AI privacy 2-day bundle (PII redaction + depersonalized prompt + per-org
+  toggle) — decide before A1.
+- A1 Investor PDF parser (3d) — NPLA hero feature.
+- E1 Deal outcomes capture (1d) — blocker for everything reputation/
+  performance.
+- A2 Counter-offer (2d), A3 Borrower capital PDF (1.5d), B1 Watchlist (0.5d).
 
-If asked "what's next?" without a specific direction: **A1 investor PDF
-parser** is the highest leverage. But: if the AI/privacy question (see
-above) hasn't been answered, address that first since A1 ships another
-Claude consumer that would be affected.
+If asked "what's next?" without direction: **start Batch 1 with G1.1**.
+It's a half-day fix that turns the demo from "current holdings" to
+"deed-verified track record" — the single biggest wow available.
 
 ---
 

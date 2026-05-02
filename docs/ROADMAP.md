@@ -6,8 +6,8 @@
 > - [STRATEGY.md](../STRATEGY.md) — vision, positioning, market, long-shot bets (the *why*)
 > - [DATA-MODEL.md](./DATA-MODEL.md) — target schema, signals/overrides design, migration plan (the *how*)
 > - [pickup.md](../pickup.md) — per-session handoff (the *what's loaded right now*)
-> - [TRACK_RECORD_VERIFY_PLAN.md](../TRACK_RECORD_VERIFY_PLAN.md) — implementation plan (mostly built)
-> - [CONTINUOUS_MONITORING_PLAN.md](../CONTINUOUS_MONITORING_PLAN.md) — implementation plan (not yet built)
+>
+> **2026-05-02 reorganization:** rewrote around the lender's journey instead of strategic-lever tiers. Every feature lives at one of eight stages of the user's actual work — Intake → Run → Investigate → Decide → Route → Hand off → Monitor → Outcome. The old Tier S/A/B/C/D/E/F catalog is preserved verbatim in the [Backlog](#backlog--provenance--tier-mapping) section at the end so nothing is lost. The decisions log carries forward unchanged.
 
 ---
 
@@ -15,1218 +15,466 @@
 
 **NPLA conference, June 22-23, 2026 (Atlantic City), attendee mode** is the forcing function. Damon facilitates warm intros to fund people, lenders, and consulting prospects. Win = land **3 of**: fund introductions, lender intros, product demos, consulting leads.
 
-**Strategic structure:** Zach owns all PulseClose IP. Insignia (Damon + Noah) is design partner + first paid customer. Partnership structure is being shaped — leaning toward a JV-type venture or JV-fund where the tech goes in-house and Zach holds equity, with the SaaS option staying live as a parallel track. Compensation structure is what gets negotiated; tech ownership is settled. See [memory: project_insignia_partnership_paths](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/project_insignia_partnership_paths.md).
+**Strategic structure:** Zach owns all PulseClose IP. Insignia (Damon + Noah) is design partner + first paid customer. Partnership structure leans toward a JV-type venture or JV-fund where the tech goes in-house and Zach holds equity, with the multi-tenant SaaS option staying live as a parallel track. Compensation structure is what gets negotiated; tech ownership is settled. See [memory: project_insignia_partnership_paths](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/project_insignia_partnership_paths.md).
 
 **Distribution thesis:** Lenders don't refer UW tools peer-to-peer. Capital-provider endorsement is the only organic distribution path. Investor handoff Excel/PDF is the strategic artifact. NPLA serves both potential business models — SaaS customer acquisition AND fund-LP intros — without committing to either.
 
-**Three product bets that serve all wins:**
-1. **Investor handoff output (Excel + PDF)** — the artifact every meeting hinges on
-2. **Module 1 (Evaluate Deal) — generalized framework** — turns a coffee meeting into instant value: "tell me your box, I'll show you a deal that clears it"
-3. **Risk-tier rebuild — rules-driven with transparent factors** — without it, demo dies under scrutiny
+**The product mental model that everything serves:** **a verification gateway between front-end CRM and the LOS that turns a deal package into a tier'd, override-aware, deed-verified, monitored borrower record — and routes the cleared deal to the right capital provider with one click.** Each pillar (entity, track record, litigation, sanctions, GC) is one adapter underneath; each downstream surface (handoff, evaluate, monitor, outcomes) is one consumer of that record.
 
 ---
 
-## Status snapshot
+## Status snapshot (as of 2026-05-02)
 
-**Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor data flowing.
+**Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor data flowing. Production healthy after a 2026-04-30 → 05-01 stabilization push that shipped 14 PRs end-to-end (P0 corrections + universal infra + Tier S demo wow + recovery).
 
-**Shipped pillars (validation report):**
-1. Entity validation — Cobalt Intelligence SOS, 50 states
-2. Track record (current portfolio) — Realie primary, Regrid fallback, ATTOM enrichment
-3. Trust-but-verify (deed-chain) — Realie address lookup; borrower share-link variant
-4. Litigation — CourtListener federal courts (bankruptcy + civil)
-5. Sanctions / PEP — OpenSanctions (6 lists) + OFAC SDN direct
-6. GC validation — CSLB live for CA, "NOT AUTOMATED" for other states
-7. AI risk memo — Claude-generated narrative, real portfolio metrics
+**Recently shipped (2026-04-30 → 05-02, see [pickup.md](../pickup.md)):**
+- P0 — 5 PRs of critical-path fixes (FK consistency, monitor cron error handling, atomic risk recompute, JSONB schema versioning, snapshot-table `org_id`).
+- Universal infra — `documents`, `notification_preferences`, `activity_events`, storage bucket, helpers (events/emit, notifications/dispatch, documents/store) live across endpoints.
+- Tier S — Comparative borrower view, Story Mode v2 AI memo, litigation case cards, GC inline summary, risk methodology PDF.
+- Recovery — `internal` plan tier for Test Co; `insertOrThrow` wrapper surfacing silent insert failures; PR 14 unblocked the production build (Suspense around `useSearchParams`); Cobalt timeout 15s → 30s; AI memo `severity` schema widened to accept `informational`.
 
-**Infrastructure:** Supabase auth + RLS, Stripe checkout/webhooks/portal, usage metering on every vendor call, rate limiting, Sentry, PostHog, Resend.
-
----
-
-## P0 — Corrections (do these before any new features)
-
-Surfaced by the 2026-04-30 multi-track audit (code / data model / UX / strategy). These are quietly broken or under-specified today and will erode demo credibility or block clean execution of the expansion plan below. Estimated 4-6 days total. Sequence: bugs first, then data-model migrations, then UX polish.
-
-### P0.1 — Critical correctness bugs
-
-**FK consistency across the four validation creation paths**
-- Files: [src/app/api/checks/entity/route.ts:48](../src/app/api/checks/entity/route.ts#L48), [src/app/api/checks/gc/route.ts:43](../src/app/api/checks/gc/route.ts#L43)
-- Bug: Entity-only and GC-only creation paths skip `primary_borrower_id` / `primary_entity_id` population. Track-record + litigation paths set them. Result: signal-driven re-derivation (`findValidationsAffectedBySignal`) misses these validations entirely; "Mark as primary residence" silently fails to recompute them.
-- Fix: All four paths must call `upsertBorrower()` + `upsertEntity()` and persist FKs at validation creation. Add a regression test that POSTs a signal after each creation path and asserts re-derivation fires.
-
-**Extended-hold factor logic flip**
-- File: [src/lib/risk/factors.ts:228-242](../src/lib/risk/factors.ts#L228-L242)
-- Bug: `allExcluded` flag inverted. With 5 properties at extended hold, 1 bank-financed: factor fires correctly but explanation says "all excluded" when 4 are still active.
-- Fix: Rename to `anyActive`, flip condition. Severity = `moderate` iff `anyActive`. Explanation lists which properties are excluded vs. active by name, not summary.
-
-**Risk-factor recompute is not transactional**
-- File: [src/lib/risk/persist.ts:195-222](../src/lib/risk/persist.ts#L195-L222)
-- Bug: Delete-all-then-insert. If insert fails mid-stream (network blip, transient PG error), validation has zero factors, `flag_count` cached = 0, tier silently drops to LOW.
-- Fix: Either wrap in a PG RPC transaction, or compute new factors first → diff against existing → upsert by `(validation_id, factor_key)` → soft-delete missing. The diff approach is also a prerequisite for the factor-history feature in Tier B.
-
-**`linkBorrowerToEntity` race condition**
-- File: [src/lib/domain/upsert.ts:215-239](../src/lib/domain/upsert.ts#L215-L239)
-- Bug: Pre-check + insert is non-atomic. Parallel calls produce duplicate active rows in `borrower_entities`. Same pattern in all four signal tables.
-- Fix: Five partial unique indexes (see P0.2 below), then `INSERT ... ON CONFLICT DO NOTHING`. Application code keeps the pre-check as an optimization but stops relying on it for correctness.
-
-**Monitor cron error handling**
-- Files: [src/lib/monitor/runner.ts](../src/lib/monitor/runner.ts), [src/app/api/cron/monitor/route.ts:83](../src/app/api/cron/monitor/route.ts#L83)
-- Bugs: (a) Per-adapter try/catch silently swallows 429s; subscription's `next_run_at` still bumps. Will hammer vendor on next tick. (b) Email send failure ignored; `monitor_runs` marked complete even if recipients never got the alert. Lender thinks borrower is clear when nobody knows.
-- Fix: Track per-adapter status (`ok` | `rate_limited` | `failed` | `skipped`) in `monitor_runs.adapter_results jsonb`. On rate limit: delay `next_run_at` by 1h. On email failure: set `monitor_runs.email_status = 'failed'`, surface in MonitorCard run history with retry button.
-
-**Button `render={<Link>}` navigation**
-- Files: dashboard layout / nav components (audit found multiple)
-- Bug: `<Button render={<Link>}>` pattern likely doesn't render an anchor tag. Back/CTA buttons currently render as buttons that do nothing.
-- Fix: **Click every nav button in a real browser.** Replace with `<Link><Button>` or use Base UI's documented composition pattern. This is the single most demo-critical UX fix.
-
-### P0.2 — Data-model corrections (one migration: `00016_p0_corrections.sql`)
-
-**Snapshot-table `org_id` denormalization**
-- Tables: `entity_checks`, `track_record_entries`, `gc_validations`, `litigation_checks`
-- Issue: RLS uses `validation_id IN (SELECT id FROM borrower_validations WHERE org_id = ...)`. Postgres can't push the filter down — every query joins through a subquery scan.
-- Migration: `ADD COLUMN org_id UUID NOT NULL REFERENCES organizations(id)`, backfill from validation, swap RLS to direct comparison, add `(org_id, created_at DESC)` index. Cost: 8 bytes × ~100K rows = 800KB of storage for big query-time wins.
-
-**Missing timestamps on legacy tables**
-- Tables: `track_record_entries`, `gc_validations`
-- Migration: Add `created_at TIMESTAMPTZ NOT NULL DEFAULT now()` and `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`. Apply existing `set_updated_at()` trigger.
-
-**Signal supersede partial unique indexes**
-- Tables: `borrower_signals`, `property_signals`, `borrower_property_signals`, `entity_signals`, `borrower_entities`
-- Migration:
-  ```sql
-  CREATE UNIQUE INDEX borrower_signals_active_uidx
-    ON borrower_signals (borrower_id, signal_key) WHERE superseded_at IS NULL;
-  CREATE UNIQUE INDEX property_signals_active_uidx
-    ON property_signals (property_id, signal_key) WHERE superseded_at IS NULL;
-  CREATE UNIQUE INDEX borrower_property_signals_active_uidx
-    ON borrower_property_signals (borrower_id, property_id, signal_key) WHERE superseded_at IS NULL;
-  CREATE UNIQUE INDEX entity_signals_active_uidx
-    ON entity_signals (entity_id, signal_key) WHERE superseded_at IS NULL;
-  CREATE UNIQUE INDEX borrower_entities_active_uidx
-    ON borrower_entities (borrower_id, entity_id) WHERE superseded_at IS NULL;
-  ```
-- Application code switches to upsert-style writes that supersede in a transaction.
-
-**`monitor_runs` missing INSERT RLS policy**
-- Table: `monitor_runs`
-- Issue: RLS-enabled with no INSERT policy = denied. Cron is currently bypassing RLS via service-role; document this explicitly or add the policy.
-- Fix: Add `CREATE POLICY monitor_runs_insert_own_org ON monitor_runs FOR INSERT WITH CHECK (org_id = (SELECT org_id FROM users WHERE id = auth.uid()));` AND comment in migration that cron uses service role for cross-tenant batch inserts.
-
-**Risk factor expiry**
-- Table: `risk_factors`
-- Issue: "Active litigation 2018" fires forever even after the case closes. No staleness model.
-- Migration: `ADD COLUMN expires_at TIMESTAMPTZ NULL`. Per-factor default rules in `src/lib/risk/factors.ts` (e.g., `active_litigation` → 5 years from `case_filed_at` if no disposition; `sanctions_hit` → never expires; `extended_hold` → no expiry, lives until override). Recompute logic ignores expired factors. Adds a daily cron sweep to recompute affected validations.
-
-**JSONB schema versioning**
-- Tables: `borrower_validations.ai_analysis`, `borrower_validations.input_warnings`, `borrower_validations.handoff_data`, `investor_criteria.criteria_value`, all `*_signals.signal_value`, `risk_factors.contributing_data`
-- Issue: No version field. Silent schema drift across migrations is going to bite once the data shapes evolve (Tier S Story Mode pushes `ai_analysis` to v2).
-- Fix: Add `schema_version INTEGER NOT NULL DEFAULT 1` per affected JSONB. Define Zod schemas in `src/lib/schemas/` keyed by `(column, version)`. Validate on write. New migration column-by-column; existing rows backfill to v1.
-
-**Global-lender escalation guard**
-- Table: `lenders`
-- Issue: Org-scoped row can be UPDATE'd to set `org_id = NULL`, escalating it to a global classifier visible to all tenants.
-- Fix: Trigger preventing `org_id` from transitioning org→NULL. Global rows are insertable only via service-role admin scripts.
-
-### P0.3 — UX gaps that could embarrass NPLA demo
-
-**Validation-creation expectation setting**
-- File: [src/app/dashboard/new/page.tsx](../src/app/dashboard/new/page.tsx)
-- Issue: Submit → 5s redirect → detail page polls for AI memo for 90s. AI takes 30-60s. Demo-path looks broken if memo lags. Founder says "let me refresh" and re-runs the validation by accident.
-- Fix: Inline progress card stays in the form during submit, showing each pillar completing in real time ("Entity: ✓ Active in CA", "Track record: 14 properties found", "Litigation: 0 federal cases", "Sanctions: clear", "AI memo: generating..."). Auto-redirect only when memo lands or after 180s timeout. Polling extended from 90s → 180s. Use Server-Sent Events if cheap, otherwise increase poll cadence to 2s.
-
-**HandoffCard download buttons don't await save**
-- File: [src/components/dashboard/handoff-card.tsx](../src/components/dashboard/handoff-card.tsx)
-- Issue: Edit narrative → click "Download Excel" before save fires → download contains stale data. Investor receives a handoff with a blank "Prepared by" field.
-- Fix: Disable Excel + PDF buttons while `dirty === true`. Save button shows "Save and download…" when there are unsaved changes. Toast on success: "Saved. Opening Excel…"
-
-**Empty states explain nothing**
-- Files: [src/app/dashboard/page.tsx:160-174](../src/app/dashboard/page.tsx#L160-L174), [src/app/dashboard/evaluate/page.tsx:189-198](../src/app/dashboard/evaluate/page.tsx#L189-L198)
-- Issue: "No validations yet" with no guidance. NPLA attendee opens fresh tenant during demo: blank.
-- Fix: Empty states with three CTAs:
-  - **New Validation** (primary)
-  - **Load demo borrower** — pre-loads a polished example for the demo path (ties into Tier S "Demo deck")
-  - **Watch 2-min walkthrough** — embedded screencap (shipped with demo collateral)
-- Differentiate "no data yet" from "API failed to load" — current code defaults to `[]` on API error and shows the empty state, hiding real failures.
-
-**Confidence score is opaque**
-- Issue: Bare percentage. Lender compares 78% vs 65% with no idea what's driving it.
-- Fix: Tooltip on hover showing contributing signals (entity active +15, sanctions clear +5, 14 properties found +10, etc.). OR rename to "Validation completeness" if it really measures completeness, not borrower quality. Audit the scoring function and pick the truthful label.
-
-**Address-extraction silent failure**
-- File: [src/app/api/share/[token]/extract-addresses/route.ts:112-119](../src/app/api/share/[token]/extract-addresses/route.ts#L112-L119)
-- Issue: Returns 200 with empty array on extraction failure. Borrower clicks Submit, nothing happens, share-link page sits there.
-- Fix: Return 422 with a clear message; show banner: "We couldn't read this document. Try pasting addresses manually below, or upload a different file." Same fix to lender-side `/api/ingest/borrower-doc`.
-
-**Print CSS validation**
-- File: [src/app/handoff/[id]/page.tsx](../src/app/handoff/[id]/page.tsx)
-- Issue: 8.5pt font, 11-column properties table, no `page-break-inside: avoid` rules. Untested on a real printer.
-- Fix: Print to PDF + print on real paper. Adjust margins to 0.75in, body font 10pt min, add `page-break-inside: avoid` on each property card, `page-break-after: always` between borrowers in multi-borrower handoffs. Add a print preview button on /handoff/[id] that opens a print-css-only iframe so the founder can sanity-check before the meeting.
-
-**Verified-flips overlay matches by address string, not property_id**
-- File: [src/lib/handoff/builder.ts:221](../src/lib/handoff/builder.ts#L221)
-- Issue: Borrower with multiple loans on one property double-counts in the verified-flip section.
-- Fix: Match on `property_id`. The address-string fallback can stay as a defensive layer for legacy data.
-
-**Investor JSON criteria editor lint**
-- File: [src/app/dashboard/evaluate/investors/page.tsx:210-225](../src/app/dashboard/evaluate/investors/page.tsx#L210-L225)
-- Issue: Plain textarea. Typed `max_ltv_x` instead of `max_ltv` = silent eligibility miss; investor returns "fail" on every deal forever.
-- Fix: Server-side Zod validation on save; return key-by-key errors. Inline error display below the textarea. Add a "Validate" button separate from "Save" so the user can lint without committing. (Full Monaco editor is Tier A.)
-
-**Zillow ZHVI null fallback is silent**
-- File: [src/lib/risk/persist.ts:106-115](../src/lib/risk/persist.ts#L106-L115)
-- Issue: Property's zip not in `zhvi_zips` → market-outlier factor silently skipped. For a one-property borrower with no zip match, no factor fires even at 10x AVM.
-- Fix: Emit informational factor `market_outlier_unavailable` with explanation "AVM not comparable (zip not in ZHVI dataset)".
+**Architecturally settled:**
+- Path B data model (borrowers / entities / properties / lenders are first-class, validations are snapshots).
+- Override-and-rerun is the product (not a workaround).
+- AI never picks the tier — Claude explains, deterministic factors decide.
+- Every JSONB column is `schema_version`-stamped and validated through `src/lib/schemas/`.
+- Snapshot inserts pass `org_id` and use `insertOrThrow` — silent insert failures surface as errors.
 
 ---
 
-## Now (this week-ish)
+## How to read this document
 
-### Data-model refactor — first-class borrowers, entities, properties, lenders
-**Foundation work that everything else depends on.** Domain entities (borrowers, entities, properties, lenders) become first-class persistent records; validations become snapshots referencing them. Signals and overrides scope to the right entity (borrower-level, property-level, or borrower×property). Override-and-rerun becomes the product pattern.
+The product is one journey, rendered as eight stages. Every feature, every UX gap, every existing screen lives at exactly one stage. Cross-cutting surfaces (workspace, borrower side, investor side, foundations) wrap the journey.
 
-Full design at [DATA-MODEL.md](./DATA-MODEL.md). Approximately 3 sessions:
-- **Session 1:** New tables + nullable FKs + backfill from existing validations (1:1 dedup, no fuzzy matching on legacy).
-- **Session 2:** API + UI updates to use new model. FDIC lender ingestion for bank/bridge classification. Signal-write UX ("Mark as primary residence" buttons in Why-this-rating panel).
-- **Session 3:** Risk-tier rebuild on the new substrate. Override-and-rerun trigger logic. AI memo re-generation hook.
+**Stage in the journey → user goal at that stage → what exists → what's coming → what's broken or disconnected.**
 
-Without this, risk-tier rebuild + Module 1 + override mechanic all get built on a substrate we'd throw away within months. Per [memory: feedback_long_term_architecture](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/feedback_long_term_architecture.md), product is new enough that doing this now is straightforward; deferring it costs more.
+Where a feature was previously catalogued under a Tier letter, the original tier code (e.g. **A1**, **B5**, **C2**) is kept inline so the existing decisions and effort estimates remain traceable. The full tier-keyed table is preserved at the bottom in [Backlog — provenance + tier mapping](#backlog--provenance--tier-mapping).
 
-### Risk-tier rebuild — rules-driven, transparent + override-aware
-*(Builds on the data-model refactor above.)*
-
-Replace the single-string Claude risk rating with a deterministic scoring function. Named factors (Entity status, Active fed litigation, Lender concentration, Hold-period anomaly, Sanctions hit, Foreclosure/distress, Owner-occupancy mismatch, GC license issues, Off-market LTV), each tagged Critical/Moderate/Minor/Informational, persisted to the new `risk_factors` table. Tier rule: any Critical → HIGH, ≥2 Moderate → MEDIUM, else LOW. "Why this rating?" expandable card surfaces factors + contributions + an inline override action per factor. AI memo gets the factor list and explains in narrative; never disagrees with the math. Bridge ICP defaults hardcoded for v1; **hold-period exclusions: primary residence + bank-financed** (per [memory: project_risk_tier_bridge_icp](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/project_risk_tier_bridge_icp.md)).
-
-**Override-and-rerun loop:** user clicks "Mark as primary residence" → `borrower_property_signals` insert → trigger re-derives risk_factors → tier recomputes → AI memo regenerates via `after()`. The signal persists on the borrower-property relationship, so a second validation for the same borrower comes pre-corrected.
-
-Files: [src/lib/ai/analysis.ts](../src/lib/ai/analysis.ts) prompt rewrite, new [src/lib/risk/factors.ts](../src/lib/risk/factors.ts) module, new "Why this rating?" component on validation detail page with inline override actions.
-
-### flag_count recompute on read
-Summary card shows "Flags: 2" while bullet list has 4 (Truong example). Cached count is set at creation, doesn't update. Fix: compute on read or recompute on ai_analysis/verified_flips change.
-
-### AI re-run on verified flips
-When borrower submits via share link, kick off `generateValidationAnalysis` via `after()` with verified flips included. Extend `AnalysisInput`. Update prompt to surface verified-flip stats.
-
-### Recover or scaffold Module 1
-Substantial prior build exists in [`/Users/zachwade/code/archive/pulseclose-archived`](file:///Users/zachwade/code/archive/pulseclose-archived) — `evaluate-engine.ts`, `eligibility-tab.tsx` (409 lines), API + tests, dashboard route, design spec at `bridge-platform/modules/investor-eligibility.md`, HTML prototype, e2e tests. Approach: don't wholesale-restore (archived app has marketing/admin/onboarding cruft not in current pulseclose). Read spec → port engine + clean Next 16-compatible UI/API to current codebase → re-use test cases as regression suite.
-
-### Demo deal preparation
-Pre-load 2-3 polished borrower validations (real or synthetic but realistic) that produce rich, clean output across all 5 pillars. These are the demos you walk into NPLA meetings with — must work flawlessly, no Cobalt rate limits, no missing data, no "trust me, normally it works."
-
----
-
-## Pre-NPLA (April 28 → June 22, ~8 weeks)
-
-### Investor handoff Excel + PDF — the centerpiece
-Polished deliverable lenders hand to investors (Colchis, Oakhurst, Mandalay, Truliant, etc.). Auto-pull what's pullable: deeds, sales prices, ownership, court records, sanctions, Zillow comp. Optional manual fields for what's not in public records: rehab spend, GC details, project narrative. Per-property layout: when bought, what paid, what spent on rehab, what sold for. Branded header, page numbers, print-friendly.
-
-This is what every NPLA meeting hinges on. Print physical copies + emailable PDF. No-brainer to elevate.
-
-**Reference shape:** Zach has seen Insignia's actual investor handoff but doesn't have a copy. Build to the shape Damon described on the 4/28 call (deeds, sales prices, ownership, transactions per property; rehab spend / GC details / narrative as fillable fields); validate against a real Insignia handoff via Damon if possible.
-
-### Module 1 — Evaluate Deal v1 (generalized framework)
-Rules engine that takes deal parameters (purchase price, ARV, rehab budget, property type, loan size, sponsor experience, location) and shows which configured investors can buy + at what terms. Build investor criteria as configurable objects (JSON or DB rows), not hardcoded. Same framework serves: JV bringing it in-house (Insignia's investors privately loaded), fund using it for own deal flow, future SaaS variant where lenders configure their own investors.
-
-v1 ships with 2-3 example investor configs (could be Insignia's, could be generalized templates — both fine, both private to deployment). Output: pass / conditional / fail with reasoning.
-
-Noah called this his #1 ask twice, unprompted. *"Track Record validates the WHO; Evaluate Deal validates the WHAT."*
-
-### Continuous monitoring
-Per [CONTINUOUS_MONITORING_PLAN.md](../CONTINUOUS_MONITORING_PLAN.md). Weekly re-runs, diff detection, Resend email alerts. Biggest near-term lock-in feature. ~3 days work. Critical for converting Insignia (and future first customers) from trial to paid — without lock-in, customers churn after the first validation.
-
-### Doc ingestion v1
-Lender-side upload widget on validation creation page that accepts PDF/Excel/Word/CSV/email and AI-parses into PulseClose schema (borrower name, entity, properties). v1 scope: PDF + Excel only, lender-pasted. Noah's "drop form-fill UX" direction.
-
-### Share-link upload widening
-Borrower share link currently accepts pasted addresses only. Add file upload (Excel/CSV/Word/PDF), Claude-parse → addresses → existing verify pipeline. Half day.
-
-### Zillow zip-median comparison
-Auto-flag deviations (over/under market) on track-record properties + subject property. Currently a manual condition on Insignia intake. Damon: *"would be amazing."*
-
-### Insignia testimonial / case study collection
-Get a quotable line in writing from Damon or Noah. Concrete value (hours saved per loan, false positives caught, deal-quality signals surfaced). Drop into one-pager + demo opening. Distribution-multiplier — every meeting opens with "Insignia uses this and says X." Ask through normal working sessions, not as a discrete deliverable ask.
-
-### Demo collateral
-- One-page PDF leave-behind with what PulseClose does + how to start a trial
-- Three slightly-different talk tracks (lender / fund / consulting prospect)
-- Trial-start mechanic (follow-up email creates account; no QR codes needed for attendee mode)
-
-### TransUnion address validation
-Adapter, surface address-match in validation report, usage-metered. Waiting on Noah's logins; build is ~1 day once those land.
-
-### Background check provider scoping (eval only)
-Identify candidate (LexisNexis / Westlaw / Unicourt) for state-court coverage. **Eval only** before NPLA — don't sign contracts. The "we're adding state court" line is enough for booth-mode credibility.
-
----
-
-## Post-NPLA / structure-dependent
-
-### Module 1 expansion with named investor PDFs
-Wire in actual Colchis + Oakhurst (and additional) investor criteria from PDFs. Path-sensitive: under JV/fund, this is private to the deployment. Under future SaaS, this becomes a "configure your own investors" UX. The framework supports both.
-
-### Nexys LOS write-back
-Map adapters → specific cleared conditions in Insignia's 130-condition master list. Blocked on Nexys API access. Once unblocked: 1-2 days for the adapter, more for the per-condition mapping.
-
-### State-court litigation provider integration
-Once eval picks a winner. $500-2K/mo vendor commitment.
-
-### Multi-state GC adapters
-FL/TX/NY contractor board adapters. Real per-state research/scrape work, ~1-2 days each.
-
-### PDF report polish
-Headers per page, page numbers, more report-like layout. Hours of work; do it bundled with investor handoff if not already covered there.
-
----
-
-## Expansion plan — features unlocked by 2-day velocity
-
-The Now + Pre-NPLA punch lists shipped in two days (2026-04-29 → 04-30). At that pace, ~50 working days remain pre-NPLA. The plan below assumes that capacity and slots features by **strategic lever**, not chronology. Sequence inside each tier is dependency-driven.
-
-**Cross-cutting design principles for everything in this section:**
-
-1. **Universal `documents` table** (defined in DATA-MODEL.md) backs every file upload — borrower share-link, lender doc ingest, photo verification, bank statements, investor PDFs, handoff artifacts. One ingestion path, one storage layer, one audit trail. No per-feature file tables.
-2. **Universal `notification_preferences`** drives every outbound alert (monitor changes, signal applications, deal evaluation results, watchlist hits). Channel = email | slack | teams | sms | webhook. Per-user, per-event-type. No per-feature notification logic.
-3. **Universal `deal_outcomes` table** records life-of-loan post-close state (funded, extended, repaid, defaulted). Foundation for reputation, investor performance dashboard, consensus moat. Capture starts now even though aggregations come later.
-4. **Universal `activity_events` table** powers the activity feed, audit log, and "what changed" diffs. Every signal write, monitor run, validation rerun, override, and deal evaluation emits one row.
-5. **Borrower / property / entity domain entities are canonical.** Every new feature references them by `id`, never by text. New tables that point to a borrower use FKs.
-6. **Every new endpoint enforces RLS via direct `org_id =` policy** (never via subquery joins). New tables get `org_id` denormalized.
+**Cross-cutting design principles (apply to every feature in every stage):**
+1. **Universal `documents` table** ([X1](#stage-1--intake-bring-a-deal-in)) backs every file upload — borrower share-link, lender doc ingest, photo verification, bank statements, investor PDFs, handoff artifacts. One ingestion path, one storage layer, one audit trail.
+2. **Universal `notification_preferences`** ([X2](#stage-7--monitor)) drives every outbound alert. Channel = email | slack | teams | sms | webhook. Per-user, per-event-type.
+3. **Universal `activity_events`** ([X3](#cross-cutting--workspace)) records every state change. UI feed, audit log, and "what changed" diffs all read from this.
+4. **Universal `deal_outcomes`** ([Stage 8](#stage-8--outcome-capture-the-feedback-loop)) records life-of-loan post-close state. Foundation for reputation, investor performance, consensus moat.
+5. **Borrower / entity / property / lender domain entities are canonical.** Every new feature references them by `id`, never by text.
+6. **Every new endpoint enforces RLS via direct `org_id =` policy.** New tables get `org_id` denormalized.
 7. **Every JSONB column is versioned** and validated through `src/lib/schemas/`.
 
 ---
 
-### Tier S — Demo wow moments (1-2 days each, ship pre-NPLA)
+# The Lender's Journey
 
-These exist primarily to make a 5-minute coffee-meeting demo unforgettable. Damon walks into a fund meeting, opens the laptop, and the founder/Damon hits 2-3 of these in sequence.
+## Stage 1 — Intake (bring a deal in)
 
-#### S1. Comparative borrower view
-**Pitch:** Pick two validations, see them side-by-side with risk factors aligned row-for-row.
+**User goal:** "I just got a deal package. Get it into PulseClose with as little typing as possible."
 
-**Users:**
-- *Lender:* compare a deal-in-hand to a known-good prior borrower
-- *Founder/Damon (NPLA):* "this is a strong borrower vs. this is a weak one — see how the rule engine treats each"
-- *Investor (handoff context):* compare two originator submissions in the same fund
+**Surface:** [/dashboard/new](../src/app/dashboard/new/page.tsx) + the validation creation API.
 
-**UX flow:**
-- Dashboard validation list gains a checkbox column. Selecting 2 enables a sticky "Compare" button at the top.
-- Click → `/dashboard/compare?a={id1}&b={id2}`
-- Two columns. Sticky header per side: borrower name, tier badge, flag count, validation date.
-- Body: factor rows aligned (left and right side show the same factor in the same row). Color: green/yellow/red dot per side. If a factor is excluded on one side via signal override, show the chip "excluded — primary residence" inline.
-- Bottom section: portfolio bar charts side-by-side (property count, total volume, hold-period histogram).
-- Empty state on first arrival: "Pick a second validation" with a borrower-name picker.
+### What exists
+- Manual form fields: borrower name, guarantor name, entity name, state of formation, GC name/license/state. ✅
+- **DocIngest** widget at the top of the form: drop xlsx/PDF/CSV → Claude extracts → form pre-fills. Currently extracts `borrower_name`, `borrower_entity_name`, `entity_state`, `guarantor_name`, `gc_name`, `gc_license_number`, `gc_state`. ✅
+- **DocIngest already extracts `property_addresses: string[]` but the form ignores that field.** ⚠️ See gap below.
 
-**Data model:** No new tables. New endpoint `GET /api/validations/compare?ids=a,b` returns a structured diff. The diff structure is reusable for the Tier B "validation diff over time" feature.
+### Gaps
+- **G1.1 — Property addresses dropped on the floor.** `DocIngest` returns `property_addresses` but [`applyExtraction` in /dashboard/new/page.tsx](../src/app/dashboard/new/page.tsx) doesn't use it. Realie/Regrid does owner-name discovery, which only finds CURRENT holdings — every completed flip on the intake xlsx is invisible. **Fix:** wire `property_addresses` straight into the verification pipeline so deed-chain runs alongside owner-name discovery in Stage 2. (~0.5 day. Highest-leverage demo unlock available.)
+- **G1.2 — Co-borrower / multi-guarantor can't be modeled.** Schema is single-guarantor; Truong example has Kim Thanh Thi Truong on most loans. Needs `validation_borrowers` join (or borrower-multiplicity on `borrower_validations`). Track in [DATA-MODEL.md](./DATA-MODEL.md). (~1 day.)
+- **G1.3 — No "have we seen this borrower" check.** Lender can re-validate a borrower they did 3 weeks ago without realizing it. (B4 below addresses.)
 
-**Dependencies:** Existing `risk_factors`, existing portfolio aggregates. Recharts already in deps.
-
-**Effort:** 2 days.
-
-**Strategic fit:** Demo amplifier #1. Reusable post-NPLA for borrower-relationship reviews.
+### What's coming
+- **Auto-fill verified flips from intake doc** (G1.1). Doc-ingest's existing `property_addresses` flows into Stage 2 deed verification. ~0.5 day.
+- **B4 — "Have we seen this borrower" guard.** Fuzzy-match on borrower name as the lender types; surface prior validations before they spend a vendor call. ~0.5 day.
+- **D1 — Email-forward deal submission.** `deals@<lender>.pulseclose.com` → Resend webhook → Claude extraction → draft validation. Stays-in-inbox workflow integration. Stores raw email in `documents` (`purpose='inbox_submission'`). Requires Resend inbound (paid). ~3 days.
+- **D4 — Browser bookmarklet / extension.** Right-click an address on Zillow → "Validate this address" → opens new validation pre-filled. Bookmarklet first (~1 day), extension later (+2 days).
+- **C3 — Reverse phone/email.** Optional borrower phone/email at intake → Hunter.io / NumVerify → "Phone matches name (high confidence)" or "VOIP / no name match (review)" chip. ~1 day.
+- **G1.2 — Multi-borrower / co-borrower modeling** (when a real customer hits it pre-NPLA, otherwise post).
 
 ---
 
-#### S2. Story Mode — structured AI memo narrative
-**Pitch:** Replace the AI memo paragraph block with a structured narrative: opener → strengths → risks (with severity callouts) → recommendations.
+## Stage 2 — Run (validate the borrower)
 
-**Users:**
-- *Lender:* skim the strengths/risks blocks instead of reading a paragraph
-- *Investor (handoff PDF):* clean narrative structure to attach to deal package
-- *Founder (demo):* visually distinct from generic ChatGPT output
+**User goal:** "Click a button. Wait less than a minute. See trustworthy pillar results."
 
-**UX flow:**
-- Validation detail page: replace existing single-text card with four blocks (Summary, Strengths, Risks, Recommendations).
-- Each Risk has a severity badge (Critical / Moderate / Minor) and a "Why this rating?" anchor link that scrolls to the relevant factor.
-- Compact-mode toggle (top-right) collapses each block to its first sentence for power-users.
-- Print/handoff PDF gets the same structure with proper page-break rules.
+**Surface:** validation creation API + inline progress card on `/dashboard/new` + redirect to detail page.
 
-**Data model:**
-- `borrower_validations.ai_analysis` schema_version 2:
-  ```
-  { schema_version: 2,
-    summary: string,
-    strengths: { title: string, narrative: string }[],
-    risks: { factor_key: string, severity: 'critical'|'moderate'|'minor', narrative: string }[],
-    recommendations: { priority: 'must'|'should'|'consider', narrative: string }[],
-    risk_rating: 'low'|'medium'|'high'  // overwritten server-side
-  }
-  ```
-- Migration: schema_version DEFAULT 1, new memos default to 2. Render layer falls back to the v1 paragraph view when reading old rows.
+### What exists
+- 4 pillars in parallel: Entity (Cobalt SOS, 50 states), Track Record (Realie + Regrid + ATTOM, owner-name search), Litigation (CourtListener federal), Sanctions/PEP (OpenSanctions + OFAC SDN direct). Plus Sanctions runs sequentially after entity to include officers/agent. GC runs only if a GC was provided (CA = automated via CSLB; non-CA = manual_review state). ✅
+- AI memo regen via `after()`. Story Mode v2 default. Dual renderer for legacy v1. ✅
+- Cobalt timeout 30s. Per-adapter status + 1h backoff on rate limits + email-failure tracking on monitor runs. ✅
+- Atomic risk recompute via `recompute_risk_factors_atomic` RPC — no zero-factor window if recompute fails mid-stream. ✅
+- Inline progress card during validation creation (each pillar shows its loader). ✅
 
-**Dependencies:** Update `src/lib/ai/analysis.ts` prompt to emit structured shape. Re-run for existing validations on demand via the "Regenerate memo" button.
+### Gaps
+- **G2.1 — Verified-flips deed-chain is a separate manual step.** Today it's pasted into VerifiedTrackRecord on the detail page after the run completes. Should be one Stage 1+2 motion: doc-ingest → addresses → verified flips run in parallel with the rest. (See G1.1.)
+- **G2.2 — TransUnion address validation pending Noah's logins.** Adapter is scoped, build is ~1 day once logins land.
+- **G2.3 — GC outside CA is manual.** Multi-state adapters (FL/TX/NY) are post-NPLA / customer-driven.
 
-**Effort:** 2 days.
-
-**Strategic fit:** Demo polish + handoff substrate. Lays groundwork for S5 (risk methodology PDF) and B6 (validation diff).
+### What's coming
+- **Doc-addresses → Verified Track Record at run time** (G1.1/G2.1 wire-up). Verified-flips runs alongside the 4 pillars on the very first submit. Detail page lands with deed history populated.
+- **C2 — BatchData historical deeds.** Parallel adapter; closes the ~60-70% historical gap Realie misses. Vendor cost ~$200-500/mo. ~2-3 days.
+- **TransUnion address validation** (~1 day; blocked on Noah's login).
 
 ---
 
-#### S3. Litigation case-card UI
-**Pitch:** Replace "3 federal cases found" with expandable case cards that show case name, court, year, nature, status, and link to CourtListener.
+## Stage 3 — Investigate (read the report; gather more)
 
-**Users:** Lender + investor (handoff). The current summary makes them open a vendor portal to verify; cards keep them in the product.
+**User goal:** "Read the synthesis, drill into anything sketchy, request more from the borrower if needed."
 
-**UX flow:**
-- Validation detail Litigation pillar: list of cards, one per case.
-- Card header: case name, court, filing year, nature-of-suit chip, status chip (Pending / Closed / Discharged / Dismissed).
-- Click → expands to show top 5 docket events + dollar amount if extractable + outbound link to CourtListener.
-- Filter chip row above the list: "Bankruptcy only", "Last 5 years only", "Active only", "Federal" (toggle, future state-court).
-- Handoff PDF: condensed table form (one row per case).
+**Surfaces:** [/dashboard/validations/[id]](../src/app/dashboard/validations/%5Bid%5D/page.tsx) (the detail page) + the borrower share link [/share/[token]](../src/app/share/%5Btoken%5D/page.tsx).
 
-**Data model:**
-- New view (or materialized table) `litigation_cases`: derived from `litigation_checks.raw_response` at validation creation. Columns: `id, validation_id, case_name, court, filed_at, nature_of_suit, status, dollar_amount_estimated, source_doc_url, raw jsonb, org_id`.
-- Backfill from existing raw_responses.
+### What exists
+- 4 pillar cards: EntityResultCard, TrackRecordTable, LitigationCases (S3 — case-card UI with category/status filter chips), GCResultCard, SanctionsCard. ✅
+- AI memo (Story Mode v2): summary → strengths → risks (severity badges + "Why this rating? →" jump links) → recommendations. Compact toggle. Sky-blue informational severity for `market_outlier`-class informational risks. ✅
+- WhyThisRating panel: factor rows with `id="risk-factor-<key>"` anchors. Inline override actions per factor (e.g. "Mark as primary residence" on `extended_hold`). ✅
+- VerifiedTrackRecord card: lender pastes addresses → Realie deed-chain. Writes `verified_flips`. ✅
+- HandoffCard: preparer fields + narrative + Excel/PDF buttons (label changes when dirty). ✅
+- MonitorCard: opt-in continuous monitoring (cadence + recipients + adapter coverage). ✅
+- Borrower share link: borrower pastes addresses (or uploads xlsx/pdf, 422 on extraction failure) → same verify pipeline. ✅
 
-**Dependencies:** Existing CourtListener data. Add a `litigation_cases` extraction step to the validation pipeline.
+### Gaps
+- **G3.1 — Verified Track Record is below the fold and not connected to intake.** It's the most reliable track-record signal we have, but lives mid-detail-page. Should auto-populate from intake doc (G1.1) and live next to the Track Record pillar, not below the AI memo.
+- **G3.2 — No "Send share link to borrower" CTA on the detail page.** The share link is the borrower-side workflow but the lender has no obvious way to copy/send it. Needs a button + Resend email template.
+- **G3.3 — Borrower-side activity is invisible to the lender.** When borrower uploads via share link, no notification, no banner, no count update on the detail page. The lender has to refresh and notice.
+- **G3.4 — No "add a GC after-the-fact."** Validation ran without GC; lender realizes the deal has one. Today the lender either re-runs the whole validation or hits the standalone `/dashboard/gc` tool. Needs an "Add GC validation to this borrower" action.
+- **G3.5 — Standalone single-check pages are vestigial.** `/dashboard/entity`, `/dashboard/gc`, `/dashboard/litigation`, `/dashboard/track-record` exist as one-off tools that don't tie to a `validation_id`. They predate the unified flow and clutter nav. Decide: hide behind a "Tools" submenu, or delete.
 
-**Effort:** 1.5 days.
-
-**Strategic fit:** Demo transparency. Counter to "your AI just said 3 cases — what cases?"
-
----
-
-#### S4. GC license one-line summary on dashboard list
-**Pitch:** Validation list gains a "GC" column showing license status inline ("CA #1234567 Active / No Discipline" or "TX: Manual review needed").
-
-**Users:** Lender scanning the pipeline daily. Pulls GC status forward without a click.
-
-**UX flow:**
-- New column in validation list: "GC".
-- Color: green (active, no discipline) / yellow (active, prior discipline) / gray (manual review, e.g., TX) / red (revoked or invalid).
-- Hover tooltip: full license details, expiration date, classifications.
-- Mobile: collapses into a small chip next to the borrower name.
-
-**Data model:**
-- Add cached column `borrower_validations.gc_summary jsonb` (`{ status, license_id, state, classifications: [], expires_at, has_discipline }`). Populate on GC validation completion. Backfill from existing `gc_validations`.
-- `schema_version`: 1.
-
-**Dependencies:** None.
-
-**Effort:** 1 day.
-
-**Strategic fit:** Pipeline-view density.
+### What's coming
+- **G3.1 fix — pull VerifiedTrackRecord above the fold and auto-populate** from the intake xlsx address list (paired with G1.1).
+- **G3.2 — "Send share link" CTA** on detail page header. Click → modal: copy link, or send via Resend with pre-written template. Activity event `sent_share_link`. ~0.5 day.
+- **G3.3 — borrower-side activity surfaced.** New "Borrower activity" strip on the detail page that reads `activity_events` for this validation (uploaded_doc, verified_addresses, uploaded_photo, etc.). ~0.5 day on top of B5.
+- **G3.4 — "Add GC to this borrower" action.** Detail page: GC pillar card shows "Add GC" when no `gc_validations` row exists. Click → inline form → patches the validation. ~0.5 day.
+- **G3.5 — kill or hide standalone tool pages** (decide and execute).
+- **C1 — Geo-tagged photo verification.** Borrower share-link gets per-property photo upload. EXIF GPS + Claude vision → property-level signal `photo_verified`. ~3 days. Major fraud-detection lever.
+- **C5 — Bank statement parser** (borrower upload). Claude extracts ending balance, NSF count, monthly inflows. New liquidity factor. ~2 days. Privacy: 90-day expiry on `documents`.
+- **C4 — Address consistency cross-check.** Home vs registered agent vs property addresses; flag CMRA mail-drops, cluster anomalies. New informational factor. ~1 day.
+- **C6 — Public records expansion.** Splits litigation pillar into Bankruptcy / Civil / Liens / Tax warrants / Foreclosures sub-cards. Extends `litigation_cases.category`. ~1 day.
 
 ---
 
-#### S5. Risk methodology — printable PDF
-**Pitch:** One-page printable showing the 9 factors with severity, contributing data, exclusions, and signal overrides applied.
+## Stage 4 — Decide (override, finalize, document the call)
 
-**Users:**
-- *Investor:* skeptical that AI picked tier — wants to see the math
-- *Credit committee:* wants to attach methodology to the deal file
-- *Lender (audit):* annual audit of underwriting decisions
+**User goal:** "Apply my judgment where I know more than the data; lock in the tier; export the math."
 
-**UX flow:**
-- Validation detail: button "Print risk methodology".
-- Generates `/validations/[id]/risk-methodology` page with print CSS.
-- Header: borrower name, validation date, tier with deterministic rule footnote ("Tier rule: any critical → HIGH; ≥2 moderate → MEDIUM; else LOW").
-- Body: 9 factors in fixed order. Each row: severity icon, factor name, contributing data (property addresses, case numbers, etc.), exclusion reason if any, narrative.
-- Footer: signal-override log (who, when, reason, what changed).
+**Surface:** the detail page (signal write actions) + [/validations/[id]/risk-methodology](../src/app/validations/%5Bid%5D/risk-methodology/page.tsx).
 
-**Data model:** No new tables. Reads `risk_factors` + signal tables.
+### What exists
+- Override-and-rerun: signal insert → trigger re-derives risk_factors → tier recomputes → AI memo regenerates via `after()`. ✅
+- Atomic recompute via RPC. ✅
+- Risk methodology printable: 9 factors in canonical order, severity dot, contributing data, exclusion reasons, signal-override audit trail, methodology pointer to `src/lib/risk/factors.ts`. ✅
+- AI never picks the tier — `risk_rating` is hard-overwritten server-side from the deterministic tier. ✅
 
-**Effort:** 1 day.
+### Gaps
+- **G4.1 — "Print risk methodology" requires Cmd+P.** Should be a one-click download (server-rendered to PDF). Bundling logic with the handoff PDF renderer is a small reuse.
+- **G4.2 — Confidence score is opaque.** Bare percentage. Lender comparing 78% vs 65% has no idea what's driving it. Needs tooltip with contributing signals OR rename to "Validation completeness" if that's what it actually measures.
 
-**Strategic fit:** Hard counter to "this is just AI". Pairs with handoff PDF — investors get methodology on the back of the handoff.
-
----
-
-### Tier A — Capital-provider stickiness (the distribution lever)
-
-Per [memory: project_distribution_thesis](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/project_distribution_thesis.md), capital-provider endorsement is the only organic distribution path. Features here make a fund/aggregator say "all our originators have to use this" — or make Damon say it for them.
-
-#### A1. Investor criteria PDF parser
-**Pitch:** Fund manager uploads their guidelines PDF (or rate sheet); Claude parses → `investor_criteria` JSONB rows; deal eligibility goes live for that investor.
-
-**Users:**
-- *Founder/Damon (NPLA):* "Hand me your guidelines — I'll have your investor profile loaded before this coffee is cold."
-- *Lender admin:* maintain investor profiles without manual JSON editing
-- *Investor (post-launch):* self-serve "load your criteria" via a token link
-
-**UX flow:**
-- `/dashboard/evaluate/investors` page: upload zone (PDF/Excel) per investor.
-- Server: file → `documents` row → Claude extraction with structured-output prompt → preview screen showing parsed criteria as a table (max LTV by FICO, max LTC, property type allow-list, geography, loan-size band, experience minimum).
-- Parser-confidence indicator per row (high/medium/low). User toggles or edits before "Save criteria".
-- Save: writes `investor_criteria` rows with `source = 'pdf_parse'`, `source_doc_url` pointing at the `documents` row. Old criteria get `effective_to = now()`; new criteria get `effective_from = now()`.
-
-**Data model:**
-- New table `investor_criteria_extractions` for the audit trail of what Claude parsed (raw output, confidence per field, user edits diff).
-- Reuses existing `investor_criteria` for the active rule rows.
-- Documents table stores the PDF.
-
-**Dependencies:** `documents` table (universal infra). Existing Claude SDK + Module 1 engine.
-
-**Effort:** 3 days.
-
-**Strategic fit:** **Highest-leverage Tier A feature.** Damon at NPLA can demo this live with a real fund's PDF. The parsed-criteria preview itself is the wow moment.
+### What's coming
+- **G4.1 — methodology PDF download.** Server renders → stores in `documents` (`purpose='risk_methodology'`) → returns download URL. ~0.5 day.
+- **G4.2 — confidence-score audit + tooltip.** Audit the scoring function; pick the truthful label; add hover tooltip showing the inputs. ~0.5 day.
 
 ---
 
-#### A2. Counter-offer / repricing calculator
-**Pitch:** When a deal fails an investor's criteria, compute the minimum changes (lower loan, higher ARV, more equity) that would make it pass.
+## Stage 5 — Route (find the right capital provider)
 
-**Users:**
-- *Lender:* borrower's deal failed — what counter do I take back?
-- *Originator (Damon):* show the borrower a path to "yes" instead of "no"
-- *Investor (long-term):* see counter-offer suggestions investor would accept
+**User goal:** "Borrower passes my underwriting. Which of my investors will buy this deal, at what terms?"
 
-**UX flow:**
-- Deal evaluation results page: each failed investor shows a "Counter offer" button next to its row.
-- Click → side panel computes the minimum delta on each constraint:
-  - Loan amount: "drop loan by $25,000 → passes at 7.75%"
-  - ARV: "increase ARV by $50,000 → passes at 7.50%"
-  - Equity: "add $15,000 borrower contribution → passes"
-  - Combined: "$10K loan reduction + $30K ARV increase → passes at best rate"
-- Each suggestion is a clickable "What if?" that re-runs the eligibility against the modified deal.
+**Surfaces:** [/dashboard/evaluate](../src/app/dashboard/evaluate/page.tsx), [/dashboard/evaluate/[id]](../src/app/dashboard/evaluate/%5Bid%5D/page.tsx), [/dashboard/evaluate/investors](../src/app/dashboard/evaluate/investors/page.tsx).
 
-**Data model:**
-- New endpoint `POST /api/evaluate/counter-offer` returning suggestion vectors.
-- No schema change; reads existing `investor_criteria`.
+### What exists
+- Module 1 — Evaluate Deal v1: rules engine takes deal parameters, evaluates against configured investors, returns pass / conditional / fail per investor. ✅
+- Investor criteria as configurable JSON (criteria_value JSONB rows, server-side Zod validation, key-by-key error display). ✅
+- 3 sample investor configs seeded. ✅
 
-**Dependencies:** Module 1 framework (shipped).
+### Gaps
+- **G5.1 — No CTA from validation → evaluate.** Validation detail page has zero outbound link to "Evaluate this deal against my investors." The two surfaces are routed as islands. Lender has to navigate manually.
+- **G5.2 — Investor criteria editor is a bare textarea.** Plain text JSON editor; full Monaco / structured editor was deferred. Today's flow: type JSON, hit Validate, fix errors. Workable but ugly.
 
-**Effort:** 2 days.
-
-**Strategic fit:** Capital-provider stickiness + originator workflow. Turns a fail into a sales tool.
+### What's coming
+- **G5.1 — "Evaluate against my investors →" CTA** on validation detail page header. Click → opens evaluate page with this validation's borrower / entity / properties pre-loaded into the deal form. ~0.5 day.
+- **A1 — Investor criteria PDF parser** (highest-leverage Tier A win for NPLA). Fund manager uploads guidelines PDF → Claude extracts `investor_criteria` rows → preview screen with confidence per row → save. Audit trail in `investor_criteria_extractions`. ~3 days.
+- **A2 — Counter-offer / repricing calculator.** Failed deal → side panel computes minimum delta on each constraint ("drop loan $25K → passes at 7.75%"). Each suggestion is a clickable "what-if". ~2 days.
+- **F1 — Multi-deal scenario comparison.** Three-column page showing investor matches across 3 deal structures (75 LTV / 70 LTV / 80 LTC). Pick the best. ~1.5 days.
+- **F2 — Rate-shock stress test.** "+100bps / +200bps" toggle on evaluation results. ~1 day.
 
 ---
 
-#### A3. Borrower-facing capital-availability PDF
-**Pitch:** Once a deal evaluates as eligible at one or more investors, generate a borrower-facing PDF: "Capital is available for this deal. Estimated terms: X% rate, Y% LTV, Z-day close."
+## Stage 6 — Hand off (the artifact every meeting hinges on)
 
-**Users:**
-- *Lender:* hand to borrower pre-appraisal so they don't bail
-- *Borrower:* proof of capital availability for a hard-money deal
-- *Damon (originator):* "we've already prequalified your capital — here's the proof"
+**User goal:** "Send the chosen investor a polished package. Or hand the borrower a capital-availability proof."
 
-**UX flow:**
-- Deal evaluation results page: button "Generate borrower summary".
-- Choices: full investor list disclosed vs. anonymized ("3 capital partners eligible at terms X-Y"). Default anonymized.
-- PDF: branded, single page, includes deal recap + estimated terms range + close timeline + lender contact.
-- Stored in `documents` with `purpose = 'borrower_capital_summary'` for re-download.
+**Surface:** HandoffCard on detail page + [/handoff/[id]](../src/app/handoff/%5Bid%5D/page.tsx).
 
-**Data model:** Reads `deal_evaluations` + `deal_eligibility_results`. Stores rendered PDF in `documents`.
+### What exists
+- Handoff Excel + PDF: auto-pull from validation data (deeds, sales prices, ownership, court records, sanctions, Zillow comp). Manual fillable cells (rehab spend, GC details, narrative). Branded header, page numbers, print-friendly. ✅
+- Save-then-download pattern (dirty tracking; button labels switch when dirty). ✅
+- Loose email validation + amber hint + field-level errors on save. ✅
+- Print CSS shipped but **never physically tested on real paper** (deferred manual item).
 
-**Dependencies:** Module 1 (shipped). PDF rendering helpers from handoff (shipped).
+### Gaps
+- **G6.1 — Handoff doesn't reference the chosen investor from Stage 5.** Generic artifact. Should optionally include a top-match investor block (terms, rate, rationale) when an evaluation exists.
+- **G6.2 — No CTA from evaluate → handoff.** Lender has to navigate back to detail page → HandoffCard.
 
-**Effort:** 1.5 days.
-
-**Strategic fit:** Sales tool that originator hands borrower. Damon's been asking for this in spirit.
-
----
-
-#### A4. Investor performance dashboard
-**Pitch:** For an investor configured in PulseClose, show every originator's deal flow funneled to them: deals evaluated, deals passed criteria, deals funded, outcomes (extended/repaid/defaulted).
-
-**Users:**
-- *Investor (long-term, login required):* see which originators are sending strong deals
-- *Lender admin:* see "we've sent Colchis 12 deals via PulseClose, 9 passed, 3 funded"
-- *Founder/Damon:* show a fund "look how much disciplined deal flow we'd send you"
-
-**UX flow:**
-- New dashboard page `/dashboard/investors/[id]`: top-line metrics (deals evaluated, pass rate, funded count, default rate). Charts: deal flow over time, originator breakdown (anonymized to investor, named to lender admin).
-- Per-originator drill-down (lender-side only): see their submissions and outcomes.
-- Investor-login surface: post-launch, deferred behind a flag.
-
-**Data model:**
-- Aggregation query against `deal_evaluations` × `deal_eligibility_results` × `deal_outcomes` (universal table — Tier E/A blocker).
-- New view `v_investor_performance` for aggregate metrics.
-- No new persistence required if `deal_outcomes` is captured.
-
-**Dependencies:** **`deal_outcomes` table must exist and be populated.** That's a 1-day standalone item (E1) — capture it now even though investor view ships later.
-
-**Effort:** 3 days for dashboard + 1 day for outcomes capture form (E1).
-
-**Strategic fit:** Long-term moat precursor. Demoable as a wireframe at NPLA even before real outcome data exists.
+### What's coming
+- **G6.2 — "Generate handoff for top-match investor" CTA** on evaluate results page. Pre-fills HandoffCard with the matched investor's terms; lender reviews/saves. ~0.5 day.
+- **G6.1 — handoff template extension** for top-match block (rate, points, LTV, rationale). ~0.5 day.
+- **A3 — Borrower capital-availability PDF.** Once eligible at ≥1 investor, generate borrower-facing single-pager: "Capital is available. Estimated terms X-Y%, Z-day close." Anonymized investor list by default. Stored in `documents` (`purpose='borrower_capital_summary'`). ~1.5 days.
+- **Print test (deferred manual item).** Physically print `/handoff/[id]` and `/validations/[id]/risk-methodology` to verify page-break / margin / color rules.
 
 ---
 
-#### A5. Deal-quality scorecard for investors (originator scoring)
-**Pitch:** Investor sees per-originator scoring: deal-quality grade, pass rate against their box, funding rate, default rate, response time.
+## Stage 7 — Monitor (the loan is live)
 
-**Users:** Investor (gated post-launch); lender admin (their own card, transparent).
+**User goal:** "Tell me if anything changes that I'd want to know — without me having to remember to check."
 
-**UX flow:**
-- Investor page: scorecard tile per originator. Grade (A-F) computed from a weighted formula. Drill-down shows the inputs.
-- Originator self-view: same scorecard as the investor sees, plus "what would move me up a letter grade".
+**Surface:** MonitorCard on detail page + [/api/cron/monitor](../src/app/api/cron/monitor/route.ts) (daily 09:00 UTC).
 
-**Data model:**
-- Reads `deal_evaluations` + `deal_outcomes` + validation flag counts. No new tables.
-- Scoring weights stored as a per-org config row.
+### What exists
+- Per-validation monitor subscriptions: cadence (daily/weekly/monthly), recipients, alert rules. ✅
+- Monitor cron runs entity / litigation / sanctions adapters; diffs vs prior snapshot; emails on change via Resend. ✅
+- `monitor_runs.adapter_results` jsonb (per-adapter status: ok / rate_limited / failed / skipped). 1h backoff on rate limits. ✅
+- `monitor_runs.email_status` tracking (sent / skipped / failed). ✅
+- Universal `notification_preferences` table — channel = email | slack | teams | sms | webhook (X2 schema only; only email wired today). ✅
 
-**Dependencies:** A4 + outcome data accumulation.
+### Gaps
+- **G7.1 — Monitoring is opt-in per validation.** No org-level default, no smart prompts. If lender forgets, the lock-in value disappears. Needs a per-org `monitor_default_on` setting + a one-time prompt after first validation.
+- **G7.2 — No "next run in N hours" indicator.** MonitorCard shows cadence but not when it's about to fire. Cosmetic but it's part of the trust signal.
+- **G7.3 — No Slack/Teams output yet.** Schema is there; dispatch layer wired only for email.
 
-**Effort:** 2 days.
-
-**Strategic fit:** Two-sided marketplace primitive. Defer real activation post-NPLA, scope schema now.
-
----
-
-### Tier B — Daily-driver retention (turn validation tool into pipeline tool)
-
-Today PulseClose is "I have a deal, I run a validation". These features turn it into "I check my dashboard every morning."
-
-#### B1. Borrower watchlist (one-click monitoring)
-**Pitch:** Validation detail page gains a "Monitor this borrower" toggle. Auto-creates a `monitor_subscription` with sensible defaults (weekly cadence, current user as recipient, all current properties).
-
-**UX flow:**
-- Toggle in validation header. Click → modal: "Monitor weekly. Email zach@pulseclose.com on changes. [Customize]". Default works one-click.
-- "Customize" expands: cadence selector (daily/weekly/monthly), recipient list (multi-email + Slack webhook later via D2), alert rules (any change / critical only).
-- Active state: small green dot next to the borrower name everywhere they appear in the app.
-
-**Data model:** Existing `monitor_subscriptions`. Add `borrower_id` FK if not already there (currently scoped to validation_id — should also support borrower-level so a new validation auto-inherits).
-
-**Dependencies:** Existing monitoring infra.
-
-**Effort:** 0.5 day.
-
-**Strategic fit:** First customer (Insignia) lock-in. Watchlist makes them log in weekly.
+### What's coming
+- **B1 — Borrower watchlist (one-click monitoring).** Detail page header toggle. Modal: weekly cadence + recipient + critical-only. Default works one-click. Add `borrower_id` FK on `monitor_subscriptions` so a NEW validation for the same borrower auto-inherits monitoring. ~0.5 day.
+- **D2 — Slack/Teams notifications.** Wire universal `notification_preferences` dispatch to Slack/Teams webhooks. Channel test button. Lender's credit team lives in Slack. ~1.5 days.
+- **D3 — Calendar integration (closing dates).** Optional `borrower_validations.expected_close_date`. ICS download. Cron at 7 days pre-close: notification "Re-run validation for closing this week?" ~1 day.
+- **G7.1 — org-level monitoring default.** Settings: "Monitor every new validation by default (weekly, founder + credit team)." ~0.5 day.
+- **G7.2 — "next run in N hours" on MonitorCard.** ~15 min.
 
 ---
 
-#### B2. Portfolio health dashboard
-**Pitch:** 2x2 (or 3x4) grid showing distribution of all the lender's borrowers across (tier × flag count). Drill-down to the borrower list per cell.
+## Stage 8 — Outcome (capture the feedback loop)
 
-**UX flow:**
-- New page `/dashboard/portfolio`: grid of cells (tier on Y, flag count on X). Each cell shows a number + sparkline trend.
-- Click cell → filtered borrower list.
-- Sidebar filters: time range (last 30/90 days/all), monitored only, has-active-deal-evaluation only.
-- Recently-changed section: "5 borrowers changed tier in the last 30 days" with quick links.
+**User goal:** "Tell PulseClose how the deal turned out so it gets smarter."
 
-**Data model:** Aggregation query over `borrower_validations` × `risk_factors` × `borrowers`. No new persistence.
+**Surface:** validation detail page (status pill) + future borrower / investor profile pages.
 
-**Dependencies:** None.
+### What exists
+- Nothing. `deal_outcomes` table is scoped in DATA-MODEL.md; not yet shipped.
 
-**Effort:** 2 days.
+### Gaps
+- **G8.1 — No outcome capture exists.** Without it, every Stage 5+6 output is unmeasurable. Reputation, performance dashboards, consensus moat all wait on this. **Highest-leverage 1-day item in the entire roadmap that isn't yet built.**
 
-**Strategic fit:** Daily-driver headline. The first thing the lender opens in the morning.
-
----
-
-#### B3. Validation search + filter + CSV export
-**Pitch:** Search across all the org's validations by borrower name, entity name, property address, date range, tier, flag presence.
-
-**UX flow:**
-- Top of dashboard: search bar with auto-complete on borrower / entity names. Returns recent matches grouped by entity type.
-- Filter sidebar: date range, tier (multi-select), flag presence (any / specific factor), monitored, has-handoff.
-- Result list: card per validation with preview metrics. CSV export of filtered set.
-
-**Data model:**
-- Add full-text search index on `borrowers.display_name`, `entities.display_name`, `properties.address_normalized`.
-- No new tables.
-
-**Dependencies:** None.
-
-**Effort:** 2 days.
-
-**Strategic fit:** Workflow friction removal. Cheap, table-stakes.
+### What's coming
+- **E1 — Deal outcomes capture.** Validation detail "Update deal status" button. Statuses: Withdrawn / Funded / Extended / Repaid / Defaulted. Optional fields per status (close date, funded amount, extension reason, default cause). Captures lender_user_id + timestamp. RLS org-scoped. ~1 day. **Ship this in the next batch.**
+- **E2 — Borrower reputation score.** Recomputed on validation create / signal apply / outcome update. Components: validation count, average tier, default rate, extension rate, signal-correction rate. Like a credit score for borrowers. ~3 days.
+- **E3 — Anonymized cross-tenant consensus.** HMAC-hash of normalized name + tax-id-last-4. Aggregation cron. Validation gets a chip "3 other lenders validated this borrower in 90d." ~2 days schema now; full feature 4-5 days when activated. Requires customer density (10+ lenders) + legal anonymization review.
+- **E4 — Public borrower profile (opt-in).** Borrower with strong PulseClose history can publish a verified track record at `pulseclose.com/borrower/[uuid]`. Per-element opt-in. ~2 days.
+- **A4 — Investor performance dashboard.** Per-investor: deals evaluated, pass rate, funded count, default rate. Originator drill-down. Needs `deal_outcomes`. ~3 days.
+- **A5 — Originator scorecard for investors.** Letter grade (A-F) per originator, computed from outcome data. Two-sided marketplace primitive; defer activation post-NPLA, schema now. ~2 days.
 
 ---
 
-#### B4. "Have we seen this borrower before?" guard
-**Pitch:** On `/dashboard/new`, as the lender types the borrower name, fuzzy-match against existing borrowers in the org and surface prior validations before they run a duplicate.
+# Cross-cutting surfaces
 
-**UX flow:**
-- Type "Kim Truo..." → dropdown shows existing matches with last-validated date and current tier.
-- Click match → opens existing validation detail (read-only; option to "Run new validation for this borrower" if they want a fresh check).
-- No match → form proceeds normally.
+These don't sit at one stage; they wrap the journey.
 
-**Data model:** Reuses `borrowers` table + normalized name search.
+## Cross-cutting — Workspace
 
-**Dependencies:** None.
+**Surfaces:** [/dashboard](../src/app/dashboard/page.tsx) (the validation list), [/dashboard/compare](../src/app/dashboard/compare/page.tsx), future `/dashboard/portfolio`, future `/dashboard/activity`, future `/dashboard/search`.
 
-**Effort:** 0.5 day.
+### What exists
+- Dashboard list with checkbox column, GC inline summary chip, tier badge, flag count, AI status, confidence %. ✅
+- S1 Compare flow — pick 2 → side-by-side aligned by factor_key. ✅
+- S4 GC chip — desktop column + mobile inline. ✅
+- Loading skeleton on list. ✅
 
-**Strategic fit:** Anti-friction. Saves the lender a wasted vendor call.
+### What's coming
+- **B5 — Activity feed UI** (universal `activity_events` table is already populating). New page `/dashboard/activity` + a per-validation strip on detail page. Filterable by actor / event type / entity / date. ~2 days. *Closes G3.3 and G7.x in part.*
+- **B2 — Portfolio health dashboard.** Tier × flag count grid for the org's borrower book. Recently-changed section. ~2 days. The "first thing the lender opens in the morning."
+- **B3 — Validation search + filter + CSV export.** Top-of-dashboard search bar with autocomplete on borrower / entity / property. Filter sidebar. ~2 days.
+- **B6 — Validation diff over time.** Same borrower, two validations 6 months apart. Reuses S1 layout + a "Changes" panel. ~1.5 days incremental on S1.
+- **D5 — Public REST API.** `/api/public/validations`, `/api/public/handoff/[id]/excel` keyed on per-org API tokens. Required for any lender with their own UW system to embed PulseClose data. ~2 days.
 
----
+## Cross-cutting — Borrower-side surface
 
-#### B5. Activity feed (universal `activity_events` table)
-**Pitch:** Timeline of everything that's happened in the org: validations created, signals applied, monitor runs, tier changes, handoffs sent, deals evaluated.
+**Surface:** [/share/[token]](../src/app/share/%5Btoken%5D/page.tsx) (public, share-token gated).
 
-**UX flow:**
-- New page `/dashboard/activity`: chronological feed grouped by day. Each row: actor, verb, object, timestamp. Click → context (the validation, the signal, etc.).
-- Filter: by actor (user), by event type, by entity (only Kim Truong's events), by date.
-- Highlights row at top: "5 new monitor changes today, 2 require attention."
+### What exists
+- Borrower pastes addresses or uploads xlsx/pdf. Same verify pipeline as lender-side. 422 on extraction failure. ✅
 
-**Data model:** New universal table `activity_events`:
-```
-id uuid PK
-org_id uuid FK NOT NULL
-actor_user_id uuid FK NULLABLE  -- null for system events (cron)
-verb text  -- 'created' | 'updated' | 'applied_signal' | 'ran_monitor' | 'changed_tier' | 'sent_handoff' | 'evaluated_deal' | 'extracted_doc' | ...
-subject_type text  -- 'validation' | 'borrower' | 'property' | 'signal' | 'monitor_run' | 'deal_evaluation'
-subject_id uuid
-metadata jsonb  -- e.g., { from_tier: 'medium', to_tier: 'low', signal_key: 'is_primary_residence' }
-created_at timestamptz
-```
-RLS: `org_id = current_org`. Index on `(org_id, created_at desc)`.
+### What's coming (much of it lives in Stage 3 above; collected here for the borrower's POV)
+- **C1 — Photo upload per property** (3 days).
+- **C5 — Bank statement upload** (2 days).
+- **G3.2 — "Send share link" CTA** from lender side (0.5 day).
+- **E4 — Public borrower profile** (2 days, post-density).
+- **G3.3 — surface borrower-side activity to lender** (0.5 day).
 
-Application code emits events at every state change. The existing `audit_log` is for security/compliance; `activity_events` is the user-facing feed.
+## Cross-cutting — Investor-side surface (post-NPLA)
 
-**Dependencies:** None.
+Investor logins are post-launch. Schema lands pre-NPLA so data accumulates. Includes:
 
-**Effort:** 2 days (table + emits + UI).
+- **A4 — Investor performance dashboard** (~3 days).
+- **A5 — Originator scorecard** (~2 days).
+- **F3 — Investor-side deal queue.** Login + deal queue + accept/decline/comment. New role `investor_user`. ~3 days.
 
-**Strategic fit:** Daily-driver. Also feeds B6 (diff) and the future investor-facing "see your originator's activity".
+## Cross-cutting — Foundations
 
----
+**Building blocks that everything else composes on:**
 
-#### B6. Validation diff over time
-**Pitch:** Same borrower, two validations 6 months apart. Show what changed: new properties acquired/disposed, new litigation, new signals, tier delta.
-
-**UX flow:**
-- Validation detail header: "Compare to previous validation" link (only enabled if a prior validation exists for this borrower).
-- Compare page (reuses S1 layout): two columns aligned by factor + portfolio. Plus a third "Changes" panel highlighting deltas (new properties, new cases, signal applications).
-
-**Data model:** Reuses S1 endpoint with date-pair input. No new tables.
-
-**Dependencies:** S1 (Comparative borrower view).
-
-**Effort:** 1.5 days incremental on S1.
-
-**Strategic fit:** Monitoring story-mode. "Borrower has been quiet for 6 months — but now this changed."
+- **X1 documents** ✅ (every file upload).
+- **X2 notification_preferences** ✅ (every outbound alert; only email dispatch wired today, D2 finishes Slack/Teams).
+- **X3 activity_events** ✅ (every state change; B5 is the missing UI).
+- **Universal `deal_outcomes`** — ships with E1.
+- **Path B data model** ✅ (borrowers / entities / properties / lenders are first-class).
+- **JSONB schema versioning** ✅ across all object-shaped JSONB columns.
+- **`insertOrThrow` wrapper** ✅ on every user-visible insert.
+- **AI privacy posture — open decision.** Today every borrower name + property + sanctions match goes through Anthropic. Options: ZDR contract ($5-15K/mo), PII redaction pre-flight (~1 day), depersonalized AI prompt (~0.5 day), per-org `ai_extraction_enabled` toggle (~0.5 day), AWS Bedrock customer-tenancy (post-NPLA). **Recommendation:** ship the 2-day bundle (redaction + depersonalized prompt + toggle) before serious lender outreach. Decide before A1 (which adds another Claude consumer).
+- **OpenSanctions trial expires 2026-05-28.** Falls back to OFAC SDN direct (free) after that. Renew or upgrade.
+- **G1.2 — multi-borrower / co-borrower modeling** (foundational schema change; defer until a real customer hits it).
 
 ---
 
-### Tier C — Trust-but-verify expansion (more ground-truth, less inference)
+# Recommended sequence
 
-Trust-but-verify is the architectural moat — automated checks that catch the things lenders' eyes miss. Each item below adds an independent signal.
+A single ordered list. Each item names the journey stage it lives at, the strategic lever, and the dependency. Pre-NPLA capacity at proven 2-day-per-feature velocity is ~25-35 working days remaining.
 
-#### C1. Geo-tagged rehab photo upload
-**Pitch:** Borrower uploads before/after photos via share link. Claude vision + EXIF GPS confirms address match. Adds confidence to track-record claims.
+**Live always — no batch:**
+0. **Bug bash + UX polish.** Anything caught in real-use sessions ships within hours. Live-fix culture, not weekly cadence. (Recent example: AI memo `severity` schema widening shipped same-day.)
 
-**Users:**
-- *Borrower (share link):* upload zone for property photos
-- *Lender:* "borrower uploaded 8 photos from 1310 Rosalia, all geo-matched within 50m → high confidence track record is real"
+**Batch 1 — Close the journey (5-6 days). Goal: one continuous flow from intake to handoff.**
+1. **G1.1 + G2.1 — Doc-ingest addresses → Verified Track Record at run time.** Closes the address paradox; deed-verified flips appear on first submit. 0.5 day. *Stage 1+2.*
+2. **G3.1 — Pull VerifiedTrackRecord above the fold** + auto-populate. 0.5 day. *Stage 3.*
+3. **G5.1 — "Evaluate against my investors →" CTA** on detail page. 0.5 day. *Stage 5.*
+4. **G6.2 — "Generate handoff for top-match" CTA** on evaluate results. 0.5 day. *Stage 6.*
+5. **G3.5 — Hide standalone single-check pages** (move to a "Tools" submenu or delete). 0.5 day. *Cross-cutting.*
+6. **B5 — Activity feed UI** + per-detail-page strip. 2 days. *Cross-cutting workspace + closes G3.3.*
+7. **G3.2 — "Send share link" CTA** with Resend template. 0.5 day. *Stage 3.*
 
-**UX flow:**
-- Share link: each property in the verified list gets an optional "Upload before/after photos" zone.
-- Upload: client-side EXIF extraction (date, GPS coordinates if available) + image dispatched to server.
-- Server: store in `documents` with `purpose = 'photo_verification'`, `related_property_id`. Run Claude vision: "is this a residential property? does it look like before/after rehab? does the visible address signage match?".
-- Result stored as `photo_verifications` row + creates a property-level signal `photo_verified = true` if confidence ≥ 0.8.
-- Lender-side: validation detail track-record card shows photo thumbnails per property + verification chip.
+**Batch 2 — Tier A capital stickiness + outcome substrate (8-10 days). Goal: Damon can demo "load your fund's PDF" + every deal starts collecting outcomes.**
+8. **AI privacy posture decision + 2-day bundle** (redaction + depersonalized prompt + toggle). 2 days. *Foundations.* Decide before #9.
+9. **A1 — Investor PDF parser.** 3 days. *Stage 5.* The NPLA hero feature.
+10. **E1 — Deal outcomes capture.** 1 day. *Stage 8.* Blocker for every reputation/performance feature.
+11. **A2 — Counter-offer / repricing calculator.** 2 days. *Stage 5.*
+12. **A3 — Borrower capital-availability PDF.** 1.5 days. *Stage 6.*
+13. **B1 — Borrower watchlist (one-click monitoring).** 0.5 day. *Stage 7.*
 
-**Data model:**
-- `documents` (universal) stores files.
-- New `photo_verifications` table:
-  ```
-  id, document_id FK, property_id FK, validation_id FK NULL,
-  has_exif_gps bool, exif_lat, exif_lng, distance_from_property_meters numeric,
-  ai_address_match_confidence numeric,
-  ai_property_type text, ai_visible_address text,
-  ai_assessment text, processed_at, org_id
-  ```
-- Auto-creates a `property_signals.photo_verified` row when high confidence.
+**Batch 3 — Daily-driver retention (5-7 days). Goal: lender opens PulseClose every morning.**
+14. **B2 — Portfolio health dashboard.** 2 days.
+15. **B3 — Search + filter + CSV export.** 2 days.
+16. **B4 — "Have we seen this borrower" guard.** 0.5 day.
+17. **B6 — Validation diff over time.** 1.5 days.
+18. **G4.1 — methodology PDF download** + **G4.2 — confidence audit/tooltip.** 1 day.
 
-**Dependencies:** `documents` table. Claude vision via SDK (already available). Supabase storage bucket (likely already provisioned).
+**Batch 4 — Trust-but-verify expansion (5-7 days). Goal: more ground-truth signals, less inference.**
+19. **C2 — BatchData historical deeds.** 2-3 days. Single biggest data-quality jump.
+20. **C1 — Geo-tagged photo verification.** 3 days. Major fraud lever + demo wow.
+21. **C4 — Address consistency cross-check.** 1 day.
+22. **C6 — Public records expansion** (liens / warrants / foreclosures sub-cards). 1 day.
 
-**Effort:** 3 days.
+**Batch 5 — Workflow integration + content (4-5 days). Goal: meet the lender where they live.**
+23. **D2 — Slack/Teams notifications.** 1.5 days. *Stage 7.*
+24. **D4 — Browser bookmarklet.** 1 day. *Stage 1.*
+25. **D5 — Public REST API.** 2 days. *Cross-cutting workspace.*
+26. **Demo collateral** — one-page leave-behind, three talk tracks, demo deal pre-load (pre-loaded with E1 outcomes). 1-2 days.
+27. **Insignia testimonial** — collect quotable line from Damon or Noah. Async ask through working sessions, not a discrete deliverable.
 
-**Strategic fit:** Major fraud-detection lever. Demo wow ("borrower lied about rehabbing — photos were of a different property").
+**Buffer batch 6.** Bug bash, polish, dry-run NPLA demos with Damon. Print test. Demo deal final scrub.
 
----
-
-#### C2. BatchData historical deed search
-**Pitch:** Per pickup.md, this is the highest-impact data-quality improvement available. Adds historical deed data Realie misses (~60-70% gap). Vendor cost ~$200-500/mo.
-
-**Users:** Every track-record validation gets richer.
-
-**UX flow:** Invisible — runs in parallel with Realie + Regrid + ATTOM.
-
-**Data model:** New adapter `src/lib/adapters/batchdata.ts`. No schema changes (writes existing `track_record_entries` + `property_ownership`).
-
-**Dependencies:** Vendor signup ($).
-
-**Effort:** 2-3 days.
-
-**Strategic fit:** Single biggest data-quality bump available. Closes the "trust me, normally we have more data" demo gap.
+**Post-NPLA / structure-dependent:**
+- E2 (reputation), E3 (consensus), E4 (public profile), A4 (investor performance), A5 (originator scorecard), F1-F3 (Module 1 expansion + investor side), C3 (reverse phone), C5 (bank statement parser), D1 (email-forward intake), D3 (calendar integration), TransUnion address (when logins land), multi-state GC adapters, Nexys LOS write-back, state-court litigation provider, G1.2 (multi-borrower modeling).
 
 ---
 
-#### C3. Reverse phone / email validation
-**Pitch:** Borrower's contact info → Hunter.io / NumVerify confirms name match + spam score.
+# Open decisions / questions
 
-**UX flow:**
-- New optional field on `/dashboard/new`: borrower phone, borrower email.
-- Background check on submit. Result: small chip on validation card "Phone matches name (high confidence)" or "Phone is VOIP / no name match (review)".
-
-**Data model:** New `contact_verifications` table per (borrower_id, channel, value). Free-tier API has rate limits — usage-meter aggressively.
-
-**Dependencies:** Vendor signup (free tier exists).
-
-**Effort:** 1 day.
-
-**Strategic fit:** Cheap fraud signal.
+1. **AI privacy posture** — see Foundations. Decide before A1.
+2. **What to do about standalone single-check pages** (`/dashboard/entity` etc.). Delete vs. hide-under-Tools. (Ship #5 in Batch 1 either way.)
+3. **OpenSanctions trial expires 2026-05-28** — renew or fall back to OFAC SDN direct.
+4. **Insignia partnership structure** (JV / JV-fund / parallel SaaS) — orthogonal to product work, drives compensation not tech ownership.
+5. **Truong xlsx live test** — once Batch 1 #1 ships, drop the xlsx in `/dashboard/new` to verify the end-to-end path. (Currently runbook test at `~/.claude/plans/ok-so-now-what-delightful-lark.md`.)
 
 ---
 
-#### C4. Address consistency cross-check
-**Pitch:** Borrower's stated home address vs. entity's registered agent address vs. property addresses — flag mismatches and cluster anomalies.
-
-**UX flow:**
-- Validation detail Risk panel: new informational factor `address_inconsistency` when (a) home address ≠ any property, (b) registered agent address is a known mail-drop, (c) all properties cluster in one zip ≠ home zip.
-- Each finding clickable to context.
-
-**Data model:** New computed factor in `src/lib/risk/factors.ts`. No schema change.
-
-**Dependencies:** Existing data + a small mail-drop / CMRA lookup list (free public dataset).
-
-**Effort:** 1 day.
-
-**Strategic fit:** Subtle fraud signal. Fits cleanly into existing factor framework.
-
----
-
-#### C5. Bank statement parser (optional borrower upload)
-**Pitch:** Borrower uploads recent bank statement via share link → Claude extraction → liquidity confirmation factor.
-
-**UX flow:**
-- Share link gains optional "Upload recent statement" zone.
-- Server: stores in `documents` with `purpose = 'bank_statement'`. Claude extracts ending balance, monthly inflows, monthly outflows, NSF count, return-deposit count.
-- Lender-side: liquidity card on validation detail. Shows ending balance vs. minimum-down requirement, cash-burn rate, NSF flags.
-- Privacy: borrower sees a clear consent banner; statements expire from `documents` after 90 days unless lender opts to retain.
-
-**Data model:**
-- `documents` stores statement.
-- New `bank_statement_extractions` table: parsed metrics, confidence per field, raw extraction.
-- Factor: `liquidity_confirmed` (positive) or `liquidity_concern` (NSF > N, ending balance < threshold).
-
-**Dependencies:** `documents` table. Privacy/legal note (statements are sensitive data).
-
-**Effort:** 2 days.
-
-**Strategic fit:** Differentiator. Most underwriting tools force the lender to ask for statements separately; this puts it in the borrower's flow.
-
----
-
-#### C6. Public records cross-check expansion
-**Pitch:** Surface what we already pull from CourtListener better — extract liens, judgments, federal tax warrants, foreclosure proceedings — instead of just bankruptcy + civil.
-
-**UX flow:**
-- Litigation pillar splits into sub-cards: Bankruptcy, Civil litigation, Liens, Federal tax warrants, Foreclosures.
-- Each surfaces a count + jump to case cards.
-
-**Data model:** Extends litigation_cases (S3) with `category` enum.
-
-**Dependencies:** S3.
-
-**Effort:** 1 day.
-
-**Strategic fit:** "More than we pay for" without new vendor.
-
----
-
-### Tier D — Workflow integration (where the lender already lives)
-
-Lenders live in email, Slack, calendars, and CRMs. Meet them there.
-
-#### D1. Email-forward deal submission
-**Pitch:** `deals@pulseclose.com` → Resend webhook → Claude extraction → pre-filled validation form awaiting lender review.
-
-**UX flow:**
-- Lender forwards a deal email (broker intro, borrower email, etc.) to `deals@<lender-subdomain>.pulseclose.com`.
-- PulseClose ingests, runs Claude extraction (borrower name, entity, properties, loan amount), creates a draft `borrower_validations` row.
-- Lender gets a notification: "New deal from broker@xyz.com — review and run validation".
-- Click → validation form pre-filled, lender adjusts and submits.
-
-**Data model:**
-- `documents` stores raw email + attachments (`purpose = 'inbox_submission'`).
-- New `inbox_submissions` table: source email, subject, sender, parsed-fields preview, status (`pending_review`, `converted`, `rejected`).
-- Per-org subdomain config row.
-
-**Dependencies:** Resend inbound email ($, paid add-on).
-
-**Effort:** 3 days.
-
-**Strategic fit:** Workflow integration. Lender stays in their inbox.
-
----
-
-#### D2. Slack / Teams notifications
-**Pitch:** When a borrower's risk tier changes (or any monitored event), send a Slack message to a configurable channel.
-
-**UX flow:**
-- `/dashboard/settings/notifications`: add Slack webhook URL or Teams webhook URL. Per-event-type toggles.
-- Channel test button verifies the webhook works.
-- Notifications use the universal `notification_preferences` system — same routing layer as email.
-
-**Data model:** Universal `notification_preferences` table:
-```
-id, user_id FK, org_id FK,
-channel: 'email' | 'slack' | 'teams' | 'sms' | 'webhook',
-event_type: 'monitor_change' | 'signal_applied' | 'deal_evaluated' | 'tier_changed' | 'photo_uploaded' | ...,
-enabled bool,
-target_address text,  -- email / webhook URL / phone
-created_at, updated_at
-```
-
-**Dependencies:** Universal notifications layer (1 day) + Slack webhook integration (0.5 day).
-
-**Effort:** 1.5 days.
-
-**Strategic fit:** Retention. Lender's credit team lives in Slack.
-
----
-
-#### D3. Calendar integration (closing dates)
-**Pitch:** Validation gains an optional "expected close date" field. ICS download + reminder to re-run validation 7 days before close.
-
-**UX flow:**
-- Validation form: optional date field "Expected close".
-- Validation detail: download `.ics` button.
-- Cron at 7 days pre-close: notification via D2/email "Re-run validation for closing this week?" with one-click rerun.
-
-**Data model:** Add `borrower_validations.expected_close_date date NULL`.
-
-**Dependencies:** D2 / notifications.
-
-**Effort:** 1 day.
-
-**Strategic fit:** Workflow nudge.
-
----
-
-#### D4. Browser extension / bookmarklet
-**Pitch:** Paste any address from Zillow/Realtor/MLS → opens PulseClose with the address pre-filled in track-record.
-
-**UX flow:**
-- Bookmarklet: drop on bookmark bar. Click while on a Zillow listing → opens PulseClose new-validation flow with address pre-filled.
-- Phase 2: real Chrome extension with right-click "Validate this address" + automatic property data scrape.
-
-**Data model:** None.
-
-**Dependencies:** None.
-
-**Effort:** 1 day for bookmarklet, +2 days for full extension.
-
-**Strategic fit:** Workflow speed. Demoable as "look how fast I can pull a validation".
-
----
-
-#### D5. Public REST API for lender CRMs
-**Pitch:** REST endpoints `/api/public/validations`, `/api/public/handoff/[id]/excel` keyed on per-org API tokens. Lenders with internal tools embed PulseClose data directly.
-
-**UX flow:**
-- `/dashboard/settings/api-keys`: generate token. Scoped per-org.
-- Docs page at `/docs/api` with OpenAPI spec.
-
-**Data model:** New `api_keys` table: `id, org_id, label, hashed_token, last_used_at, created_at, revoked_at`.
-
-**Dependencies:** Existing endpoints + token middleware.
-
-**Effort:** 2 days.
-
-**Strategic fit:** Enterprise enablement. Required for any lender with their own UW system to accept us.
-
----
-
-### Tier E — Network effects / data moat (long horizon, schema now)
-
-Per [STRATEGY.md](../STRATEGY.md) long-shot bets. Each item below is high-effort and customer-density-gated, but the **schema** to support them is cheap to ship now so we accumulate data from day 1.
-
-#### E1. Deal outcomes capture (universal `deal_outcomes` table)
-**Pitch:** Post-close, lender clicks "Deal funded / extended / repaid / defaulted" on the validation. Foundation table for everything in this tier and most of Tier A.
-
-**UX flow:**
-- Validation detail: "Update deal status" button. Statuses: Withdrawn / Funded / Extended / Repaid / Defaulted.
-- Each status has optional fields (close date, funding amount, extension reason, default cause).
-- Once status set, validation gets an outcome chip on the dashboard.
-
-**Data model:**
-```
-deal_outcomes
-  id uuid PK
-  org_id uuid FK NOT NULL
-  borrower_id uuid FK NOT NULL
-  validation_id uuid FK NULL
-  deal_evaluation_id uuid FK NULL
-  status: 'pending' | 'withdrawn' | 'funded' | 'extended' | 'repaid' | 'defaulted'
-  status_date date
-  funded_amount numeric NULL
-  funded_terms jsonb NULL  -- rate, points, term length
-  extension_count int DEFAULT 0
-  default_cause text NULL
-  notes text
-  reported_by_user_id uuid FK
-  created_at, updated_at
-  RLS: org_id-scoped
-```
-
-**Dependencies:** Borrowers + validations (shipped).
-
-**Effort:** 1 day for schema + capture form.
-
-**Strategic fit:** Blocker for A4, A5, E2, E3, E4. **Ship this in P0 timeframe** even though the dashboards come later.
-
----
-
-#### E2. Borrower reputation score (PulseClose-native)
-**Pitch:** Over time + outcomes, build a derived score per borrower. Inputs: validation count, average tier, default rate, extension rate, signal correction rate, time-since-first-validation.
-
-**Users:** Lender (decision input); investor (deal-flow filter); future: borrower (their own profile).
-
-**UX flow:**
-- Borrower detail page: large reputation score (A-F or 0-100) with explanation panel.
-- Each input shows its contribution. Like a credit-score breakdown.
-- Trend chart over time.
-
-**Data model:**
-```
-borrower_reputation_scores
-  id, borrower_id FK, org_id FK,
-  score int,  -- 0-100
-  letter_grade text,  -- 'A'..'F'
-  components jsonb,  -- per-input contribution
-  validations_count, outcomes_count,
-  computed_at, expires_at
-```
-- Recompute on validation create, signal apply, outcome update.
-
-**Dependencies:** E1.
-
-**Effort:** 3 days.
-
-**Strategic fit:** Long-term moat. The thing every lender wants and no one has the data for.
-
----
-
-#### E3. Anonymized cross-tenant consensus
-**Pitch:** When lender X validates borrower Kim Truong, check (via anonymized hash) if other lenders have validated her recently. Show "validated by 3 other PulseClose lenders in last 90 days; consolidated view available on request".
-
-**UX flow:**
-- Validation detail: small chip "Borrower has 3 other validations in network (90d)". Click → consolidated read-only view (with permissions: only show after both parties have opted in via a pre-negotiated consortium agreement).
-
-**Data model:**
-```
-consensus_aggregates
-  id, borrower_hash text,  -- HMAC of normalized name + tax-id-last-4 if available
-  validations_count_30d, validations_count_90d, validations_count_365d,
-  last_seen_at, last_tier_observed (low|medium|high),
-  computed_at
-```
-- Hash computed at validation creation time. Aggregation cron.
-- Per-org `consensus_participation` flag.
-
-**Dependencies:** Critical mass (10+ lenders). Legal review of anonymization (~$5-15K).
-
-**Effort:** 2 days schema + cron now; full feature is 4-5 days when activated.
-
-**Strategic fit:** Defensible moat. Hard to replicate without customer density.
-
----
-
-#### E4. Public borrower profile (opt-in)
-**Pitch:** A borrower with a strong PulseClose history can opt in to a public "verified track record" page they share with new lenders.
-
-**UX flow:**
-- Borrower share link gains a section: "Make your PulseClose history visible to future lenders".
-- Opt-in toggle per element (validations, outcomes, signal-corrections-not-fraud).
-- Public URL `pulseclose.com/borrower/[uuid]` showing track record + reputation score.
-
-**Data model:** New `borrower_public_profiles` table with opt-in flags + public-uuid + visibility-control matrix.
-
-**Dependencies:** E2.
-
-**Effort:** 2 days.
-
-**Strategic fit:** Network engine. Borrowers self-promote → new lenders find PulseClose.
-
----
-
-### Tier F — Module 1 expansion
-
-#### F1. Multi-deal scenario comparison
-**Pitch:** Enter 3 deal structures (e.g., 75% LTV at 2-yr / 70% LTV at 3-yr / 80% LTC bridge), see investor matches per scenario, pick the best.
-
-**UX flow:** `/dashboard/evaluate/scenarios` page. Three columns. Investor pass/fail per row. Best-rate column.
-
-**Data model:** Reuses `deal_evaluations` × `deal_eligibility_results`.
-
-**Effort:** 1.5 days.
-
-**Strategic fit:** Originator workflow. "Show me three options for this borrower."
-
----
-
-#### F2. Rate-shock stress test
-**Pitch:** "If rates rise 100bps, which investors still take this deal?" — auto-runs eligibility against +100bps / +200bps scenarios.
-
-**UX flow:** Toggle on deal evaluation results: "Stress test +100bps". Results shown side-by-side with current.
-
-**Data model:** No new tables.
-
-**Effort:** 1 day.
-
-**Strategic fit:** Risk-management story for investors.
-
----
-
-#### F3. Investor-side deal queue
-**Pitch:** Investor logs in, sees all PulseClose-tagged qualified deals from their configured originators, accepts/declines/comments.
-
-**UX flow:**
-- New investor-side dashboard. Deal queue. Per-deal: borrower summary, tier, eligibility result, originator's narrative.
-- Accept → notifies originator. Decline → reason capture, fed back to A5 scorecard.
-
-**Data model:** `deal_submissions` table linking originator → investor → deal_evaluation_id with status (`pending`, `accepted`, `declined`, `withdrawn`).
-
-**Dependencies:** Investor logins (currently lender-only auth scope). New role `investor_user`.
-
-**Effort:** 3 days.
-
-**Strategic fit:** Two-sided marketplace primitive. Defer activation post-NPLA.
-
----
-
-### Cross-cutting infrastructure (universal building blocks)
-
-Three small but universal additions that several Tier features depend on. Ship these as P1 (right after P0) so the rest of the plan composes cleanly.
-
-#### X1. Universal `documents` table
-**Pitch:** One table for every uploaded file in the system: borrower share-link uploads, lender doc ingest, photos, bank statements, investor PDFs, generated handoff PDFs/Excels.
-
-**Data model:**
-```
-documents
-  id uuid PK
-  org_id uuid FK NOT NULL
-  uploaded_by_user_id uuid FK NULL  -- null for borrower uploads via share link
-  share_token text NULL  -- for borrower-side uploads
-  storage_path text NOT NULL  -- supabase storage path
-  mime_type text, file_size_bytes int, original_filename text,
-  purpose text NOT NULL  -- 'borrower_doc_intake' | 'borrower_share_upload' | 'photo_verification'
-                         -- | 'bank_statement' | 'investor_pdf' | 'handoff_artifact'
-                         -- | 'inbox_submission' | 'borrower_capital_summary'
-  related_entity_type text NULL  -- 'borrower' | 'property' | 'validation' | 'investor' | 'monitor_run'
-  related_entity_id uuid NULL
-  ai_extraction_status text  -- 'pending' | 'success' | 'failed' | 'not_applicable'
-  ai_extraction jsonb NULL  -- structured extraction result
-  expires_at timestamptz NULL  -- for sensitive docs (bank statements default 90d)
-  created_at, updated_at
-  RLS: org_id-scoped (with share_token bypass policy for borrower side)
-```
-
-Migrate existing scattered file-handling (handoff Excel/PDF rendering, doc ingest, share-link file upload) onto this table.
-
-**Effort:** 1 day for table + migration; per-feature integration is line-item time.
-
----
-
-#### X2. Universal `notification_preferences` + dispatch layer
-**Pitch:** Single per-user-per-event-type config that drives all outbound notifications. New features add an event_type and reuse the dispatch layer.
-
-**Data model:** See D2 above for schema.
-
-**Effort:** 1 day.
-
----
-
-#### X3. Universal `activity_events` table
-**Pitch:** Every state change emits one row. UI feed (B5), audit trail, time-machine queries, "what changed" diffs all read from this.
-
-**Data model:** See B5 above for schema.
-
-**Effort:** 1 day.
-
----
-
-### Recommended implementation order (pre-NPLA, ~50 working days)
-
-**Week 1 — Stabilization (P0 above, 4-6 days).**
-Critical bugs → data-model corrections → demo-path UX. Click through the demo flow in a browser end-to-end before moving on.
-
-**Week 2 — Universal infra + Tier S demo wow (6-8 days).**
-X1 + X2 + X3 (3 days). Then S1 (Comparative) + S2 (Story Mode) + S3 (Litigation cards) + S4 (GC inline) + S5 (Risk methodology PDF) (~7 days).
-
-**Week 3 — Tier A capital-provider stickiness (8-10 days).**
-A1 (Investor PDF parser, 3d) + A2 (Counter-offer, 2d) + A3 (Borrower capital PDF, 1.5d) + E1 (deal outcomes capture — 1d, blocker for A4) + A4 (Investor performance dashboard, 3d).
-
-**Week 4 — Tier B retention (6-8 days).**
-B1 (Watchlist, 0.5d) + B2 (Portfolio dashboard, 2d) + B3 (Search, 2d) + B4 ("Have we seen this borrower", 0.5d) + B5 (Activity feed, 2d) + B6 (Validation diff, 1.5d).
-
-**Week 5 — Data-quality jump (4-5 days).**
-C2 (BatchData deeds — biggest single data-quality lever, 2-3d) + C3 (Reverse phone/email, 1d) + C4 (Address consistency, 1d).
-
-**Week 6 — Trust-but-verify polish (5-6 days).**
-C1 (Photo verification, 3d) + C5 (Bank statement parser, 2d) + C6 (Litigation expansion, 1d).
-
-**Week 7 — Workflow integration + content (4-5 days).**
-D2 (Slack/Teams, 1.5d) + D4 (Bookmarklet, 1d) + D5 (Public API, 2d). **Plus content tasks: Insignia testimonial, 2-3 polished demo deals (E1 outcomes pre-loaded), demo collateral, talk-tracks.**
-
-**Buffer week 8.** Bug bash, polish, dry-run NPLA demos with Damon.
-
-Tiers E (network effects) and F (Module 1 expansion beyond F1/F2) sit post-NPLA. Schema for E1-E3 ships in week 3 so data accumulates from day 1.
-
----
-
-## Backlog / ideas (with provenance)
-
-> Items marked with **→ Tier X** in Notes have been promoted to the [Expansion plan](#expansion-plan--features-unlocked-by-2-day-velocity) above with full UX + data-model detail.
-
-| Idea | Source | Notes |
-|---|---|---|
-| OpenCorporates person → entity discovery ($2,800/yr) | STRATEGY.md medium-term | DEFERRED. Insignia uses Elementix; revisit only for non-Insignia customers where Elementix isn't already paid. |
-| Cross-lender borrower reputation graph | STRATEGY.md long-shot | **→ Tier E (E2 + E3)**. Schema lands pre-NPLA; activation post-density. |
-| Fraud-ring detection via graph AI | STRATEGY.md long-shot | Same data-cooperative problem. Long horizon; benefits from E1/E3 substrate. |
-| Satellite construction monitoring | STRATEGY.md long-shot | Big swing. Pairs with C1 (photo verification) once continuous monitoring proves out. |
-| Climate-risk scoring per property | STRATEGY.md long-shot | First American partnership angle. New informational risk factor; small effort. |
-| DSCR rental-loan vertical | STRATEGY.md market expansion | 54% YoY growth, ~90% engine reuse. Post-NPLA bet if a DSCR customer signal appears. |
-| SBA lending vertical | STRATEGY.md market expansion | $25B/yr, regulatory tailwind. |
-| UK bridging finance | STRATEGY.md market expansion | GBP 13.4B market. Far. |
-| Compliance automation (mandated docs, deadlines) | Insignia 4/28 call | "Smart thing to tell us something needs to be sent out." Composes with universal `documents` table (X1) once shipped. |
-| Operating-agreement collection adapter | Insignia 4/28 call | For brokered channel where Elementix output isn't accepted (Kiavi/Yabi). Templated borrower request via share link + extraction via X1 + entity-ownership map population. |
-| State-specific endorsement validator | Insignia 4/28 call | Noah: *"every state has some different endorsements."* Per-state research-bound. |
-| ICP picker (Bridge / Bank / DSCR / Brokered / Private credit) | 4/28 demo | Premature until non-Bridge customer asks. v1 hardcodes Bridge. |
-| Auto-recommend supplemental conditions | Insignia 4/28 call | "If applicable" supplemental conditions section. Recommend: e.g., "Bitcoin source + loan > $10M → recommend personal tax transcript." Small rules layer on top of factor + signal data. |
-| Investor-criteria PDF parser | Module 1 expansion | **→ Tier A (A1)**. |
-| Comparative borrower view | Audit 2026-04-30 | **→ Tier S (S1)**. |
-| Story Mode AI memo | Audit 2026-04-30 | **→ Tier S (S2)**. |
-| Litigation case-card UI | Audit 2026-04-30 | **→ Tier S (S3)**. |
-| GC inline summary | Audit 2026-04-30 | **→ Tier S (S4)**. |
-| Risk methodology PDF | Audit 2026-04-30 | **→ Tier S (S5)**. |
-| Counter-offer / repricing | Audit 2026-04-30 | **→ Tier A (A2)**. |
-| Borrower capital-availability PDF | Audit 2026-04-30 | **→ Tier A (A3)**. |
-| Investor performance dashboard | Audit 2026-04-30 | **→ Tier A (A4)**. |
-| Originator scorecard for investors | Audit 2026-04-30 | **→ Tier A (A5)**. |
-| Borrower watchlist (one-click monitor) | Audit 2026-04-30 | **→ Tier B (B1)**. |
-| Portfolio health dashboard | Audit 2026-04-30 | **→ Tier B (B2)**. |
-| Validation search + filter | Audit 2026-04-30 | **→ Tier B (B3)**. |
-| "Have we seen this borrower" guard | Audit 2026-04-30 | **→ Tier B (B4)**. |
-| Activity feed | Audit 2026-04-30 | **→ Tier B (B5)**. |
-| Validation diff over time | Audit 2026-04-30 | **→ Tier B (B6)**. |
-| Geo-tagged photo verification | Audit 2026-04-30 | **→ Tier C (C1)**. |
-| BatchData historical deeds | Audit 2026-04-30 / pickup.md | **→ Tier C (C2)**. Highest-impact data-quality lever available. |
-| Reverse phone/email validation | Audit 2026-04-30 | **→ Tier C (C3)**. |
-| Address consistency cross-check | Audit 2026-04-30 | **→ Tier C (C4)**. |
-| Bank statement parser | Audit 2026-04-30 | **→ Tier C (C5)**. |
-| Public records expansion (liens, warrants) | Audit 2026-04-30 | **→ Tier C (C6)**. |
-| Email-forward deal submission | Audit 2026-04-30 | **→ Tier D (D1)**. |
-| Slack/Teams notifications | Audit 2026-04-30 | **→ Tier D (D2)**. |
-| Calendar integration | Audit 2026-04-30 | **→ Tier D (D3)**. |
-| Browser extension / bookmarklet | Audit 2026-04-30 | **→ Tier D (D4)**. |
-| Public REST API for CRMs | Audit 2026-04-30 | **→ Tier D (D5)**. |
-| Deal outcomes capture | Audit 2026-04-30 | **→ Tier E (E1)**. |
-| Borrower reputation score | Audit 2026-04-30 | **→ Tier E (E2)**. |
-| Anonymized cross-tenant consensus | Audit 2026-04-30 | **→ Tier E (E3)**. |
-| Public borrower profile (opt-in) | Audit 2026-04-30 | **→ Tier E (E4)**. |
-| Multi-deal scenario comparison | Audit 2026-04-30 | **→ Tier F (F1)**. |
-| Rate-shock stress test | Audit 2026-04-30 | **→ Tier F (F2)**. |
-| Investor-side deal queue | Audit 2026-04-30 | **→ Tier F (F3)**. |
-| Universal `documents` table | Audit 2026-04-30 | **→ X1 (cross-cutting infra)**. |
-| Universal `notification_preferences` | Audit 2026-04-30 | **→ X2 (cross-cutting infra)**. |
-| Universal `activity_events` table | Audit 2026-04-30 | **→ X3 (cross-cutting infra)**. |
+# Backlog — provenance + tier mapping
+
+Every feature catalogued under the old tier system. The "Stage" column re-slots each feature into the user journey above so it's findable two ways. Notes preserved.
+
+| Idea / Tier code | Stage | Source | Notes |
+|---|---|---|---|
+| OpenCorporates person → entity discovery ($2,800/yr) | Stage 2 | STRATEGY.md | DEFERRED. Insignia uses Elementix; revisit only for non-Insignia customers. |
+| **S1** Comparative borrower view | Workspace | Audit 2026-04-30 | ✅ Shipped. |
+| **S2** Story Mode AI memo | Stage 3 | Audit 2026-04-30 | ✅ Shipped. |
+| **S3** Litigation case-card UI | Stage 3 | Audit 2026-04-30 | ✅ Shipped. |
+| **S4** GC inline summary | Workspace | Audit 2026-04-30 | ✅ Shipped. |
+| **S5** Risk methodology PDF | Stage 4 | Audit 2026-04-30 | ✅ Shipped (G4.1 polish: download not print-only). |
+| **A1** Investor criteria PDF parser | Stage 5 | Audit 2026-04-30 | Batch 2. Highest Tier A. |
+| **A2** Counter-offer / repricing | Stage 5 | Audit 2026-04-30 | Batch 2. |
+| **A3** Borrower capital-availability PDF | Stage 6 | Audit 2026-04-30 | Batch 2. |
+| **A4** Investor performance dashboard | Stage 8 | Audit 2026-04-30 | Post-NPLA. Needs E1. |
+| **A5** Originator scorecard for investors | Stage 8 | Audit 2026-04-30 | Post-NPLA. Needs E1+E2. |
+| **B1** Borrower watchlist (one-click monitor) | Stage 7 | Audit 2026-04-30 | Batch 2. |
+| **B2** Portfolio health dashboard | Workspace | Audit 2026-04-30 | Batch 3. |
+| **B3** Validation search + filter | Workspace | Audit 2026-04-30 | Batch 3. |
+| **B4** "Have we seen this borrower" guard | Stage 1 | Audit 2026-04-30 | Batch 3. |
+| **B5** Activity feed | Workspace | Audit 2026-04-30 | Batch 1. Closes G3.3. |
+| **B6** Validation diff over time | Workspace | Audit 2026-04-30 | Batch 3. Builds on S1. |
+| **C1** Geo-tagged photo verification | Stage 3 | Audit 2026-04-30 | Batch 4. |
+| **C2** BatchData historical deeds | Stage 2 | pickup.md | Batch 4. Single biggest data-quality lever. |
+| **C3** Reverse phone/email validation | Stage 1 | Audit 2026-04-30 | Post-NPLA (cheap signal). |
+| **C4** Address consistency cross-check | Stage 3 | Audit 2026-04-30 | Batch 4. |
+| **C5** Bank statement parser | Stage 3 | Audit 2026-04-30 | Post-NPLA. Privacy-sensitive. |
+| **C6** Public records expansion (liens, warrants) | Stage 3 | Audit 2026-04-30 | Batch 4. |
+| **D1** Email-forward deal submission | Stage 1 | Audit 2026-04-30 | Post-NPLA. Resend inbound paid. |
+| **D2** Slack/Teams notifications | Stage 7 | Audit 2026-04-30 | Batch 5. |
+| **D3** Calendar integration (closing dates) | Stage 7 | Audit 2026-04-30 | Post-NPLA. |
+| **D4** Browser extension / bookmarklet | Stage 1 | Audit 2026-04-30 | Batch 5 (bookmarklet); extension post-NPLA. |
+| **D5** Public REST API for CRMs | Workspace | Audit 2026-04-30 | Batch 5. |
+| **E1** Deal outcomes capture | Stage 8 | Audit 2026-04-30 | Batch 2. Blocker for A4/A5/E2/E3/E4. |
+| **E2** Borrower reputation score | Stage 8 | Audit 2026-04-30 | Post-NPLA. Needs E1. |
+| **E3** Anonymized cross-tenant consensus | Stage 8 | Audit 2026-04-30 | Post-density. Schema now. |
+| **E4** Public borrower profile (opt-in) | Stage 8 + Borrower-side | Audit 2026-04-30 | Post-density. |
+| **F1** Multi-deal scenario comparison | Stage 5 | Audit 2026-04-30 | Post-NPLA. |
+| **F2** Rate-shock stress test | Stage 5 | Audit 2026-04-30 | Post-NPLA. |
+| **F3** Investor-side deal queue | Investor-side | Audit 2026-04-30 | Post-NPLA. New role. |
+| **X1** Universal `documents` table | Foundations | Audit 2026-04-30 | ✅ Shipped. |
+| **X2** Universal `notification_preferences` | Foundations | Audit 2026-04-30 | ✅ Schema shipped; only email dispatch wired (D2 finishes). |
+| **X3** Universal `activity_events` table | Foundations | Audit 2026-04-30 | ✅ Schema shipped; B5 is the UI. |
+| **G1.1** Doc-ingest addresses → verified flips | Stage 1+2 | UX audit 2026-05-02 | Batch 1. Closes address paradox. |
+| **G1.2** Multi-borrower / co-borrower modeling | Foundations | Truong demo data | Defer until customer-driven. |
+| **G3.1** VerifiedTrackRecord above fold | Stage 3 | UX audit 2026-05-02 | Batch 1. |
+| **G3.2** "Send share link" CTA | Stage 3 | UX audit 2026-05-02 | Batch 1. |
+| **G3.3** Surface borrower activity to lender | Stage 3 | UX audit 2026-05-02 | Batch 1 (rolls into B5). |
+| **G3.4** "Add GC after-the-fact" action | Stage 3 | UX audit 2026-05-02 | Post-Batch-3. |
+| **G3.5** Kill standalone tool pages | Cross-cutting | UX audit 2026-05-02 | Batch 1. |
+| **G4.1** Methodology PDF download (not print-only) | Stage 4 | UX audit 2026-05-02 | Batch 3. |
+| **G4.2** Confidence-score audit + tooltip | Stage 4 | P0 audit + UX 2026-05-02 | Batch 3. |
+| **G5.1** Validation → evaluate CTA | Stage 5 | UX audit 2026-05-02 | Batch 1. |
+| **G6.1** Handoff template references chosen investor | Stage 6 | UX audit 2026-05-02 | Batch 2 (with G6.2). |
+| **G6.2** Evaluate → handoff CTA | Stage 6 | UX audit 2026-05-02 | Batch 1. |
+| **G7.1** Org-level monitor default | Stage 7 | UX audit 2026-05-02 | Batch 5. |
+| **G7.2** "Next run in N hours" indicator | Stage 7 | UX audit 2026-05-02 | Polish (any batch). |
+| **G7.3** Slack/Teams output | Stage 7 | Audit + UX 2026-05-02 | = D2. |
+| **G8.1** Outcome capture exists at all | Stage 8 | UX audit 2026-05-02 | = E1. |
+| Cross-lender borrower reputation graph | Stage 8 | STRATEGY.md long-shot | = E2 + E3. |
+| Fraud-ring detection via graph AI | Stage 8 | STRATEGY.md long-shot | Long horizon; needs E1/E3. |
+| Satellite construction monitoring | Stage 7 | STRATEGY.md long-shot | Pairs with C1. |
+| Climate-risk scoring per property | Stage 3 | STRATEGY.md long-shot | First American partnership. New informational factor. |
+| DSCR rental-loan vertical | New | STRATEGY.md | 90% engine reuse. Post-NPLA bet if signal appears. |
+| SBA lending vertical | New | STRATEGY.md | $25B/yr. Far. |
+| UK bridging finance | New | STRATEGY.md | GBP 13.4B. Far. |
+| Compliance automation (mandated docs, deadlines) | Stage 7 | Insignia 4/28 call | Composes with X1. |
+| Operating-agreement collection adapter | Stage 1 | Insignia 4/28 call | For Kiavi/Yabi brokered channel. Templated borrower request via share link. |
+| State-specific endorsement validator | Stage 3 | Insignia 4/28 call | Per-state research-bound. |
+| ICP picker (Bridge / Bank / DSCR / Brokered / Private credit) | Foundations | 4/28 demo | Premature; v1 hardcodes Bridge. |
+| Auto-recommend supplemental conditions | Stage 4 | Insignia 4/28 call | Small rules layer on factor + signal data. |
+| Multi-state GC adapters (FL/TX/NY) | Stage 2 | Existing roadmap | Post-NPLA / customer-driven. |
+| Nexys LOS write-back | Cross-cutting workspace | Existing roadmap | Blocked on Nexys API access. |
+| State-court litigation provider | Stage 3 | Existing roadmap | Eval pre-NPLA, sign post-NPLA. |
+| TransUnion address validation | Stage 2 | Existing roadmap | Blocked on Noah's logins. ~1 day to wire. |
 
 ---
 
 ## Decisions log (append-only)
 
+### 2026-05-02 — Reorganized roadmap around the lender's journey
+Old structure was tier-keyed (S/A/B/C/D/E/F/X) — good for prioritization, bad for understanding the product as one continuous flow. UX audit surfaced four disconnects (address paradox, no validate→evaluate→handoff CTAs, borrower-side activity invisible, vestigial standalone tool pages) that were hidden by the tier framing because each disconnect spans tiers. Rewrote primary navigation around eight journey stages (Intake → Run → Investigate → Decide → Route → Hand off → Monitor → Outcome) plus four cross-cutting surfaces (Workspace, Borrower-side, Investor-side, Foundations). Every previous tier feature preserved with its tier code; full backlog table maps tier ↔ stage. Added 11 explicit UX gaps (G1.1 through G8.1) as first-class items with stage placement, fix scope, and batch slot. Recommended sequence is now one ordered list of batches keyed to journey stages, not 7 tiers in parallel. Source: 2026-05-02 UX analysis triggered by user feedback that "things seem disconnected." Replaces the previous tier-organized recommended-sequence section.
+
 ### 2026-04-30 — Velocity-aware expansion plan + P0 audit
-After shipping Now + the entire code-buildable Pre-NPLA punch list in two days (2026-04-29 → 04-30), ran a four-track audit (code correctness / data model / UX / strategy) to surface bugs from the rapid push and rescope what's reachable pre-NPLA at proven velocity. Outputs:
-
-1. **P0 — Corrections** section added at the top of this doc covering 6 critical bugs, 7 data-model issues, and 9 UX gaps. Migration `00016_p0_corrections.sql` consolidates the schema changes (snapshot-table org_id denormalization, missing timestamps, partial unique indexes on signal tables, JSONB schema_version, risk_factor expires_at, lender escalation guard, monitor_runs RLS).
-2. **Expansion plan** added with six tiers organized by strategic lever: S (demo wow), A (capital-provider stickiness), B (daily-driver retention), C (trust-but-verify), D (workflow integration), E (network-effects moat), F (Module 1 expansion). 30+ feature blocks with user stories, UX flows, data model, dependencies, effort estimates.
-3. **Three universal infra tables** added to DATA-MODEL.md (documents, notification_preferences, activity_events) plus an outcome/reputation/consensus layer. Every new feature composes on these primitives — no per-feature file storage, notification, or event-log code.
-4. **Implementation order** spans 8 weeks at 2-day-per-feature pace. Sequence: P0 stabilization → universal infra → Tier S demo wow → Tier A capital stickiness → Tier B retention → Tier C data-quality → Tier D workflow → buffer + content. Tiers E and F (long-horizon moat + Module 1 expansion) sit post-NPLA but their schema lands pre-NPLA so data accumulates from day 1.
-
-Source: 2026-04-30 multi-track audit. Plan reflects [memory: feedback_velocity_sizing](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/feedback_velocity_sizing.md) (days, not weeks) and [memory: feedback_long_term_architecture](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/feedback_long_term_architecture.md) (clean-refactor over fast-ship). Distribution thesis remains intact — Tier A weighted higher than Tier B in the schedule.
+After shipping Now + the entire code-buildable Pre-NPLA punch list in two days (2026-04-29 → 04-30), ran a four-track audit (code correctness / data model / UX / strategy) to surface bugs from the rapid push and rescope what's reachable pre-NPLA at proven velocity. Outputs: P0 — Corrections section covering 6 critical bugs, 7 data-model issues, and 9 UX gaps; migration `00016_p0_corrections.sql`; Expansion plan with six tiers (S/A/B/C/D/E/F); three universal infra tables (documents, notification_preferences, activity_events). Implementation order spans 8 weeks at 2-day-per-feature pace. Source: 2026-04-30 multi-track audit. Plan reflects [memory: feedback_velocity_sizing](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/feedback_velocity_sizing.md) and [memory: feedback_long_term_architecture](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/feedback_long_term_architecture.md). *(2026-05-02 update: tier organization re-folded into journey-stage organization; original feature catalog preserved in backlog table.)*
 
 ### 2026-04-28 — Zach owns all PulseClose IP
 Partnership structure with Insignia (JV, JV-fund, or parallel SaaS) is being shaped, but tech ownership is settled in Zach's favor. Compensation structure is what gets negotiated; ownership is not. Most product work is therefore dual-use across paths. Build generalized frameworks (Module 1 as configurable rules engine, not hardcoded to Insignia). Reserve real caution only for marketing/positioning materials that publicly name Insignia's relationships without Damon's blessing.
@@ -1291,6 +539,6 @@ A focused-SaaS-as-non-LOS-LOS path requires building 15-20 missing features (clo
 
 ## Pricing source of truth
 
-**App pricing:** $299 / $499 / $799 — set in [src/lib/stripe/server.ts](../src/lib/stripe/server.ts) and [src/app/dashboard/settings/page.tsx](../src/app/dashboard/settings/page.tsx). Stripe is the source of truth.
+**App pricing:** $299 / $499 / $799 — set in [src/lib/stripe/server.ts](../src/lib/stripe/server.ts) and [src/app/dashboard/settings/page.tsx](../src/app/dashboard/settings/page.tsx). Stripe is the source of truth. Plus the SQL-only `internal` plan for Test Co (unlimited, no Stripe price ID).
 
 Older strategy docs reference $499 / $1,499 / $2,999 — stale. If pricing changes, update both code locations and add a Decisions Log entry.
