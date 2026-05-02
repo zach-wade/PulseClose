@@ -70,7 +70,7 @@ async function cobaltSearchOnce(
 
   const res = await fetch(`${COBALT_BASE_URL}/search?${params}`, {
     headers: { "x-api-key": apiKey },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(30000),
   });
 
   if (res.status === 429) {
@@ -132,7 +132,7 @@ async function pollForResult(
       `${COBALT_BASE_URL}/search?retryId=${retryId}`,
       {
         headers: { "x-api-key": apiKey },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       },
     );
 
