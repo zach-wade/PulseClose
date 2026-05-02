@@ -77,7 +77,12 @@ interface Props {
 }
 
 export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) {
-  const [addressInput, setAddressInput] = useState("");
+  // Pre-populate textarea with the addresses we already verified — lets
+  // the lender re-run (e.g., after a parser fix) without re-pasting. Adds
+  // are still ad-hoc; this just removes the friction of identical re-verify.
+  const [addressInput, setAddressInput] = useState(() =>
+    initial.map((f) => f.submitted_address).join("\n"),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
