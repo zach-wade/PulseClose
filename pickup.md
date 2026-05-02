@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-05-02)
+# PulseClose — Session Pickup (2026-05-02 end-of-session)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
@@ -7,8 +7,11 @@
 > - This file (you're here)
 > - `docs/ROADMAP.md` — **journey-organized** (Stage 1 Intake → Stage 8
 >   Outcome) with all old tier features (S/A/B/C/D/E/F) re-slotted into
->   stages and 11 explicit UX gaps (G1.1-G8.1) as first-class items
-> - `docs/DATA-MODEL.md` — full schema incl. universal infra tables
+>   stages, 11 explicit UX gaps (G1.1-G8.1), and 11 cross-cutting design
+>   principles. Last meaningful edit: 2026-05-02 (Batch 1 complete + open
+>   items sweep).
+> - `docs/DATA-MODEL.md` — full schema incl. universal infra tables +
+>   canonical-name dedup notes
 > - `STRATEGY.md` — vision, market, long-shot bets
 > - `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`
 
@@ -20,21 +23,40 @@
 SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
 22-23, 2026; ~7 weeks out).
 
-**P0 corrections + universal infra + Tier S demo wow + recovery PRs are
-SHIPPED end-to-end.** Production is healthy as of 2026-05-02. See
-"What was completed" below for the recovery story.
+**Production health:** ✅ All 22 PRs since 2026-04-30 live and verified.
+The 2026-05-02 testing pass with the Truong xlsx surfaced 7 bugs that
+got fixed live, plus a comprehensive robustness sweep applying the new
+design principles across the codebase.
 
-**2026-05-02 — Roadmap reorganized + UX cohesion fixes shipped.** ROADMAP.md
-rewrote primary navigation around the 8-stage lender journey (Intake → Run
-→ Investigate → Decide → Route → Hand off → Monitor → Outcome) instead of
-S/A/B/C/D/E/F tiers; surfaced 11 UX disconnects as first-class items
-(G1.1-G8.1); single ordered batch sequence replaces parallel tier
-schedules. Sidebar nav simplified — 4 standalone single-check tools
-(Entity / Track Record / GC / Litigation) removed from primary nav since
-they contradicted the unified-validation flow (G3.5). Recommended next
-work: **Batch 1** (close the journey: G1.1 doc-addresses → verified flips,
-G3.1 VerifiedTrackRecord above fold, G5.1 evaluate CTA, G6.2 handoff CTA,
-B5 activity feed UI).
+**Batch 1 (close the journey) — ✅ COMPLETE.** One continuous flow from
+intake to handoff to monitor to activity feed. The platform now feels
+like a live workspace, not a one-shot report.
+
+```
+Batch 1 ships in order (all 2026-05-02):
+  G1.1+G2.1  intake addresses → deed verify at run time         6db0fbc
+  G3.1       pillar evidence above operational layer            b3bd964
+  G3.2       Send share link to borrower (Resend email)         544381a
+  G3.5       sidebar tools removed + page files deleted         412ae07 + 0943fc7
+  G5.1       validate → evaluate CTA + URL pre-fill             ab3795e
+  G6.2       evaluate → handoff hint card                       ab3795e
+  Robustness sweep (max_tokens defense, Realie filter,
+    sent_handoff emit, redundant button, cleanup script)        0943fc7
+  B5         activity feed UI + per-detail strip + sidebar      149a3dd
+```
+
+**The matcher/dedup story** (the headline data-quality work):
+```
+  Address parser fix (City, ST ZIP envelope strip)              8a5a043
+  Name matcher rewrite (tokenize+set, was substring)            bbd4226
+  Same fix on borrower-linked-to-entity input warning           48d550e
+  Canonical-name dedup migration 00021                          6bceaf0
+```
+This stuff is now codified as ROADMAP.md cross-cutting principles 8-11
+(tokenize-and-set matching; dual-coded SQL/JS dedup keys; backfill plans
+for stricter constraints; Claude truncation defense). Future code MUST
+follow these — every new matcher / dedup key / Claude consumer that
+violates them is on a clear path to silent failure.
 
 ---
 
@@ -55,132 +77,66 @@ B5 activity feed UI).
   UNIQUE partial indexes, `risk_factors.expires_at`, JSONB schema_version
   + CHECK constraints, lender escalation guard, `monitor_runs.adapter_results
   / email_status`, `recompute_risk_factors_atomic` RPC.
-  `MONITOR_RUN_RESULTS_ENABLED=true` flipped on Vercel.
 - **PR 5 (93be452):** UX polish — handoff save-then-download, empty states,
   ZHVI null fallback factor, address-extraction 422, AI memo poll 90→180s.
 
 ### Universal infra + Tier S demo wow (6 PRs, 2026-04-30)
 
 - **PR 6 (dc34fd5):** Migration `00017_universal_infra.sql` — `documents`
-  table + Supabase storage bucket + `notification_preferences` +
-  `activity_events`. Helpers: `events/emit.ts`, `notifications/dispatch.ts`,
+  + storage bucket + `notification_preferences` + `activity_events`.
+  Helpers: `events/emit.ts`, `notifications/dispatch.ts`,
   `documents/store.ts`. Activity emission retrofitted across endpoints.
-- **PR 7 (9774386):** S1 Comparative borrower view — `/dashboard/compare`.
-- **PR 8 (b311552):** S2 Story Mode AI memo — `ai_analysis` schema v2 with
-  dual renderer.
-- **PR 9 (27716ca):** S3 Litigation case cards — migration
-  `00018_litigation_cases.sql` + extract/materialize + cards UI.
-- **PR 10 (5235cc6):** S4 GC inline summary — migration `00019_gc_summary.sql`
-  + chip component (desktop column + mobile inline).
-- **PR 11 (ac7ee9e):** S5 Risk methodology PDF — server-rendered printable
-  at `/validations/[id]/risk-methodology`.
+- **PR 7-11:** S1 Compare / S2 Story Mode / S3 Litigation cards / S4 GC
+  inline / S5 Risk methodology PDF. Migrations 00018, 00019.
 
 ### Recovery + Quality (4 PRs, 2026-04-30 → 2026-05-01)
 
 - **PR 12 (bf89219):** `internal` plan tier — migration `00020_internal_plan.sql`.
-  PLANS gains `internal` with `Infinity` checkLimit, no Stripe price IDs.
-  Bypasses both monthly cap and 3-check pre-subscription gate. Test Co
-  flipped to `internal` (`scripts/promote-to-internal.ts`); usage UI shows
-  "Unlimited" instead of a meaningless progress bar.
-- **PR 13 (a29b328 + 47509a1):** **P0 — silent snapshot insert failures.**
-  Discovered reviewing validation 790adc76. 00016 made `org_id NOT NULL` on
-  4 snapshot tables but app code didn't pass org_id; `.insert()` errors
-  were silently swallowed. New `src/lib/supabase/insert-or-throw.ts` helper
-  surfaces failures; org_id added to ~12 insert sites
-  (validations/route.ts × 5, monitor/runner.ts × 3, api/checks/* × 4) plus
-  user-visible silent inserts wrapped (verified_flips × 2,
-  deal_eligibility_results, investor_criteria). Also: sanctions card UX
-  shows officers/agent in "Names Screened" (derived from match
-  query_names); handoff body UX loosened email schema + field-level
-  errors + amber hint.
-- **PR 14 (9e4d733):** **CRITICAL — production builds had been failing for
-  ~9 hours** since PR 7 shipped. Next 16 requires `useSearchParams()`
-  consumers to be wrapped in a Suspense boundary; the Compare page wasn't.
-  Vercel kept serving the pre-PR-7 deploy — meaning **PRs 7-13 never
-  reached production until this fix landed.** Wrapped ComparePage in
-  Suspense with a skeleton fallback.
-- **`78ee8d6`:** Cobalt fetch timeout 15s → 30s. CA SOS scrapes (which
-  Cobalt does on our behalf — we don't have our own scraper) can take 14s+;
-  15s budget was right at the wire.
+- **PR 13 (a29b328 + 47509a1):** silent snapshot insert failures fix.
+  `src/lib/supabase/insert-or-throw.ts` wraps user-visible inserts.
+- **PR 14 (9e4d733):** CRITICAL build unblock — `useSearchParams()` needs
+  Suspense in Next 16. Compare page wasn't wrapped; broke prerender; PRs
+  7-13 hadn't reached prod for ~9 hours.
+- **`78ee8d6`:** Cobalt fetch timeout 15s → 30s.
 
-### 2026-05-02 follow-ups
+### 2026-05-02 — Reorganization + Batch 1 + Robustness sweep + B5
 
-- **AI memo blank-out fix (8ae2884):** v2 schema's `risks[].severity` enum
-  was too narrow (`critical | moderate | minor`). The deterministic
-  `risk_factors` table emits 5 severities (`critical | moderate | minor |
-  informational | none`); the prompt tells Claude to copy the factor
-  block's severity verbatim, so `informational` (e.g. `market_outlier`)
-  legitimately appears in v2 memos and rejected the whole shape.
-  Widened enum + interface + prompt to accept `informational`; added
-  defensive coercion in `analysis.ts` (any unknown severity → `minor`)
-  so future drift can't blank the memo. Renderer shows informational
-  rows with sky-blue accent + Info icon (distinct from amber/red risks).
-- **Sidebar cohesion fix (412ae07):** Removed 4 standalone single-check
-  tool nav items (Entity Search / Track Record / GC Validation /
-  Litigation) per G3.5. The unified validation flow is the canonical
-  path; module-shaped sidebar contradicted the journey. Page files at
-  `/dashboard/{entity,gc,litigation,track-record}/page.tsx` kept (unlinked)
-  pending decision to delete.
-- **Runbook reconciliation (`~/.claude/plans/ok-so-now-what-delightful-lark.md`):**
-  Caught 2 fictional UI claims — "Property addresses" input on `/dashboard/new`
-  (doesn't exist; Realie auto-discovers via owner-name search) and
-  "GC: manual" chip for no-GC validations (renders em-dash; "manual"
-  only appears when GC ran for non-CA state). Fixed both + added a new
-  Phase 1.5 for the `VerifiedTrackRecord` deed-verify path.
-- **ROADMAP reorganized around the journey (412ae07):** see
-  [docs/ROADMAP.md](docs/ROADMAP.md). 8 stages × 4 cross-cutting surfaces;
-  every prior tier feature kept its tier code; 11 UX gaps surfaced as
-  G1.1-G8.1; one ordered batch sequence.
-- **Batch 1.1 — intake addresses → deed-verified at run time (G1.1, 6db0fbc):**
-  DocIngest's existing `property_addresses` extraction now flows into a
-  textarea on `/dashboard/new`, sends in the API request, and the
-  validation API runs `verifyAddresses()` in `after()`. AI memo
-  regenerates with verified-flip stats. Drop xlsx → see deed-verified
-  flips on detail page within ~30s.
-- **Doc-ingest fix + G3.1 reorder (b3bd964):** xlsx with 50+ properties
-  overflowed `max_tokens=1024` and Claude truncated the JSON → user-facing
-  502 "Could not parse extraction response". Bumped to 4096 + clearer
-  error on truncation. Reordered detail page so pillar cards
-  (Entity / TrackRecord / VerifiedTrackRecord / Litigation / Sanctions /
-  GC) sit between WhyThisRating and HandoffCard.
-- **Batch 1.3 — validate → evaluate → handoff CTAs (G5.1 + G6.2, ab3795e):**
-  "Evaluate against my investors" button on detail page header pre-fills
-  evaluate form via URL params (Suspense-wrapped per Next 16). Evaluate
-  results page surfaces "Ready for the investor handoff?" hint card
-  routing back to dashboard list when ≥1 investor passes.
-- **Address-parser fix (8a5a043):** `parseAddressForState` was leaving
-  the city attached to the street ("1259 ALMADEN AVE, SAN JOSE") and
-  Realie's address endpoint 404'd every lookup. New regex strips
-  `, City, ST ZIP` envelope cleanly. Verified across 7 input variants.
-- **Pre-populate VerifiedTrackRecord textarea (cd0674c):** existing
-  verified_flips' submitted_addresses now pre-fill the textarea so the
-  Verify button isn't disabled after a fresh run.
-- **Name-matcher rewrite (bbd4226 + 48d550e):** Realie returns owner
-  names as `LASTNAME, FIRSTNAME-MIDDLE` ("TRUONG, KIM-AN"); lender input
-  is "Firstname Middle Lastname". Old substring-on-space-stripped match
-  failed 100% of cases. Replaced with tokenize + set-inclusion in two
-  files (`verify-core.ts` deed-chain matcher + `validations/route.ts`
-  borrower-linked-to-entity input warning). Three Truong properties
-  now correctly resolve to "Verified — still owns".
-- **Canonical-name dedup (00021 migration + this commit):** Same root
-  cause as the matcher bug, but at the dedup-key layer. Old
-  `normalized_name` (lowercase + collapse-whitespace) made
-  "Kim An Truong" and "TRUONG, KIM AN" produce DIFFERENT keys, so the
-  same person could end up as two borrower rows. Migration adds
+- **AI memo blank-out fix (8ae2884):** v2 `risks[].severity` enum widened
+  to accept `informational`; defensive coercion of unknown severities.
+- **ROADMAP reorganized + sidebar cohesion (412ae07):** journey-organized
+  primary navigation; 11 UX gaps as G1.1-G8.1; sidebar 7 items → 4.
+- **Batch 1.1 G1.1+G2.1 (6db0fbc):** intake addresses → deed verify at
+  run time. AI memo regenerates with verified-flip stats.
+- **Doc-ingest truncation fix + G3.1 page reorder (b3bd964):** max_tokens
+  1024 → 4096 + clearer error + pillar evidence above operational layer.
+- **Batch 1.3 G5.1 + G6.2 (ab3795e):** validate → evaluate → handoff CTAs.
+- **Address-parser fix (8a5a043):** strip `, City, ST ZIP` envelope.
+- **VerifiedTrackRecord textarea pre-fill (cd0674c).**
+- **Name-matcher rewrite (bbd4226 + 48d550e):** tokenize + set-inclusion
+  for verify-core deed-chain matcher AND borrower-linked-to-entity.
+- **Canonical-name dedup (6bceaf0):** migration 00021 +
   `canonicalize_name(text, strip_entity_suffixes)` Postgres function +
-  `normalized_canonical` generated column on borrowers / entities /
-  lenders + org-scoped unique indexes. JS `canonicalizeName` in
-  `upsert.ts` mirrors the SQL exactly (12/12 parity tests pass).
-  Discovered + cleaned 2 duplicate entities + 16 duplicate Rocket
-  Mortgage rows during rollout. Length filter relaxed from 2 → 1 after
-  the first-attempt collapsed `S&T Bank` and `F&M Bank` into a single
-  "bank" canonical (real false-positive that surfaced on FDIC data).
-  Global lender uniqueness intentionally deferred — FDIC has multiple
-  legitimate banks with same canonical name + distinct cert numbers.
+  `normalized_canonical` generated columns + JS `canonicalizeName` parity
+  + 3 new design principles in ROADMAP.
+- **G3.2 Send share link to borrower (544381a):** `POST /api/validations/[id]/send-share-link`
+  + Resend email + inline form on VerifiedTrackRecord card.
+- **Robustness sweep (0943fc7):** AI memo + extract-addresses max_tokens
+  bumped to 4096; Realie owner-filter canonicalized; `sent_handoff`
+  activity emit on Excel + PDF download paths; redundant Export PDF
+  button removed; orphan tool pages deleted; `scripts/cleanup-canonical-duplicates.ts`
+  productized.
+- **Open-items doc sweep (1cf5f17):** new design principle 11 (Claude
+  truncation defense); G2.4 address parser edge case formalized; pickup
+  Open decisions expanded from 2 → 7 with NPLA-tied deadlines; new
+  "Operational risk register" section.
+- **B5 Activity feed UI (149a3dd):** `GET /api/activity` + `/dashboard/activity`
+  feed + per-validation `<ActivityStrip />` + sidebar nav. Closes Batch 1.
+
+---
 
 ## Open data-quality questions for Damon (NPLA prep)
 
-These surfaced during the 2026-05-02 Truong validation test. Worth
+These surfaced during the 2026-05-02 Truong validation testing. Worth
 confirming with Damon before serious lender outreach since the
 interpretation drives both demo narrative and what the product
 "validates" honestly.
@@ -205,28 +161,22 @@ interpretation drives both demo narrative and what the product
    Kim Thanh Thi Truong as co-borrower (likely wife). Schema is
    single-guarantor today (G1.2 in roadmap). Does Damon's intake flow
    need both names persisted in our domain model, or is single-guarantor
-   acceptable for v1? Affects whether we ship G1.2 pre- or post-NPLA.
-3. **Cobalt rate limits.** During the Truong test, Cobalt rate-limited
-   on the entity lookup (429), which left `latest_sos_status='not_found'`
-   for `TT Investment Properties, LLC` despite the entity being real
-   and active. Our backoff path handled it gracefully (1h `next_run_at`
-   delta, "Manual verification recommended" flag on the validation), but
-   demo-day with multiple back-to-back validations could hit this. Worth
-   asking Damon for Cobalt's enterprise tier pricing or whether Insignia
-   has a higher-rate Cobalt account we could use for demo runs.
-4. **Address parser — apartment unit handling.** `71 WEBBER WAY 77,
-   BUENA PARK` returned "Address not found" because the parser doesn't
-   handle the unusual "77" suffix between street name and city. Real-
-   world intake will have edge cases like this — `Apt 5`, `#5`, `Unit 5`,
-   building numbers, mail-drop suffixes. Tracked as part of the
-   address-canonicalization gap in DATA-MODEL.md but worth confirming
-   what shapes Damon sees most often in Insignia's intake flow.
+   acceptable for v1?
+3. **Cobalt rate limits during demo days.** During testing, Cobalt
+   rate-limited on the entity lookup (429); our backoff path handled
+   it gracefully but a back-to-back demo session could hit the wall in
+   front of a fund. Insignia have a higher-rate Cobalt account, or
+   should we pre-load demo validations with cached `liveData=false`?
+4. **Address parser edge cases** — `71 WEBBER WAY 77, BUENA PARK`
+   returned "Address not found" because `77` between street name and
+   city tripped the parser. What address shapes does Insignia's intake
+   typically have (`Apt 5` / `#5` / `Unit 5` / building numbers)?
 
 ---
 
-## Database state (as of 2026-05-02)
+## Database state (as of 2026-05-02 end-of-session)
 
-**Migrations applied (20 total):**
+**Migrations applied (21 total):**
 ```
 00001 foundation                        Core tables
 00002 handle_new_user                   Auto-create user/org on signup
@@ -249,23 +199,36 @@ interpretation drives both demo narrative and what the product
 00018 litigation_cases                  Materialized litigation cards
 00019 gc_summary                        Cached GC chip column
 00020 internal_plan                     `internal` plan tier (unlimited)
+00021 canonical_name_dedup              canonicalize_name() + normalized_canonical
+                                        generated cols + org-scoped UNIQUE indexes
 ```
 
-**Row counts:**
+**Row counts (live as of 2026-05-02):**
 - `organizations` = 1 (Test Co, plan=internal)
 - `users` = 1
-- `lenders` = ~4,300 global (FDIC + known-bridge denylist)
+- `borrowers` = 1 (Kim An Truong)
+- `entities` = 1 (TT Investment Properties, LLC — 2 stale "TT Investments"
+  duplicates merged + deleted during 00021 rollout)
+- `properties` = 28
+- `lenders` = 3801 global FDIC + ~17 org-scoped (16 duplicate Rocket
+  Mortgage rows merged during 00021)
 - `investors` = 3 sample configs
 - `zhvi_zips` = 26,283
-- **`borrowers` / `entities` / `properties` retained** from prior runs:
-  - Kim An Truong (borrower id `d4d94670-86cd-48b2-a6fe-e0d26dba96aa`)
-  - "TT INVESTMENTS" + "TT INVESTMENTS, LLC" entities (the latter was the
-    real CA SOS hit, formed 2011-09-20, agent KIMAN TRUONG at 1323 Rosalia)
-  - 25 properties from the prior Realie pull
-- `borrower_validations` = 0 (both broken-pillar test runs cleaned up via
-  `scripts/cleanup-broken-validations.ts`)
-- `documents`, `activity_events`, `notification_preferences`,
-  `litigation_cases` exist but empty.
+- `borrower_validations` = 6 (test runs from 2026-05-02 — leave or
+  cleanup with `scripts/cleanup-broken-validations.ts --delete` if
+  starting fresh)
+- `track_record_entries` = 150
+- `entity_checks` = 6
+- `litigation_checks` = 12 (no `litigation_cases` materialized yet
+  because nothing was a "found" CourtListener result for Truong)
+- `sanctions_checks` = 6
+- `verified_flips` = 24 (the Truong addresses; 3 owned_and_held + 20
+  never_owned + 1 not_found)
+- `risk_factors` = 30 (5 active factors × 6 validations)
+- `gc_validations` = 0 (Truong had no GC; never typed)
+- `activity_events` = 8 (powering the new B5 feed)
+- `documents`, `monitor_subscriptions`, `monitor_runs`,
+  `notification_preferences` = 0
 
 ---
 
@@ -284,44 +247,48 @@ interpretation drives both demo narrative and what the product
 1. **Real entity name is "TT Investment Properties, LLC"** — earlier tests
    used "TT Investments" (abbreviation) which triggered noisy sanctions
    matches against "TT International Investment Management" (UK firm).
-   Always use the full name.
+   Always use the full name. The two stale "TT Investments" entity rows
+   are now deleted (cascaded out via 00021 rollout).
 2. **Co-borrower Kim Thanh Thi Truong** appears on most loans (likely
    wife). Schema has only one `guarantor` field — use her there or leave
    blank.
 3. **Registered agent address per CA SOS:** `KIMAN TRUONG at 1323 ROSALIA
    AVE` — the *1323* property, not *1310* (both are Kim's per the xlsx).
 
-**Use this file to test the Excel doc-ingest path** (`/api/ingest/borrower-doc`)
-when running fresh validations on `/dashboard/new`. It's the canonical
-real-world test for the lender intake flow.
+**Use this file to test the doc-ingest + intake-deed-verify path** —
+DocIngest now extracts the property addresses too (G1.1 shipped), and the
+validation API runs `verifyAddresses()` in `after()` for them. Drop xlsx
+→ form pre-fills → click Run → detail page lands with `verified_flips`
+populated within ~30s.
 
 ---
 
-## Manual items the user should do
+## Manual items the user should do (post-Batch-1)
 
-1. **Re-run a validation post AI-memo-fix** to confirm Story Mode v2
-   renders cleanly with `informational` severity rows. Use:
-   - Borrower: `Kim An Truong`
-   - Entity: `TT Investment Properties, LLC` ← use the FULL name
-   - State: `CA`
-   - Verify pillar tables populate AND the AI memo renders all 4 risk
-     rows (one of them — `market_outlier` — should be sky-blue
-     informational, distinct from amber/red).
-2. **Test doc ingestion with the xlsx** above — drop into upload zone on
-   `/dashboard/new`. Today only the borrower/entity/GC fields pre-fill.
-   Once Batch 1 G1.1 ships, the property addresses will also pre-fill
-   and run through deed verification automatically.
-3. **Walk the demo runbook** at
+1. **Re-test Batch 1 end-to-end with B5 verification.** Drop Truong xlsx
+   → run validation → on detail page, scroll to bottom: `<ActivityStrip />`
+   should show created + updated events for this run. Click "See all" →
+   routes to `/dashboard/activity?subject_id=<id>`.
+2. **Test Activity feed at `/dashboard/activity`.** Verb-filter pills
+   should work; "Load more" appears when >50 events. Day grouping shows.
+3. **Test Send Share Link** (G3.2). On Truong validation, click
+   "Send to borrower" on VerifiedTrackRecord card; type your own email
+   + a test message; click Send. Should arrive within seconds with the
+   borrower-facing share link. Activity feed gets `sent_share_link` row.
+4. **Test handoff download → activity event.** Download Excel from
+   HandoffCard. Activity feed gets `sent_handoff` row with
+   `metadata.artifact = "excel"`.
+5. **Walk the demo runbook** at
    `/Users/zachwade/.claude/plans/ok-so-now-what-delightful-lark.md`
-   (Phase 1-7, updated 2026-05-02). Includes the deferred print test for
-   `/handoff/[id]` and `/validations/[id]/risk-methodology` — physically
-   print to verify page-break / margin / color rules.
-4. **NPLA pre-flight, ~1 week out:** verify all migrations idempotent on
-   a fresh tenant.
-5. **Decide on AI/data privacy stance** before serious lender outreach
-   AND before A1 ships (A1 adds another Claude consumer). Recommended:
-   ship the 2-day bundle (PII redaction + depersonalized prompt + per-org
-   `ai_extraction_enabled` toggle) before any non-Insignia outreach.
+   (Phase 1-7). Includes the deferred print test for `/handoff/[id]`
+   and `/validations/[id]/risk-methodology` — physically print to verify
+   page-break / margin / color rules.
+6. **NPLA pre-flight, ~1 week out:** verify all 21 migrations idempotent
+   on a fresh tenant.
+7. **Decide on AI/data privacy stance** before A1 ships (A1 adds another
+   Claude consumer). Recommended: ship the 2-day bundle (PII redaction
+   + depersonalized prompt + per-org `ai_extraction_enabled` toggle)
+   before any non-Insignia outreach.
 
 ---
 
@@ -332,21 +299,29 @@ real-world test for the lender intake flow.
 | Auth (Supabase) | Working | |
 | Validation flow (4 pillars + sanctions) | Working | All snapshot inserts wrapped in `insertOrThrow` post PR 13 |
 | Entity / Track / GC / Lit / Sanctions adapters | Working | Cobalt timeout = 30s |
-| Trust-but-verify (Realie deed-chain) | Working | Address normalization fixed |
-| Borrower share link (paste + xlsx/pdf upload) | Working | 422 on extraction failure |
-| AI risk memo — Story Mode v2 | Working | Dual renderer, schema-versioned |
+| Trust-but-verify (Realie deed-chain) | Working | Address parser fixed; name matcher canonical |
+| **Intake addresses → deed-verify at run time (G1.1)** | Working | DocIngest pre-fills textarea; verifyAddresses() runs in after() |
+| Borrower share link (paste + xlsx/pdf upload) | Working | 422 on extraction failure; max_tokens 4096 |
+| **Send share link to borrower (G3.2)** | Working | Resend email; activity event emitted |
+| AI risk memo — Story Mode v2 | Working | Dual renderer; informational severity supported; max_tokens 4096 |
 | Risk-tier rebuild + override-and-rerun | Working | Atomic recompute via RPC |
-| Module 1 — Evaluate Deal | Working | Investor criteria validator surfaces key-by-key errors |
-| Investor handoff (Excel + PDF) | Working | Save-then-download, dirty tracking, loose email + amber hint |
+| Module 1 — Evaluate Deal | Working | Pre-fill from URL params; "evaluate against my investors" CTA |
+| Investor handoff (Excel + PDF) | Working | Save-then-download; sent_handoff activity event |
+| **Validate → evaluate → handoff CTAs (G5.1+G6.2)** | Working | Detail page → evaluate (pre-filled) → handoff prompt |
 | Continuous monitoring | Working | Per-adapter status, 1h rate-limit backoff |
-| Doc ingestion (lender side) | Working | xlsx/pdf/csv |
-| Share-link upload | Working | |
+| Doc ingestion (lender side) | Working | xlsx/pdf/csv; max_tokens 4096; address extraction wired |
+| Share-link upload | Working | max_tokens 4096 |
 | Zillow ZHVI deviation + unavailable factor | Working | |
 | Comparative borrower view (S1) | Working | Wrapped in Suspense |
 | Story Mode AI memo (S2) | Working | v2 with strengths/risks/recs |
 | Litigation case cards (S3) | Working | Materialized + filter chips |
 | GC inline summary (S4) | Working | Desktop column + mobile inline |
 | Risk methodology PDF (S5) | Working | `/validations/[id]/risk-methodology` |
+| **Activity feed UI (B5)** | Working | `/dashboard/activity` + per-detail strip + sidebar |
+| **Pillar evidence above operational layer (G3.1)** | Working | Pillars between WhyThisRating and Handoff |
+| **Sidebar cohesion (G3.5)** | Working | 4 nav items (Validations / Activity / Evaluate / Investors / Usage); standalone tool pages deleted |
+| **Canonical-name dedup (00021)** | Working | borrowers / entities / lenders dedup-keyed by canonical token-sorted form |
+| **Tokenize-and-set name matcher** | Working | verify-core + validations/route + realie owner-search filter |
 | Stripe billing | Working | $299 / $499 / $799 + `internal` (unlimited, SQL-only) |
 | Test Co `internal` plan | Live | Unlimited validations for the founder org |
 | Sanctions card "Names Screened" | Working | Now includes officers/agent derived from matches |
@@ -359,8 +334,7 @@ real-world test for the lender intake flow.
 ## Open decisions / questions for the user
 
 1. **Insignia + outside AI** — borrower intake docs and AI memos go through
-   Anthropic. Asked but not yet decided. Options outlined in the
-   conversation:
+   Anthropic. Asked but not yet decided. Options:
    - Anthropic ZDR contract (cleanest answer, ~$5-15K/mo enterprise tier)
    - **PII redaction pre-flight on doc ingestion** (~1 day, ship-able)
    - **Depersonalized AI memo prompt** (placeholders not real names, ~0.5 day)
@@ -372,88 +346,71 @@ real-world test for the lender intake flow.
    committing to ZDR cost. **DECIDE BEFORE A1** — Investor PDF parser
    adds another Claude consumer and would need to be retrofitted.
 
-2. **What to do with the Truong xlsx** — the user has it; runbook calls for
-   testing doc ingest with it. Either Claude tests via API or user walks
-   the UI manually.
-
-3. **Print-CSS physical test** — `/handoff/[id]` and
+2. **Print-CSS physical test** — `/handoff/[id]` and
    `/validations/[id]/risk-methodology` print rules look right in DevTools
    but page-break behavior under real printer drivers has never been
    physically verified on paper. Deferred manual item from PR 5. Should
    happen before NPLA. ~30 min with a printer.
 
-4. **OpenSanctions trial expiry — 2026-05-28** (~26 days). Three options:
+3. **OpenSanctions trial expiry — 2026-05-28** (~26 days). Three options:
    (a) Pay for OpenSanctions production tier, (b) Fall back to OFAC SDN
    direct only (free, less coverage), (c) Negotiate trial extension.
    System auto-falls-back to OFAC if API key fails, so worst case is a
    silent degradation in sanctions coverage on 5/28. Decide by ~5/24.
 
-5. **Cobalt rate limits during demo days** — 2026-05-02 testing hit a 429
-   on the entity lookup (resolved gracefully via 1h backoff + "Manual
-   verification recommended" flag), but a back-to-back demo session
-   running 5+ validations could hit the same wall in front of a fund.
-   Options: (a) Ask Damon whether Insignia has a higher-rate Cobalt
-   account, (b) Pre-load 2-3 demo validations with cached `liveData=false`
-   so the demo path doesn't depend on live Cobalt calls, (c) Pay for
-   Cobalt enterprise tier. Decide before NPLA dry-runs (~6/15).
+4. **Cobalt rate limits during demo days** — Decide before NPLA dry-runs
+   (~6/15). Options: ask Damon for Insignia's account, pre-load demo
+   validations with `liveData=false` cached, or pay Cobalt enterprise.
 
-6. **Co-borrower / multi-guarantor schema (G1.2)** — Most TT loans have
-   Kim Thanh Thi Truong as co-borrower; today schema is single-guarantor.
-   Ask Damon: does Insignia's intake flow always have ≤1 guarantor, or do
-   we need to model multi-borrower / multi-guarantor before a real
-   customer hits it? ~1d schema change + UI updates if yes.
+5. **Co-borrower / multi-guarantor schema (G1.2)** — Damon-question.
+   ~1d schema change + UI updates if yes. Affects whether we ship G1.2
+   pre- or post-NPLA.
 
-7. **AI privacy 2-day bundle scope** — same decision as #1, but mechanically:
+6. **AI privacy 2-day bundle scope** — same decision as #1, but mechanically:
    should the depersonalized prompt store the actual borrower name on the
    server-side and only send placeholders to Claude, or replace before
-   prompt build (cleaner) vs. post-process Claude's output (riskier)? Pick
-   when starting #1.
+   prompt build (cleaner) vs. post-process Claude's output (riskier)?
+   Pick when starting #1.
 
 ---
 
 ## Next session — what to pick up
 
-**Batch 1 (close the journey) is COMPLETE except B5.** Status as of
-2026-05-02:
+**Batch 1 — close the journey: ✅ COMPLETE.** All 7 items shipped including
+B5 Activity feed UI (149a3dd). The platform now has a continuous flow
+from intake to handoff to monitor to activity feed.
 
-- ✅ G1.1 + G2.1 (intake addresses → deed verify at run time, `6db0fbc`)
-- ✅ G3.1 (pillar evidence above operational layer, `b3bd964`)
-- ✅ G3.2 (Send share link to borrower CTA + Resend, `544381a`)
-- ✅ G3.5 (sidebar tools gone, page files deleted in `0943fc7`)
-- ✅ G5.1 (validate → evaluate CTA, `ab3795e`)
-- ✅ G6.2 (evaluate → handoff hint card, `ab3795e`)
-- ✅ Robustness sweep — AI max_tokens defense, Realie owner-filter
-  canonicalization, sent_handoff activity emission, redundant Export
-  PDF button removed, scripts/cleanup-canonical-duplicates.ts (`0943fc7`)
-- ⏳ B5 — Activity feed UI (~2d). All 7 emit verbs populating
-  `activity_events`; just needs read+render layer.
+**Recommended next pick:** **AI privacy 2-day bundle** (Open decisions #1).
+This is gating Batch 2 — A1 Investor PDF parser adds another Claude
+consumer that would need to be retrofitted. Decide stance + ship the
+bundle (PII redaction + depersonalized prompt + per-org toggle) before
+A1.
 
-**Recommended next pick:** **B5 Activity feed UI**. It closes G3.3
-(borrower-side activity invisible to lender) and gives the demo the
-"live workspace" feel that turns PulseClose from a one-shot report
-into a daily-driver tool.
+**Then Batch 2 — Tier A capital stickiness + outcome substrate (8-10d):**
+- **A1 — Investor PDF parser** (3d) — NPLA hero feature. Fund manager
+  uploads guidelines PDF → Claude extracts criteria → preview → save.
+  Damon can demo this live with a real fund's PDF.
+- **E1 — Deal outcomes capture** (1d) — blocker for everything
+  reputation/performance. Validation detail "Update deal status" button
+  with statuses: Withdrawn / Funded / Extended / Repaid / Defaulted.
+- **A2 — Counter-offer / repricing calculator** (2d).
+- **A3 — Borrower capital-availability PDF** (1.5d).
+- **B1 — Borrower watchlist (one-click monitor)** (0.5d).
 
-Or in priority order if B5 feels too big right now:
-- **Address parser edge cases** (~0.5d, Stage 2). Handle "71 WEBBER WAY 77"
+**Smaller fillers (any time):**
+- **Address parser edge cases (G2.4, 0.5d).** Handle `71 WEBBER WAY 77`
   and similar — single small case left from the Truong test.
-- **Cobalt entity-name normalizer** (~1h). Adopts the canonical pattern;
+- **Cobalt entity-name normalizer (~1h).** Adopts the canonical pattern;
   removes noisy "Registered name X differs from search Y" warnings.
-- **Confidence-score audit + tooltip (G4.2, 0.5d).** Bare percentage today;
-  needs hover with contributing signals OR rename to "Validation
-  completeness" if that's what it actually measures.
+- **Confidence-score audit + tooltip (G4.2, 0.5d).** Bare percentage
+  today; needs hover with contributing signals OR rename to "Validation
+  completeness".
+- **Methodology PDF download (G4.1, 0.5d).** Today opens new tab needing
+  Cmd+P; should be one-click download via server-render to PDF.
 
-Then **Batch 2 — Tier A capital stickiness + outcome substrate** (8-10d):
-- AI privacy 2-day bundle (PII redaction + depersonalized prompt + per-org
-  toggle) — decide before A1.
-- A1 Investor PDF parser (3d) — NPLA hero feature.
-- E1 Deal outcomes capture (1d) — blocker for everything reputation/
-  performance.
-- A2 Counter-offer (2d), A3 Borrower capital PDF (1.5d), B1 Watchlist (0.5d).
-
-If asked "what's next?" without direction: **start B5 (activity feed UI)**.
-It's the only Batch 1 item left and is mostly a read+render layer on
-schema that's already live — should be 2 days at the tested velocity but
-could compress to 1 day with focus.
+**If asked "what's next?" without direction:** decide AI privacy stance
+(Open #1), then ship A1. Both block the highest-leverage NPLA demo
+moment.
 
 ---
 
@@ -466,6 +423,7 @@ src/lib/adapters/
   stub.ts            Demo data adapter
   cobalt.ts          SOS entity adapter (Cobalt scrapes; we don't)
   realie.ts          Property search + lookupPropertyByAddress
+                     owner filter uses canonical token-subset (0943fc7)
   regrid.ts          Property search — fallback
   attom.ts           Sale history enrichment
   courtlistener.ts   Federal litigation
@@ -477,7 +435,7 @@ src/lib/adapters/
 
 | Check Type | Primary | Fallback | Env Var | Status |
 |---|---|---|---|---|
-| Entity | Cobalt (30s timeout) | Cached (`liveData=false`) | `COBALT_INTELLIGENCE_API_KEY` | Working |
+| Entity | Cobalt (30s timeout) | Cached (`liveData=false`) | `COBALT_INTELLIGENCE_API_KEY` | Working; rate-limit risk for demos |
 | Track Record (search) | Realie | Regrid → stub | `REALIE_API_KEY`, `REGRID_API_TOKEN` | Working |
 | Track Record (enrichment) | ATTOM | Skip | `ATTOM_API_KEY` | Working |
 | Track Record (verify) | Realie | (none) | `REALIE_API_KEY` | Working |
@@ -488,32 +446,38 @@ src/lib/adapters/
 ## Other key library modules
 
 ```
-src/lib/domain/upsert.ts          borrower/entity/property/lender + linkBorrowerToEntity
-src/lib/risk/factors.ts           Pure compute: 9 factors + tier rule
-src/lib/risk/persist.ts           Atomic recompute via RPC
-src/lib/ai/analysis.ts            v2 Story Mode prompt
-src/lib/ai/regenerate.ts          Memo regen helper
-src/lib/evaluate/engine.ts        Module 1 — multi-investor eligibility
-src/lib/handoff/builder.ts        HandoffDocument assembly
-src/lib/handoff/excel.ts          exceljs workbook generator
-src/lib/monitor/runner.ts         Continuous monitoring + adapter_results tracking
-src/lib/email/resend.ts           Resend wrapper
-src/lib/litigation/extract.ts     CourtListener raw → ExtractedCase
-src/lib/litigation/materialize.ts Upsert litigation_cases for a validation
-src/lib/gc/summary.ts             buildGCSummary for the dashboard chip
-src/lib/events/emit.ts            activity_events emission
-src/lib/notifications/dispatch.ts notification_preferences fan-out
-src/lib/documents/store.ts        Supabase storage upload + documents row
-src/lib/schemas/jsonb.ts          Zod schemas for every JSONB column
-src/lib/schemas/api.ts            Zod schemas for API request bodies
-src/lib/async/with-error-log.ts   Helper for after()-callback bodies
+src/lib/domain/upsert.ts             borrower/entity/property/lender + linkBorrowerToEntity
+                                     canonicalizeName() mirrors SQL canonicalize_name()
+src/lib/risk/factors.ts              Pure compute: 9 factors + tier rule
+src/lib/risk/persist.ts              Atomic recompute via RPC
+src/lib/ai/analysis.ts               v2 Story Mode prompt; max_tokens 4096
+src/lib/ai/regenerate.ts             Memo regen helper
+src/lib/evaluate/engine.ts           Module 1 — multi-investor eligibility
+src/lib/handoff/builder.ts           HandoffDocument assembly
+src/lib/handoff/excel.ts             exceljs workbook generator
+src/lib/monitor/runner.ts            Continuous monitoring + adapter_results tracking
+src/lib/email/resend.ts              Resend wrapper
+src/lib/litigation/extract.ts        CourtListener raw → ExtractedCase
+src/lib/litigation/materialize.ts    Upsert litigation_cases for a validation
+src/lib/gc/summary.ts                buildGCSummary for the dashboard chip
+src/lib/events/emit.ts               activity_events emission; ActivityVerb union
+src/lib/notifications/dispatch.ts    notification_preferences fan-out
+src/lib/documents/store.ts           Supabase storage upload + documents row
+src/lib/schemas/jsonb.ts             Zod schemas for every JSONB column
+src/lib/schemas/api.ts               Zod schemas for API request bodies
+src/lib/async/with-error-log.ts      Helper for after()-callback bodies
 src/lib/supabase/insert-or-throw.ts  Surface silent insert/update failures
+src/lib/track-record/verify-core.ts  Deed-chain matcher (tokenize + set-compare)
+                                     parseAddressForState (handles , City, ST ZIP envelope)
+
+src/components/dashboard/activity-feed.tsx    ActivityFeed + ActivityFeedCard renderers
+src/components/dashboard/activity-strip.tsx   Per-validation feed card; auto-hides empty
 ```
 
 ## Scripts
 
 ```
-scripts/ingest-fdic-lenders.ts          ~4,300 banks → global lenders
+scripts/ingest-fdic-lenders.ts          ~3,800 banks → global lenders (idempotent)
 scripts/ingest-zhvi-zips.ts             ~26K zip medians from Zillow ZHVI
 scripts/seed-sample-investors.ts        3 sample investor configs
 scripts/cleanup-active-duplicates.ts    Pre-flight for 00016 UNIQUE indexes
@@ -527,7 +491,7 @@ scripts/find-test-co.ts                 Find Test Co + plan/usage state
 scripts/promote-to-internal.ts          Flip an org to `internal` plan
 scripts/cleanup-broken-validations.ts   Find + delete broken-pillar validations
 scripts/cleanup-canonical-duplicates.ts Productized 00021 duplicate-merger
-                                        (dry-run by default; --apply to execute)
+                                        (dry-run default; --apply to execute)
 scripts/review-validation.ts            Pull full snapshot for a validation_id
 scripts/review-validation-quick.ts      Compact one-screen status report —
                                         pillar counts + ai_analysis + flips
@@ -538,12 +502,15 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
 
 ## Critical context for next session
 
-- **Velocity is days, not weeks.** Fourteen PRs (P0 + universal infra +
-  Tier S + recovery) shipped end-to-end across two sessions.
+- **Velocity is days, not weeks.** Twenty-two PRs (P0 + universal infra +
+  Tier S + recovery + Batch 1 + robustness sweep + B5) shipped end-to-end
+  across two sessions.
 - **CHECK BUILD STATUS in Vercel after every push.** PR 7-13 didn't reach
-  production for ~9 hours because Compare page broke prerender. `vercel ls
-  pulseclose | head -3` shows recent deploys; "Error" status means stale
-  prod is still serving requests.
+  production for ~9 hours because Compare page broke prerender. Even
+  with builds passing locally, **Vercel auto-deploy hooks have failed
+  silently twice this session** — the manual fallback `vercel deploy
+  --prod --yes` is necessary when `vercel ls pulseclose | head -3`
+  doesn't show a recent Building / Ready row after `git push`.
 - **Path B data model is committed to.** Every new feature references
   borrowers/entities/properties/lenders by FK.
 - **JSONB columns are schema-versioned.** Every object-shaped JSONB carries
@@ -555,24 +522,37 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
 - **Snapshot inserts MUST pass org_id and use `insertOrThrow`.** Wrap any
   new insert into `entity_checks`, `track_record_entries`,
   `litigation_checks`, `gc_validations`, or other user-visible tables with
-  `insertOrThrow` from `src/lib/supabase/insert-or-throw.ts`. Silent
-  insert failures hid for ~24h before discovery.
+  `insertOrThrow` from `src/lib/supabase/insert-or-throw.ts`.
+- **Dedup keys are canonical, not literal.** Borrower / entity / lender
+  dedup uses `normalized_canonical` (Postgres `canonicalize_name()`
+  generated column) + JS `canonicalizeName()` mirror in `upsert.ts`.
+  Drift between SQL and JS creates infinite duplicates instead of dedupes.
+  See ROADMAP cross-cutting principles 8-10.
+- **Vendor data ↔ lender input matching uses tokenize+set, never
+  substring.** Names (Realie format vs lender format), entity names
+  (with vs without LLC), addresses — all use canonical token comparison.
+  Substring on lowercased + space-stripped strings is the wrong primitive
+  and will silently break demos. See ROADMAP cross-cutting principle 8.
+- **Any place we `JSON.parse` a Claude response is a truncation hazard.**
+  Use `max_tokens: 4096` minimum, inspect `stop_reason` post-call,
+  surface "Document too large — Claude truncated" instead of generic
+  parse errors. See ROADMAP cross-cutting principle 11.
 - **AI Story Mode v2 is the default for new validations.** Old v1 reads
-  fall back through the dual renderer. Don't migrate v1 rows backward.
+  fall back through the dual renderer.
 - **Override-and-rerun is the product.** Risk factors recompute atomically
   via the `recompute_risk_factors_atomic` RPC.
 - **AI never picks the tier.** `risk_rating` is hard-overwritten server-side
   from the deterministic tier post-AI parse.
 - **Test Co is on the `internal` plan** (unlimited validations, no Stripe).
-  `ORG_ID=<uuid> npx tsx scripts/promote-to-internal.ts` flips any other
-  org. Internal plan never appears in the upgrade matrix.
 - **Cobalt = our SOS scraper provider** (we don't have our own scraper).
-  30s fetch timeout. CA SOS via Cobalt can be the slowest.
+  30s fetch timeout. CA SOS via Cobalt can be the slowest. Rate-limit
+  risk for demo days.
 - **Real Truong test data:** entity is `TT Investment Properties, LLC`,
   borrower is `Kim An Truong`, xlsx at
   `/Users/zachwade/Downloads/K Truong - Track Record - 12-10-25.xlsx`.
-- **Ship straight to prod via `git push origin main`** (auto-deploy).
-  `supabase db push` for migrations.
+- **Ship straight to prod via `git push origin main`** (auto-deploy when
+  it works). `supabase db push` for migrations. Test Co is a real-data
+  test bed.
 
 ---
 
@@ -592,15 +572,16 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
 
 ## Operations notes
 
-- **OpenSanctions trial expires 2026-05-28** (~4 weeks). After that it
+- **OpenSanctions trial expires 2026-05-28** (~26 days). After that it
   falls back to OFAC SDN direct (free). Renew or upgrade before then.
+  See Open decisions #3.
 - **Cobalt key:** rotate when usage cap hits. Direct API call to verify
   health: `curl -s -m 60 -H "x-api-key: $COBALT_INTELLIGENCE_API_KEY"
   "https://apigateway.cobaltintelligence.com/v1/search?searchQuery=...&state=CA&liveData=true"`.
-- **Deploys:** `git push origin main` triggers production auto-deploy.
-  **Always check `vercel ls pulseclose | head -3` for "Ready" status —
-  silent build failures cost us 9 hours once.** Manual fallback:
-  `vercel deploy --prod --yes`.
+- **Deploys:** `git push origin main` triggers production auto-deploy
+  WHEN the webhook fires. **Vercel has failed to auto-deploy 2x this
+  session — always confirm with `vercel ls pulseclose | head -3` and
+  fall back to `vercel deploy --prod --yes` if no new build appears.**
 - **Supabase migrations:** `supabase db push` after creating new files in
   `supabase/migrations/`.
 - **Database wipes** (if needed during dev): cascading deletes via
@@ -619,8 +600,8 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
   `additional_persons text[]` on `sanctions_checks`.
 - **Multi-borrower validations (G1.2)** — Kim Thanh Thi Truong
   (co-borrower on most TT Investment Properties loans) can't be modeled
-  cleanly today; schema is single guarantor. Real-world usage will hit
-  this. Damon-decision item — see Open decisions #6.
+  cleanly today; schema is single guarantor. Damon-decision item — see
+  Open decisions #5.
 - **Existing pre-PR-13 validations** in any tenant that ran during the
   ~24h silent-insert window have empty pillar tables and can't be back-
   filled (vendor data not reproducible without re-spending API budget).
@@ -628,8 +609,8 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
 - **Print CSS on `/handoff/[id]` and `/validations/[id]/risk-methodology`**
   has not been physically tested on real paper. The print rules look
   right in DevTools but page-break behavior under real printer drivers
-  needs a one-time manual check. See Open decisions #3.
-- **AI privacy posture** — see Open decisions #1 + #7. Today every
+  needs a one-time manual check. See Open decisions #2.
+- **AI privacy posture** — see Open decisions #1 + #6. Today every
   borrower name + property + sanctions match goes through Anthropic's
   Claude. ZDR is on the contract by default; Insignia hasn't been asked
   their stance. **Decide before A1 (Investor PDF parser).**
@@ -641,10 +622,17 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
   different formats creates duplicate property rows. Tracked in ROADMAP.md
   Foundations. ~1-2d when worked. Mitigation: prefer Realie's `addressFull`
   as canonical when available.
-- **Address parser edge cases** — `71 WEBBER WAY 77, BUENA PARK` returned
-  "Address not found" because the `77` between street and city tripped
-  the parser. Fix: tokenize → identify state-code anchor → strip
-  everything between. ~0.5d.
+- **Address parser edge cases (G2.4)** — `71 WEBBER WAY 77, BUENA PARK`
+  returned "Address not found" because the `77` between street and city
+  tripped the parser. Fix: tokenize → identify state-code anchor → strip
+  everything between, OR fall through to Realie with raw input on parse
+  failure. ~0.5d.
+- **6 retained borrower_validations rows from 2026-05-02 testing.** Not a
+  regression — these are real test runs from the matcher/dedup work and
+  should NOT be deleted before re-running validation tests. They are
+  what backfill the activity_events feed for visual confirmation. If
+  starting genuinely fresh, delete via
+  `npx tsx scripts/cleanup-broken-validations.ts --delete`.
 
 ---
 
