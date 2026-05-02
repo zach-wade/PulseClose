@@ -353,13 +353,15 @@ the remaining items in this surface area.
 - ✅ `verify-core` deed-chain matcher (tokenize + set-compare).
 - ✅ `validations/route.ts` borrower-linked-to-entity input-warning matcher.
 - ✅ `00021_canonical_name_dedup.sql` — `canonicalize_name(text, strip_entity_suffixes)` Postgres function + `normalized_canonical` generated columns on borrowers / entities / lenders + org-scoped unique indexes. JS `canonicalizeName` in `upsert.ts` mirrors the SQL exactly. Org-scoped uniqueness is enforced; global lender rows (FDIC) intentionally allow same-canonical-name with distinct fdic_ids.
+- ✅ Realie owner-search filter (`searchPropertiesRealie`). Was using `startsWith` on uppercased strings — false-negatived "TT INVESTMENT PROPERTIES, LLC" vs "TT Investment Properties LLC" (comma format mismatch) and silently fell through to borrower-name fallback. Now uses the canonical token-subset check (entity-suffix-stripped). Same primitives as verify-core.
+- ✅ `scripts/cleanup-canonical-duplicates.ts` — productized version of the inline merge surgery I ran during 00021 rollout. Detects duplicates by canonical key in borrowers/entities/lenders within their dedup scope, re-points FK references, deletes duplicates. Idempotent. Dry-run by default; `--apply` to execute.
 
 **Still open:**
 - **Property `address_normalized` canonicalization.** Same shape of bug — addresses come in many formats (`"1310 Rosalia Ave, Garden Grove, CA 92840"` vs. `"1310 ROSALIA AVE"` vs. `"1310 Rosalia Avenue"`). Today's `normalize_address()` SQL function only strips punctuation + lowercases. A properly-canonical address requires USPS-style suffix expansion (`Street`/`St`/`Str` → `street`), directional handling (`N` / `North`), and unit-separator parsing (`Apt 5` / `#5` / `Unit 5`). **Effort:** 1-2 days. **Risk if not fixed:** the same property gets created multiple times under different deeds; track-record aggregation across snapshots double-counts. **Mitigation while open:** Realie's `addressFull` is the de-facto canonical when available; prefer it over user-typed display when persisting.
+- **Address parser edge cases (`verify-core.ts parseAddressForState`).** The `, City, ST ZIP` regex doesn't handle building/unit numbers between street and city — `71 WEBBER WAY 77, BUENA PARK, CA 90621` returned "Address not found" because `77` between street and city tripped Realie. Fix: tokenize → identify the state-code token → treat everything before it (excluding city) as the street + suffix. Or: send the raw address to Realie when the parser fails (Realie may be more tolerant). ~0.5d.
 - **Cobalt entity-name normalizer.** [`cobalt.ts:178 normalizeEntityName`](../src/lib/adapters/cobalt.ts) uses substring-on-normalized matching and produces noisy "Registered name X differs from search Y" warnings. Low impact (just warning text) but should adopt the canonical pattern. ~1h.
 - **Borrower-Entity linking via fuzzy-name match in upsert.** `linkBorrowerToEntity` matches existing relationships by `(borrower_id, entity_id)` exact — fine. But the upstream resolution from name→id uses the dedup canonical key, so name-format drift can still create the wrong link if the borrower or entity row was created under a different format earlier. Will resolve naturally once `00021` is widely deployed.
 - **Person-name false-positives in the 2-token case.** `"Kim An"` ⊆ `"An Soon Kim"` triggers a false match because the matcher treats names as unordered token sets. Real fix requires DOB / SSN / address fingerprinting. Documented as a known limit, not a bug.
-- **Pre-existing duplicate-row cleanup tool.** `00021` only enforces dedup on writes. If a tenant already has duplicates from before the migration, they need a one-shot merge. Today this is manual via the inline scripts I ran during 00021 rollout (delete entity duplicates, re-point lender FK refs). Productize as `scripts/cleanup-canonical-duplicates.ts` ~0.5d.
 - **Cross-borrower / cross-entity merge UI.** Once two real records collide (e.g., human discovers Kim's entity exists under both abbreviation and full name), the lender needs an admin tool to merge them and re-point all FK refs. Bigger feature, ~2d. Probably post-NPLA unless a customer hits it.
 
 ---
@@ -371,14 +373,26 @@ A single ordered list. Each item names the journey stage it lives at, the strate
 **Live always — no batch:**
 0. **Bug bash + UX polish.** Anything caught in real-use sessions ships within hours. Live-fix culture, not weekly cadence. (Recent example: AI memo `severity` schema widening shipped same-day.)
 
-**Batch 1 — Close the journey (5-6 days). Goal: one continuous flow from intake to handoff.**
+**Batch 1 — Close the journey (5-6 days). Goal: one continuous flow from intake to handoff. ✅ COMPLETE except B5.**
 1. ~~**G1.1 + G2.1 — Doc-ingest addresses → Verified Track Record at run time.**~~ ✅ Shipped 2026-05-02. Deed-verified flips appear automatically on first submit; AI memo regenerates with verified-flip stats. *Stage 1+2.*
-2. **G3.1 — Pull VerifiedTrackRecord above the fold** + auto-populate. 0.5 day. *Stage 3.*
-3. **G5.1 — "Evaluate against my investors →" CTA** on detail page. 0.5 day. *Stage 5.*
-4. **G6.2 — "Generate handoff for top-match" CTA** on evaluate results. 0.5 day. *Stage 6.*
-5. ~~**G3.5 — Hide standalone single-check pages**~~ ✅ Shipped 2026-05-02 (sidebar nav cleanup). Page files unlinked but kept; delete in a follow-up if confirmed unused.
-6. **B5 — Activity feed UI** + per-detail-page strip. 2 days. *Cross-cutting workspace + closes G3.3.*
-7. **G3.2 — "Send share link" CTA** with Resend template. 0.5 day. *Stage 3.*
+2. ~~**G3.1 — Pull VerifiedTrackRecord above the fold**~~ ✅ Shipped 2026-05-02. Pillar evidence sits between WhyThisRating and HandoffCard. *Stage 3.*
+3. ~~**G5.1 — "Evaluate against my investors →" CTA** on detail page.~~ ✅ Shipped 2026-05-02. Pre-fills evaluate form via URL params. *Stage 5.*
+4. ~~**G6.2 — "Ready for the investor handoff?" hint on evaluate results.**~~ ✅ Shipped 2026-05-02. *Stage 6.*
+5. ~~**G3.5 — Drop standalone single-check pages from sidebar**~~ ✅ Shipped 2026-05-02 (nav cleanup commit + page files deleted in robustness-sweep commit).
+6. **B5 — Activity feed UI** + per-detail-page strip. 2 days. *Cross-cutting workspace + closes G3.3.* **Only Batch 1 item remaining.** Schema is populating with all 7 emit verbs (created, updated, applied_signal, ran_monitor, sent_share_link, sent_handoff, compared, evaluated_deal). Just needs read+render layer.
+7. ~~**G3.2 — "Send share link" CTA** with Resend template.~~ ✅ Shipped 2026-05-02. Backend at `POST /api/validations/[id]/send-share-link` + inline form on VerifiedTrackRecord card.
+
+**Robustness sweep — 2026-05-02 audit pass (post-Batch 1).**
+After Batch 1 shipped end-to-end, ran a comprehensive code review applying
+the new design principles to every adjacent surface. Items that fell out:
+
+- ✅ **AI memo `max_tokens` 2048 → 4096.** Same Claude-truncation class as the doc-ingest bug; AI memo's response was within budget for Truong but borderline for portfolios with more risk factors. Bumped before it bit.
+- ✅ **Share-link `extract-addresses` `max_tokens` 2048 → 4096.** Parity with `borrower-doc` for borrower-side xlsx uploads.
+- ✅ **Realie owner-search filter** uses canonical token-subset (was `startsWith` on uppercased strings; format-fragile).
+- ✅ **Activity emit on handoff download** (`sent_handoff` verb with `artifact: 'excel' | 'pdf'`). Both download paths now emit events; B5 feed will see them.
+- ✅ **Removed duplicate "Export PDF" button** from validation detail header. `window.print()` printed the validation page directly with no print CSS — confusing UX. The risk-methodology print + handoff PDF/Excel are the canonical artifact paths.
+- ✅ **Deleted orphan tool pages** at `/dashboard/{entity,gc,litigation,track-record}/page.tsx`. Already unlinked from sidebar (G3.5); no remaining incoming refs.
+- ✅ **`scripts/cleanup-canonical-duplicates.ts`** productized. Dry-run by default; `--apply` to execute. Re-points FK refs across borrower_validations, borrower_entities, entity_signals, entity_checks, borrower_signals, borrower_property_signals, property_ownership.
 
 **Batch 2 — Tier A capital stickiness + outcome substrate (8-10 days). Goal: Damon can demo "load your fund's PDF" + every deal starts collecting outcomes.**
 8. **AI privacy posture decision + 2-day bundle** (redaction + depersonalized prompt + toggle). 2 days. *Foundations.* Decide before #9.

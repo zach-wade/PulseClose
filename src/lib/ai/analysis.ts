@@ -291,7 +291,11 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 2048,
+      // 4096 fits a Story Mode v2 memo with 5+ risks, 4+ strengths, 5+
+      // recommendations comfortably. Was 2048 — borderline for portfolios
+      // with many risk factors; same Claude truncation class as the
+      // doc-ingest bug (b3bd964). Bumped defensively before it bites.
+      max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
 

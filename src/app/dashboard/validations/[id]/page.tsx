@@ -302,10 +302,6 @@ export default function ValidationDetailPage() {
             <FileDown className="mr-2 h-4 w-4" />
             Print risk methodology
           </Button>
-          <Button variant="outline" onClick={() => window.print()}>
-            <FileDown className="mr-2 h-4 w-4" />
-            Export PDF
-          </Button>
         </div>
       </div>
 

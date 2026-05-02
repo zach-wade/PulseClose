@@ -105,7 +105,10 @@ export async function POST(
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-5-20250929",
-      max_tokens: 2048,
+      // 4096 — parity with /api/ingest/borrower-doc. Borrower-uploaded xlsxs
+      // can have 50+ addresses; the array of strings is more compact than
+      // the full borrower-doc shape but the upper bound is similar.
+      max_tokens: 4096,
       messages: [{ role: "user", content: userContent }],
     });
     const text = response.content[0]?.type === "text" ? response.content[0].text : "";

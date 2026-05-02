@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { buildHandoffDocument } from "@/lib/handoff/builder";
 import { generateHandoffWorkbook } from "@/lib/handoff/excel";
+import { emitActivity } from "@/lib/events/emit";
 
 export const maxDuration = 60;
 
@@ -25,6 +26,17 @@ export async function GET(
 
   const buffer = await generateHandoffWorkbook(doc);
   const filename = `${doc.borrower_name.replace(/[^a-zA-Z0-9_-]+/g, "-")}-handoff-${doc.generated_at.slice(0, 10)}.xlsx`;
+
+  // Activity event so the (forthcoming) feed (B5) can show "Damon downloaded
+  // the handoff for Kim Truong". Schema-defined verb in jsonb.ts.
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "sent_handoff",
+    subjectType: "validation",
+    subjectId: id,
+    metadata: { artifact: "excel" },
+  });
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

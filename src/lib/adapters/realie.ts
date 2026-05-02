@@ -78,6 +78,34 @@ interface RealieResponse {
   message?: string;
 }
 
+// Token helpers — kept inline (rather than imported from upsert.ts) because
+// realie.ts is in the adapter layer and shouldn't depend on domain code.
+// Logic mirrors canonicalizeName / tokenSetMatch in verify-core / upsert.
+const ENTITY_SUFFIX_TOKENS = new Set([
+  "llc", "inc", "incorporated", "corp", "corporation",
+  "ltd", "limited", "lp", "llp", "trust", "company", "co",
+]);
+
+function canonicalTokens(input: string | null | undefined, stripEntitySuffixes: boolean): string[] {
+  if (!input) return [];
+  return input
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 1)
+    .filter((t) => !stripEntitySuffixes || !ENTITY_SUFFIX_TOKENS.has(t));
+}
+
+function tokensSubset(needle: string[], haystack: string[]): boolean {
+  if (needle.length === 0 || haystack.length === 0) return false;
+  const set = new Set(haystack);
+  if (needle.length === 1) {
+    // Single-token search needs ≥3 chars to match — guards against
+    // common-word false positives.
+    return needle[0].length >= 3 && set.has(needle[0]);
+  }
+  return needle.every((t) => set.has(t));
+}
+
 export class RealieError extends Error {
   constructor(
     message: string,
@@ -238,12 +266,22 @@ export async function searchPropertiesRealie(
     const data: RealieResponse = await res.json();
     const properties = data.properties ?? [];
 
-    // Filter to exact owner name match (Realie does prefix matching, returns partial matches)
+    // Filter to confident owner-name matches. Realie's owner-search is a
+    // prefix match server-side and returns partial matches; we want
+    // semantic equivalence regardless of comma/punctuation/word-order.
+    // Reuses the same canonicalize logic we use for domain dedup +
+    // deed-chain matching (verify-core.ts) — see ROADMAP.md cross-cutting
+    // principle 8 (tokenize-and-set, never substring).
+    //
+    // Without this, search "TT Investment Properties, LLC" against Realie
+    // record ownerName "TT INVESTMENT PROPERTIES LLC" (no comma) returns
+    // false on startsWith and the entity match was silently dropped, then
+    // the fallback fired against borrower personal name. This worked for
+    // Truong but masked the bug.
+    const searchTokens = canonicalTokens(searchName, true);
     const exactMatches = properties.filter((p) => {
-      const owner = p.ownerName?.toUpperCase() ?? "";
-      const search = searchName.toUpperCase();
-      // Match exact name or name with suffix (LLC, INC, etc.)
-      return owner.startsWith(search);
+      const ownerTokens = canonicalTokens(p.ownerName ?? "", true);
+      return tokensSubset(searchTokens, ownerTokens);
     });
 
     const results = exactMatches.map(mapPropertyToRecord);

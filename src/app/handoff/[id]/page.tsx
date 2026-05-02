@@ -10,6 +10,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { buildHandoffDocument, type HandoffDocument } from "@/lib/handoff/builder";
+import { emitActivity } from "@/lib/events/emit";
 
 export const dynamic = "force-dynamic";
 
@@ -294,6 +295,17 @@ export default async function HandoffPage({
   const supabase = createAdminClient();
   const doc = await buildHandoffDocument(supabase, id, profile.org_id);
   if (!doc) notFound();
+  // Fire activity event for the PDF view path (B5 feed). Excel download
+  // emits the same verb from /api/handoff/[id]/excel; metadata.artifact
+  // distinguishes them.
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "sent_handoff",
+    subjectType: "validation",
+    subjectId: id,
+    metadata: { artifact: "pdf" },
+  });
   return (
     <div className="hf-root">
       <HandoffBody doc={doc} />
