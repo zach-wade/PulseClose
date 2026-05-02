@@ -500,15 +500,36 @@ export async function POST(request: Request) {
     //    looks like an entity (different relationship semantics) or when
     //    the SOS lookup itself failed. Reuses additionalPersons (officers
     //    + registered agent) gathered earlier for the sanctions screen.
-    const stripWs = (s: string | null | undefined) =>
-      (s ?? "").toLowerCase().replace(/\s+/g, "");
-    const borrowerCompact = stripWs(borrower_name);
-    const guarantorCompact = stripWs(guarantor_name);
-    const candidates = additionalPersons.map(stripWs).filter(Boolean);
+    //
+    // Use the same tokenize+set match as verify-core — substring on
+    // space-stripped strings false-negatives for "LASTNAME, FIRSTNAME"
+    // vs "Firstname Lastname" (Cobalt formats officers as the former).
+    const tokenizeName = (s: string | null | undefined): string[] => {
+      if (!s) return [];
+      return s
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length >= 2);
+    };
+    const namesOverlap = (a: string[], b: string[]): boolean => {
+      if (a.length === 0 || b.length === 0) return false;
+      const sa = new Set(a);
+      const sb = new Set(b);
+      const [smaller, larger] = sa.size <= sb.size ? [sa, sb] : [sb, sa];
+      if (smaller.size === 1) {
+        const [only] = smaller;
+        return only.length >= 3 && larger.has(only);
+      }
+      for (const t of smaller) if (!larger.has(t)) return false;
+      return true;
+    };
+    const borrowerTokens = tokenizeName(borrower_name);
+    const guarantorTokens = tokenizeName(guarantor_name);
+    const candidateTokenSets = additionalPersons.map(tokenizeName).filter((ts) => ts.length > 0);
     const borrowerLinked =
-      !borrowerCompact || candidates.some((c) => c.includes(borrowerCompact) || borrowerCompact.includes(c));
+      borrowerTokens.length === 0 || candidateTokenSets.some((cs) => namesOverlap(cs, borrowerTokens));
     const guarantorLinked =
-      !guarantorCompact || candidates.some((c) => c.includes(guarantorCompact) || guarantorCompact.includes(c));
+      guarantorTokens.length === 0 || candidateTokenSets.some((cs) => namesOverlap(cs, guarantorTokens));
     const sosWorked = entityResult.sos_status !== "not_found" && !(entityResult.raw_response as { _error?: boolean } | null)?._error;
 
     if (sosWorked && !looksLikeEntity && !borrowerLinked && !guarantorLinked) {
