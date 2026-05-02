@@ -46,9 +46,14 @@ function parseAddressForState(input: string, fallbackState?: string): ResolvedAd
   const trimmed = input.trim();
   const stateMatch = trimmed.match(/[,\s]\s*([A-Z]{2})\s*\d{5}?/);
   const state = stateMatch?.[1] ?? fallbackState ?? "";
+  // Strip the trailing ", City, ST ZIP" envelope. Single regex handles all
+  // four variants: with/without city, with/without zip (incl. zip+4).
+  // Realie's /public/property/address/ endpoint expects street-only; an
+  // earlier two-pass version left the city attached when both city AND
+  // state+zip were present (e.g. "1259 ALMADEN AVE, SAN JOSE, CA 95110"
+  // → "1259 ALMADEN AVE, SAN JOSE") which Realie 404'd on.
   const street = trimmed
-    .replace(/,\s*[A-Z]{2}\s*\d{5}.*$/, "")
-    .replace(/,\s*[^,]+,\s*[A-Z]{2}.*$/, "")
+    .replace(/,\s*([^,]+,\s*)?[A-Z]{2}(\s+\d{5}(-\d{4})?)?\s*$/, "")
     .trim();
   return { street, state };
 }
