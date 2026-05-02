@@ -32,6 +32,7 @@ import { WhyThisRating } from "@/components/dashboard/why-this-rating";
 import { HandoffCard } from "@/components/dashboard/handoff-card";
 import { MonitorCard } from "@/components/dashboard/monitor-card";
 import { AIMemo } from "@/components/dashboard/ai-memo";
+import { ActivityStrip } from "@/components/dashboard/activity-strip";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -480,6 +481,11 @@ export default function ValidationDetailPage() {
 
       {/* Continuous monitoring */}
       <MonitorCard validationId={data.id} />
+
+      {/* Activity on this validation — surfaces borrower-side events
+          (share-link sends, monitor runs, signal applications) that the
+          lender otherwise wouldn't see without refreshing pillar tables. */}
+      <ActivityStrip validationId={data.id} />
     </div>
   );
 }

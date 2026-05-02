@@ -9,6 +9,7 @@ import {
   BarChart3,
   Calculator,
   Briefcase,
+  Activity,
   Settings,
   LogOut,
   Menu,
@@ -16,16 +17,21 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-// Nav reflects the lender's journey, not a menu of modules. Standalone
-// single-check pages (/dashboard/{entity,gc,litigation,track-record}) are
-// not surfaced here — the unified validation flow is the canonical path.
-// Those routes still exist for back-compat but aren't promoted.
+// Nav reflects the lender's journey, not a menu of modules. The standalone
+// single-check pages were deleted in G3.5 — the unified validation flow is
+// the canonical path.
 const navItems = [
   {
     label: "Validations",
     href: "/dashboard",
     icon: Shield,
     description: "Borrower validations — pipeline view",
+  },
+  {
+    label: "Activity",
+    href: "/dashboard/activity",
+    icon: Activity,
+    description: "Workspace event feed",
   },
   {
     label: "Evaluate Deal",
