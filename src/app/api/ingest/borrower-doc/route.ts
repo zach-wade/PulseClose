@@ -50,6 +50,8 @@ Rules:
 - Return only fields you can confidently extract. Use null for missing fields, [] for missing addresses.
 - entity_state must be the 2-letter postal code, uppercase.
 - Don't invent data. If the doc has just an entity name with no obvious individual borrower, set borrower_name to null.
+- property_addresses: include up to 50 addresses (downstream verifier caps at 50). Prefer current/active holdings + recent flips; truncate older entries if the doc lists more.
+- Keep the "notes" field under 200 characters.
 - Return JSON only. No prose, no markdown fences.`;
 
 async function pdfToContentBlock(buffer: Buffer): Promise<Anthropic.Messages.DocumentBlockParam> {
@@ -143,23 +145,63 @@ export async function POST(request: Request) {
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
+      // 4096 fits ~50 addresses + the rest of the shape comfortably.
+      // Was 1024 — too tight for real intake xlsxs (Truong's has 50+ rows
+      // across Active/Track-Record/Re-Writes sheets) which cut JSON
+      // mid-array and surfaced as "Could not parse extraction response".
+      max_tokens: 4096,
       messages: [{ role: "user", content: userContent }],
     });
 
     const text =
       response.content[0]?.type === "text" ? response.content[0].text : "";
+    const stopReason = response.stop_reason;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error("Borrower doc ingest — no JSON match", {
+        stopReason,
+        textLength: text.length,
+        textPreview: text.slice(0, 500),
+      });
       return NextResponse.json(
-        { error: "Could not parse extraction response", raw: text },
+        {
+          error: stopReason === "max_tokens"
+            ? "Document too large — Claude truncated the response. Try a smaller subset of the file or fill the form manually."
+            : "Could not parse extraction response",
+          raw: text,
+          stop_reason: stopReason,
+        },
         { status: 502 },
       );
     }
-    const parsed = JSON.parse(jsonMatch[0]) as IngestResult;
+    let parsed: IngestResult;
+    try {
+      parsed = JSON.parse(jsonMatch[0]) as IngestResult;
+    } catch (parseErr) {
+      console.error("Borrower doc ingest — JSON parse failed", {
+        stopReason,
+        textLength: text.length,
+        parseErr: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      });
+      return NextResponse.json(
+        {
+          error: stopReason === "max_tokens"
+            ? "Document too large — Claude truncated the response. Try a smaller subset of the file or fill the form manually."
+            : "Could not parse extraction response (invalid JSON)",
+          raw: text,
+          stop_reason: stopReason,
+        },
+        { status: 502 },
+      );
+    }
     // Normalize state codes
     if (parsed.entity_state) parsed.entity_state = parsed.entity_state.toUpperCase().slice(0, 2);
     if (parsed.gc_state) parsed.gc_state = parsed.gc_state.toUpperCase().slice(0, 2);
+    // Defensively cap addresses at 50 (downstream verifier limit) so a
+    // long extraction doesn't blow past MAX_ADDRESSES on the next leg.
+    if (Array.isArray(parsed.property_addresses) && parsed.property_addresses.length > 50) {
+      parsed.property_addresses = parsed.property_addresses.slice(0, 50);
+    }
     return NextResponse.json(parsed);
   } catch (err) {
     console.error("Borrower doc ingest failed:", err);

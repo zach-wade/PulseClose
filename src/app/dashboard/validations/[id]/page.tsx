@@ -408,11 +408,15 @@ export default function ValidationDetailPage() {
         onSignalApplied={handleSignalApplied}
       />
 
-      {/* Investor handoff — Excel + PDF export */}
-      <HandoffCard validationId={data.id} initial={data.handoff_data} />
-
-      {/* Continuous monitoring */}
-      <MonitorCard validationId={data.id} />
+      {/*
+        Pillar evidence — sits between the analytical layer (AI memo +
+        WhyThisRating) and the operational layer (Handoff + Monitor) so the
+        natural read order is: summary → synthesis → override → evidence →
+        action. Track Record + Verified Track Record live as a pair —
+        Realie auto-discovers current holdings via owner-name search, and
+        VerifiedTrackRecord shows the deed-verified flips (auto-populated
+        from intake doc per G1.1, top-up via paste).
+      */}
 
       {/* Entity Checks */}
       {data.entity_checks.map((ec) => (
@@ -424,12 +428,12 @@ export default function ValidationDetailPage() {
         />
       ))}
 
-      {/* Track Record */}
+      {/* Track Record — auto-discovered current holdings */}
       {data.track_record.length > 0 && (
         <TrackRecordTable data={data.track_record} />
       )}
 
-      {/* Verified Track Record (trust-but-verify) */}
+      {/* Verified Track Record — deed-verified flips (intake or top-up) */}
       <VerifiedTrackRecord
         validationId={data.id}
         initial={data.verified_flips ?? []}
@@ -453,6 +457,14 @@ export default function ValidationDetailPage() {
       {data.gc_validations.map((gc) => (
         <GCResultCard key={gc.id} data={gc} />
       ))}
+
+      {/* Operational layer — produce artifacts + watch for changes */}
+
+      {/* Investor handoff — Excel + PDF export */}
+      <HandoffCard validationId={data.id} initial={data.handoff_data} />
+
+      {/* Continuous monitoring */}
+      <MonitorCard validationId={data.id} />
     </div>
   );
 }
