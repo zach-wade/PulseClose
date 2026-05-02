@@ -58,6 +58,14 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 5. **Borrower / entity / property / lender domain entities are canonical.** Every new feature references them by `id`, never by text.
 6. **Every new endpoint enforces RLS via direct `org_id =` policy.** New tables get `org_id` denormalized.
 7. **Every JSONB column is versioned** and validated through `src/lib/schemas/`.
+8. **Data-matching across format boundaries uses tokenize-and-set, never substring.** Vendor data and lender input arrive in different shapes (Realie: `LASTNAME, FIRSTNAME-MIDDLE`; lender: `Firstname Middle Lastname`; SOS: `LASTNAME, FIRSTNAME`). Substring matching on lowercased + space-stripped strings false-negatives constantly. The canonical pattern (`canonicalizeName`, `tokenSetMatch`) is in [src/lib/track-record/verify-core.ts](../src/lib/track-record/verify-core.ts) and [src/lib/domain/upsert.ts](../src/lib/domain/upsert.ts) — every new matcher copies that shape, including:
+   - tokenize on non-alphanumeric (`\b[a-z0-9]+\b`)
+   - drop length-1 tokens for **person** names (`"An"` alone false-positives), keep length-1 for **entity** names (`"S&T Bank"` is meaningful)
+   - drop entity-suffix tokens (`llc | inc | corp | ...`) for entity matching
+   - sort tokens, join with single space → canonical form
+   - match by set inclusion (smaller ⊆ larger)
+9. **Dedup keys are dual-coded.** When a Postgres generated column derives a dedup key from a SQL function (e.g., `normalized_canonical generated always as (canonicalize_name(display_name, true)) stored`), the application code must implement the same logic in JS for `WHERE normalized_canonical = $jsCanonical` lookups. Drift between the two creates **infinite duplicates** instead of dedupes — the JS query never finds the row Postgres just generated, so it inserts a new one. See [`canonicalizeName` in upsert.ts](../src/lib/domain/upsert.ts) and the parity test cases there. Any change to one must update the other in the same PR.
+10. **Generated dedup columns require a backfill plan.** Adding a stricter canonical key to an existing table will reveal pre-existing duplicates that violate the new constraint. Migrations must include either (a) a cleanup script run before `CREATE UNIQUE INDEX` or (b) a `RAISE NOTICE` post-apply step that surfaces the conflict count so the operator can run a merge tool. See [00021_canonical_name_dedup.sql](../supabase/migrations/00021_canonical_name_dedup.sql) for the template — and the lessons we learned writing it.
 
 ---
 
@@ -325,6 +333,34 @@ Investor logins are post-launch. Schema lands pre-NPLA so data accumulates. Incl
 - **AI privacy posture — open decision.** Today every borrower name + property + sanctions match goes through Anthropic. Options: ZDR contract ($5-15K/mo), PII redaction pre-flight (~1 day), depersonalized AI prompt (~0.5 day), per-org `ai_extraction_enabled` toggle (~0.5 day), AWS Bedrock customer-tenancy (post-NPLA). **Recommendation:** ship the 2-day bundle (redaction + depersonalized prompt + toggle) before serious lender outreach. Decide before A1 (which adds another Claude consumer).
 - **OpenSanctions trial expires 2026-05-28.** Falls back to OFAC SDN direct (free) after that. Renew or upgrade.
 - **G1.2 — multi-borrower / co-borrower modeling** (foundational schema change; defer until a real customer hits it).
+
+### Data integrity — canonical keys and the matchers that enforce them
+
+The 2026-05-02 testing pass surfaced a class of bug that the early
+codebase shipped with: vendor data and lender input arrive in different
+formats (Realie: `LASTNAME, FIRSTNAME-MIDDLE`; SOS: `LASTNAME, FIRSTNAME`;
+lender form: `Firstname Middle Lastname`). The early matchers (substring
+on lowercased + space-stripped strings) silently false-negatived
+99% of comparisons. Two separate fixes shipped (`bbd4226` for the
+verify-core deed-chain matcher, `48d550e` for the borrower-linked-to-entity
+input-warning check). A third issue — the dedup keys for borrowers /
+entities / lenders — required a migration ([00021_canonical_name_dedup.sql](../supabase/migrations/00021_canonical_name_dedup.sql))
+to add canonical-name generated columns and unique indexes. Cross-cutting
+principles 8 + 9 + 10 above codify the pattern; this section captures
+the remaining items in this surface area.
+
+**Shipped:**
+- ✅ `verify-core` deed-chain matcher (tokenize + set-compare).
+- ✅ `validations/route.ts` borrower-linked-to-entity input-warning matcher.
+- ✅ `00021_canonical_name_dedup.sql` — `canonicalize_name(text, strip_entity_suffixes)` Postgres function + `normalized_canonical` generated columns on borrowers / entities / lenders + org-scoped unique indexes. JS `canonicalizeName` in `upsert.ts` mirrors the SQL exactly. Org-scoped uniqueness is enforced; global lender rows (FDIC) intentionally allow same-canonical-name with distinct fdic_ids.
+
+**Still open:**
+- **Property `address_normalized` canonicalization.** Same shape of bug — addresses come in many formats (`"1310 Rosalia Ave, Garden Grove, CA 92840"` vs. `"1310 ROSALIA AVE"` vs. `"1310 Rosalia Avenue"`). Today's `normalize_address()` SQL function only strips punctuation + lowercases. A properly-canonical address requires USPS-style suffix expansion (`Street`/`St`/`Str` → `street`), directional handling (`N` / `North`), and unit-separator parsing (`Apt 5` / `#5` / `Unit 5`). **Effort:** 1-2 days. **Risk if not fixed:** the same property gets created multiple times under different deeds; track-record aggregation across snapshots double-counts. **Mitigation while open:** Realie's `addressFull` is the de-facto canonical when available; prefer it over user-typed display when persisting.
+- **Cobalt entity-name normalizer.** [`cobalt.ts:178 normalizeEntityName`](../src/lib/adapters/cobalt.ts) uses substring-on-normalized matching and produces noisy "Registered name X differs from search Y" warnings. Low impact (just warning text) but should adopt the canonical pattern. ~1h.
+- **Borrower-Entity linking via fuzzy-name match in upsert.** `linkBorrowerToEntity` matches existing relationships by `(borrower_id, entity_id)` exact — fine. But the upstream resolution from name→id uses the dedup canonical key, so name-format drift can still create the wrong link if the borrower or entity row was created under a different format earlier. Will resolve naturally once `00021` is widely deployed.
+- **Person-name false-positives in the 2-token case.** `"Kim An"` ⊆ `"An Soon Kim"` triggers a false match because the matcher treats names as unordered token sets. Real fix requires DOB / SSN / address fingerprinting. Documented as a known limit, not a bug.
+- **Pre-existing duplicate-row cleanup tool.** `00021` only enforces dedup on writes. If a tenant already has duplicates from before the migration, they need a one-shot merge. Today this is manual via the inline scripts I ran during 00021 rollout (delete entity duplicates, re-point lender FK refs). Productize as `scripts/cleanup-canonical-duplicates.ts` ~0.5d.
+- **Cross-borrower / cross-entity merge UI.** Once two real records collide (e.g., human discovers Kim's entity exists under both abbreviation and full name), the lender needs an admin tool to merge them and re-point all FK refs. Bigger feature, ~2d. Probably post-NPLA unless a customer hits it.
 
 ---
 

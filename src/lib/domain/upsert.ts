@@ -3,14 +3,17 @@
 // fields and returns the existing record's id if a match is found, else
 // inserts a new row and returns its id.
 //
-// Match keys mirror the indexes added in 00010_domain_entities.sql:
-//   borrowers   → (org_id, normalized_name)
-//   entities    → (org_id, normalized_name, state)
-//   properties  → (org_id, address_normalized)
-//   lenders     → (org_id, normalized_name)  -- per-org; FDIC-derived rows
-//                                                are global (org_id = null)
+// Match keys (canonical-name dedup, 00021_canonical_name_dedup.sql):
+//   borrowers   → (org_id, normalized_canonical)                  fall back to (org_id, normalized_name)
+//   entities    → (org_id, normalized_canonical, state)            fall back to (org_id, normalized_name, state)
+//   properties  → (org_id, address_normalized)                    [address canonicalization deferred]
+//   lenders     → (org_id, normalized_canonical)                  fall back to (org_id, normalized_name)
+//                                                                 plus a global (org_id IS NULL) match path
 //
-// Normalization mirrors the SQL helpers — must stay in sync.
+// `normalized_canonical` is a generated column computed by Postgres'
+// `canonicalize_name(text, strip_entity_suffixes bool)`. Same logic must
+// live in `canonicalizeName` below — drift between the two creates
+// infinite duplicates instead of dedupes.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -30,6 +33,36 @@ export function normalizeAddress(input: string | null | undefined): string | nul
     .replace(/\s+/g, " ");
 }
 
+// Canonical name key — must mirror Postgres canonicalize_name() exactly.
+// Tokenize on non-alphanumeric, drop short noise, optionally drop entity
+// suffixes, sort, join with single space. This collapses input variants
+// like "Kim An Truong" / "TRUONG, KIM AN" / "Truong, Kim-An" to the same
+// value ("an kim truong"). Entity-mode also collapses "Co LLC" / "L.L.C."
+// suffixes.
+const ENTITY_SUFFIX_TOKENS = new Set([
+  "llc", "inc", "incorporated", "corp", "corporation",
+  "ltd", "limited", "lp", "llp", "trust", "company", "co",
+]);
+
+export function canonicalizeName(
+  input: string | null | undefined,
+  opts: { stripEntitySuffixes?: boolean } = {},
+): string | null {
+  if (!input) return null;
+  const stripEntity = opts.stripEntitySuffixes ?? false;
+  // Keep length >= 1 — see migration 00021 comment for rationale (single-
+  // letter prefixes like "S&T Bank" are meaningful and length-2 collapsed
+  // four distinct FDIC banks together on first apply).
+  const tokens = input
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 1)
+    .filter((t) => !stripEntity || !ENTITY_SUFFIX_TOKENS.has(t))
+    .sort();
+  if (tokens.length === 0) return null;
+  return tokens.join(" ");
+}
+
 // ── Borrowers ──────────────────────────────────────────────────────────
 
 export async function upsertBorrower(
@@ -39,17 +72,33 @@ export async function upsertBorrower(
 ): Promise<string | null> {
   const name = displayName?.trim();
   if (!name) return null;
+  const canonical = canonicalizeName(name, { stripEntitySuffixes: false });
   const normalized = normalizeText(name);
-  if (!normalized) return null;
+  if (!canonical && !normalized) return null;
 
-  const { data: existing } = await supabase
-    .from("borrowers")
-    .select("id")
-    .eq("org_id", orgId)
-    .eq("normalized_name", normalized)
-    .maybeSingle();
-
-  if (existing) return existing.id;
+  // Look up by canonical first — collapses "Kim An Truong" and "TRUONG, KIM
+  // AN" to the same row. Fall back to legacy normalized_name for any rows
+  // that pre-date 00021's generated column (Postgres backfills generated
+  // columns automatically, but a tenant on a stale schema could still hit
+  // this code path).
+  if (canonical) {
+    const { data: existing } = await supabase
+      .from("borrowers")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("normalized_canonical", canonical)
+      .maybeSingle();
+    if (existing) return existing.id;
+  }
+  if (normalized) {
+    const { data: existing } = await supabase
+      .from("borrowers")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("normalized_name", normalized)
+      .maybeSingle();
+    if (existing) return existing.id;
+  }
 
   const { data: created, error } = await supabase
     .from("borrowers")
@@ -58,14 +107,28 @@ export async function upsertBorrower(
     .single();
 
   if (error) {
-    // Race: another writer beat us. Re-read.
-    const { data: race } = await supabase
-      .from("borrowers")
-      .select("id")
-      .eq("org_id", orgId)
-      .eq("normalized_name", normalized)
-      .maybeSingle();
-    return race?.id ?? null;
+    // Race: another writer beat us OR our lookup missed a sibling row whose
+    // canonical key collides with ours (the unique index on
+    // (org_id, normalized_canonical) raised 23505). Re-read by canonical.
+    if (canonical) {
+      const { data: race } = await supabase
+        .from("borrowers")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("normalized_canonical", canonical)
+        .maybeSingle();
+      if (race) return race.id;
+    }
+    if (normalized) {
+      const { data: race } = await supabase
+        .from("borrowers")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("normalized_name", normalized)
+        .maybeSingle();
+      return race?.id ?? null;
+    }
+    return null;
   }
   return created.id;
 }
@@ -89,19 +152,33 @@ export async function upsertEntity(
 ): Promise<string | null> {
   const name = input.displayName?.trim();
   if (!name) return null;
+  const canonical = canonicalizeName(name, { stripEntitySuffixes: true });
   const normalized = normalizeText(name);
-  if (!normalized) return null;
+  if (!canonical && !normalized) return null;
   const state = input.state ?? null;
 
-  const query = supabase
-    .from("entities")
-    .select("id")
-    .eq("org_id", orgId)
-    .eq("normalized_name", normalized);
-  const { data: existing } = await (state
-    ? query.eq("state", state)
-    : query.is("state", null)
-  ).maybeSingle();
+  // Canonical lookup first — collapses "TT Investment Properties, LLC" /
+  // "TT INVESTMENT PROPERTIES LLC" / "TT investment properties l.l.c." to
+  // one row per state.
+  let existing: { id: string } | null = null;
+  if (canonical) {
+    const q = supabase
+      .from("entities")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("normalized_canonical", canonical);
+    const { data } = await (state ? q.eq("state", state) : q.is("state", null)).maybeSingle();
+    existing = data;
+  }
+  if (!existing && normalized) {
+    const q = supabase
+      .from("entities")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("normalized_name", normalized);
+    const { data } = await (state ? q.eq("state", state) : q.is("state", null)).maybeSingle();
+    existing = data;
+  }
 
   // Cached-state fields to refresh on write. Only set when present so we
   // don't blow away prior values with nulls.
@@ -126,16 +203,26 @@ export async function upsertEntity(
     .single();
 
   if (error) {
-    const raceQuery = supabase
-      .from("entities")
-      .select("id")
-      .eq("org_id", orgId)
-      .eq("normalized_name", normalized);
-    const { data: race } = await (state
-      ? raceQuery.eq("state", state)
-      : raceQuery.is("state", null)
-    ).maybeSingle();
-    return race?.id ?? null;
+    // Race: re-read by canonical first, then legacy normalized_name.
+    if (canonical) {
+      const q = supabase
+        .from("entities")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("normalized_canonical", canonical);
+      const { data: race } = await (state ? q.eq("state", state) : q.is("state", null)).maybeSingle();
+      if (race) return race.id;
+    }
+    if (normalized) {
+      const q = supabase
+        .from("entities")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("normalized_name", normalized);
+      const { data: race } = await (state ? q.eq("state", state) : q.is("state", null)).maybeSingle();
+      return race?.id ?? null;
+    }
+    return null;
   }
   return created.id;
 }
@@ -264,27 +351,50 @@ export async function upsertLender(
 ): Promise<string | null> {
   const name = input.displayName?.trim();
   if (!name) return null;
+  const canonical = canonicalizeName(name, { stripEntitySuffixes: true });
   const normalized = normalizeText(name);
-  if (!normalized) return null;
+  if (!canonical && !normalized) return null;
 
-  // First try a global (org_id null) match — FDIC-classified rows are
-  // shared across all orgs and should be reused before falling back to
+  // Try global (org_id IS NULL) by canonical first — FDIC-classified rows
+  // are shared across all orgs and should be reused before falling back to
   // creating an org-scoped lender row.
-  const { data: globalMatch } = await supabase
-    .from("lenders")
-    .select("id")
-    .is("org_id", null)
-    .eq("normalized_name", normalized)
-    .maybeSingle();
-  if (globalMatch) return globalMatch.id;
+  if (canonical) {
+    const { data: globalMatch } = await supabase
+      .from("lenders")
+      .select("id")
+      .is("org_id", null)
+      .eq("normalized_canonical", canonical)
+      .maybeSingle();
+    if (globalMatch) return globalMatch.id;
+  }
+  if (normalized) {
+    const { data: globalMatch } = await supabase
+      .from("lenders")
+      .select("id")
+      .is("org_id", null)
+      .eq("normalized_name", normalized)
+      .maybeSingle();
+    if (globalMatch) return globalMatch.id;
+  }
 
-  const { data: orgMatch } = await supabase
-    .from("lenders")
-    .select("id")
-    .eq("org_id", orgId)
-    .eq("normalized_name", normalized)
-    .maybeSingle();
-  if (orgMatch) return orgMatch.id;
+  if (canonical) {
+    const { data: orgMatch } = await supabase
+      .from("lenders")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("normalized_canonical", canonical)
+      .maybeSingle();
+    if (orgMatch) return orgMatch.id;
+  }
+  if (normalized) {
+    const { data: orgMatch } = await supabase
+      .from("lenders")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("normalized_name", normalized)
+      .maybeSingle();
+    if (orgMatch) return orgMatch.id;
+  }
 
   const { data: created, error } = await supabase
     .from("lenders")
@@ -299,13 +409,25 @@ export async function upsertLender(
     .single();
 
   if (error) {
-    const { data: race } = await supabase
-      .from("lenders")
-      .select("id")
-      .eq("org_id", orgId)
-      .eq("normalized_name", normalized)
-      .maybeSingle();
-    return race?.id ?? null;
+    if (canonical) {
+      const { data: race } = await supabase
+        .from("lenders")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("normalized_canonical", canonical)
+        .maybeSingle();
+      if (race) return race.id;
+    }
+    if (normalized) {
+      const { data: race } = await supabase
+        .from("lenders")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("normalized_name", normalized)
+        .maybeSingle();
+      return race?.id ?? null;
+    }
+    return null;
   }
   return created.id;
 }

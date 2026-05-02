@@ -115,7 +115,7 @@ B5 activity feed UI).
   defensive coercion in `analysis.ts` (any unknown severity → `minor`)
   so future drift can't blank the memo. Renderer shows informational
   rows with sky-blue accent + Info icon (distinct from amber/red risks).
-- **Sidebar cohesion fix (this commit):** Removed 4 standalone single-check
+- **Sidebar cohesion fix (412ae07):** Removed 4 standalone single-check
   tool nav items (Entity Search / Track Record / GC Validation /
   Litigation) per G3.5. The unified validation flow is the canonical
   path; module-shaped sidebar contradicted the journey. Page files at
@@ -127,10 +127,100 @@ B5 activity feed UI).
   "GC: manual" chip for no-GC validations (renders em-dash; "manual"
   only appears when GC ran for non-CA state). Fixed both + added a new
   Phase 1.5 for the `VerifiedTrackRecord` deed-verify path.
-- **ROADMAP reorganized around the journey (this commit):** see
+- **ROADMAP reorganized around the journey (412ae07):** see
   [docs/ROADMAP.md](docs/ROADMAP.md). 8 stages × 4 cross-cutting surfaces;
   every prior tier feature kept its tier code; 11 UX gaps surfaced as
   G1.1-G8.1; one ordered batch sequence.
+- **Batch 1.1 — intake addresses → deed-verified at run time (G1.1, 6db0fbc):**
+  DocIngest's existing `property_addresses` extraction now flows into a
+  textarea on `/dashboard/new`, sends in the API request, and the
+  validation API runs `verifyAddresses()` in `after()`. AI memo
+  regenerates with verified-flip stats. Drop xlsx → see deed-verified
+  flips on detail page within ~30s.
+- **Doc-ingest fix + G3.1 reorder (b3bd964):** xlsx with 50+ properties
+  overflowed `max_tokens=1024` and Claude truncated the JSON → user-facing
+  502 "Could not parse extraction response". Bumped to 4096 + clearer
+  error on truncation. Reordered detail page so pillar cards
+  (Entity / TrackRecord / VerifiedTrackRecord / Litigation / Sanctions /
+  GC) sit between WhyThisRating and HandoffCard.
+- **Batch 1.3 — validate → evaluate → handoff CTAs (G5.1 + G6.2, ab3795e):**
+  "Evaluate against my investors" button on detail page header pre-fills
+  evaluate form via URL params (Suspense-wrapped per Next 16). Evaluate
+  results page surfaces "Ready for the investor handoff?" hint card
+  routing back to dashboard list when ≥1 investor passes.
+- **Address-parser fix (8a5a043):** `parseAddressForState` was leaving
+  the city attached to the street ("1259 ALMADEN AVE, SAN JOSE") and
+  Realie's address endpoint 404'd every lookup. New regex strips
+  `, City, ST ZIP` envelope cleanly. Verified across 7 input variants.
+- **Pre-populate VerifiedTrackRecord textarea (cd0674c):** existing
+  verified_flips' submitted_addresses now pre-fill the textarea so the
+  Verify button isn't disabled after a fresh run.
+- **Name-matcher rewrite (bbd4226 + 48d550e):** Realie returns owner
+  names as `LASTNAME, FIRSTNAME-MIDDLE` ("TRUONG, KIM-AN"); lender input
+  is "Firstname Middle Lastname". Old substring-on-space-stripped match
+  failed 100% of cases. Replaced with tokenize + set-inclusion in two
+  files (`verify-core.ts` deed-chain matcher + `validations/route.ts`
+  borrower-linked-to-entity input warning). Three Truong properties
+  now correctly resolve to "Verified — still owns".
+- **Canonical-name dedup (00021 migration + this commit):** Same root
+  cause as the matcher bug, but at the dedup-key layer. Old
+  `normalized_name` (lowercase + collapse-whitespace) made
+  "Kim An Truong" and "TRUONG, KIM AN" produce DIFFERENT keys, so the
+  same person could end up as two borrower rows. Migration adds
+  `canonicalize_name(text, strip_entity_suffixes)` Postgres function +
+  `normalized_canonical` generated column on borrowers / entities /
+  lenders + org-scoped unique indexes. JS `canonicalizeName` in
+  `upsert.ts` mirrors the SQL exactly (12/12 parity tests pass).
+  Discovered + cleaned 2 duplicate entities + 16 duplicate Rocket
+  Mortgage rows during rollout. Length filter relaxed from 2 → 1 after
+  the first-attempt collapsed `S&T Bank` and `F&M Bank` into a single
+  "bank" canonical (real false-positive that surfaced on FDIC data).
+  Global lender uniqueness intentionally deferred — FDIC has multiple
+  legitimate banks with same canonical name + distinct cert numbers.
+
+## Open data-quality questions for Damon (NPLA prep)
+
+These surfaced during the 2026-05-02 Truong validation test. Worth
+confirming with Damon before serious lender outreach since the
+interpretation drives both demo narrative and what the product
+"validates" honestly.
+
+1. **Truong xlsx — what do the addresses represent?** Of the 24 addresses
+   in the "Borrower Track Record" sheet, only 3 (1259 Almaden, 10245
+   Bouvais, 7449 Willowwick) show Kim or her family in Realie's deed
+   chain. The other 20+ properties have unrelated current owners (KIM,
+   AN SOON · CORONA CLAY CO · KIM, AN NGUYEN · LE, AN K · etc.) and
+   Realie's transfer history shows no past Kim ownership. Two
+   interpretations:
+   - (a) **Realie's deed-history coverage gap.** Realie has strong
+     CA current-ownership but historical transfers depend on county
+     scraping. Older flips Kim sold years ago may not surface.
+     **C2 BatchData closes this gap.**
+   - (b) **Insignia's intake template lists financed-but-not-owned
+     properties.** Kim could be a guarantor / co-signer / fund
+     contributor on these without ever taking deed. The demo
+     interpretation matters: validating a "borrower track record"
+     means the borrower OWNED these, not just funded them.
+2. **Co-borrower modeling.** Most TT Investment Properties loans have
+   Kim Thanh Thi Truong as co-borrower (likely wife). Schema is
+   single-guarantor today (G1.2 in roadmap). Does Damon's intake flow
+   need both names persisted in our domain model, or is single-guarantor
+   acceptable for v1? Affects whether we ship G1.2 pre- or post-NPLA.
+3. **Cobalt rate limits.** During the Truong test, Cobalt rate-limited
+   on the entity lookup (429), which left `latest_sos_status='not_found'`
+   for `TT Investment Properties, LLC` despite the entity being real
+   and active. Our backoff path handled it gracefully (1h `next_run_at`
+   delta, "Manual verification recommended" flag on the validation), but
+   demo-day with multiple back-to-back validations could hit this. Worth
+   asking Damon for Cobalt's enterprise tier pricing or whether Insignia
+   has a higher-rate Cobalt account we could use for demo runs.
+4. **Address parser — apartment unit handling.** `71 WEBBER WAY 77,
+   BUENA PARK` returned "Address not found" because the parser doesn't
+   handle the unusual "77" suffix between street name and city. Real-
+   world intake will have edge cases like this — `Apt 5`, `#5`, `Unit 5`,
+   building numbers, mail-drop suffixes. Tracked as part of the
+   address-canonicalization gap in DATA-MODEL.md but worth confirming
+   what shapes Damon sees most often in Insignia's intake flow.
 
 ---
 

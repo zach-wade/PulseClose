@@ -15,6 +15,8 @@
 3. **Signals + overrides are queryable, audit-friendly, and scoped to the right entity.** Property-level facts on the property; borrower-level facts on the borrower; relationship facts on the join.
 4. **Override-and-rerun is the product.** UI corrections to derived signals re-derive risk factors, recompute the tier, and re-run the AI memo automatically.
 5. **All multi-tenant data is org-scoped via RLS.** Foreign keys traverse to `org_id` for policy enforcement; no cross-org leakage.
+6. **Dedup keys are canonical, not literal.** Names enter the system in many formats — Realie returns `LASTNAME, FIRSTNAME-MIDDLE`, SOS returns `LASTNAME, FIRSTNAME`, lender forms produce `Firstname Middle Lastname`. Any equality test against literal text false-negatives. Domain dedup keys (borrowers / entities / lenders) use a canonical form: tokenize on non-alphanumeric, drop entity-suffix tokens (LLC/Inc/etc.) for entity matching, sort, join with single space. The same logic lives in **two places that must stay in lockstep** — Postgres function `canonicalize_name(text, strip_entity_suffixes bool)` (computes the generated `normalized_canonical` column) and JS `canonicalizeName()` in `src/lib/domain/upsert.ts` (used in `WHERE normalized_canonical = $jsCanonical` lookups). See cross-cutting principle 9 in [ROADMAP.md](./ROADMAP.md).
+7. **Vendor data and lender input are matched via tokenize-and-set, never substring.** The same canonical pattern (with single-letter tokens kept for entities, dropped for persons) is used everywhere two names from different sources need comparison — the deed-chain ownership matcher in `src/lib/track-record/verify-core.ts`, the borrower-linked-to-entity input warning, and any future matcher. Substring on lowercased + space-stripped strings is the wrong primitive and will silently break demos.
 
 ---
 
@@ -24,11 +26,17 @@
 
 ```
 borrowers
-  id, org_id, display_name, normalized_name
+  id, org_id, display_name
+  normalized_name        -- generated: lowercase + collapse-whitespace (legacy, kept for backcompat)
+  normalized_canonical   -- generated: canonicalize_name(display_name, false)
+                         -- DEDUP KEY: unique on (org_id, normalized_canonical)
   notes, created_at, updated_at
 
 entities                                  -- legal entities (LLC, Corp, LP, Trust)
-  id, org_id, display_name, normalized_name, state, entity_type
+  id, org_id, display_name, state, entity_type
+  normalized_name        -- generated (legacy)
+  normalized_canonical   -- generated: canonicalize_name(display_name, true)
+                         -- DEDUP KEY: unique on (org_id, normalized_canonical, state)
   formation_date_known, dissolution_date_known
   latest_sos_status, latest_sos_check_at  -- cached from most recent check
   latest_registered_agent
@@ -42,7 +50,13 @@ borrower_entities                          -- M:M with role + ownership %
   created_at, superseded_at
 
 properties
-  id, org_id, address_normalized, address_display
+  id, org_id, address_display
+  address_normalized     -- generated: lowercase + strip-punct + collapse-whitespace
+                         -- KNOWN GAP: not USPS-canonical; "1310 Rosalia Ave" vs "1310 ROSALIA AVENUE"
+                         -- vs "1310 Rosalia Ave, Garden Grove, CA 92840" produce different keys.
+                         -- See ROADMAP.md → "Data integrity — canonical keys" → property
+                         -- address_normalized canonicalization. Mitigation: prefer Realie's
+                         -- addressFull as the canonical when available.
   city, state, zip, apn (nullable)
   latest_avm, latest_avm_check_at         -- cached snapshot
   notes, created_at, updated_at
@@ -57,7 +71,13 @@ property_ownership                         -- historical chain
 
 lenders
   id, org_id (nullable for global FDIC-derived classifiers)
-  display_name, normalized_name
+  display_name
+  normalized_name        -- generated (legacy)
+  normalized_canonical   -- generated: canonicalize_name(display_name, true)
+                         -- DEDUP KEY (org-scoped): unique on (org_id, normalized_canonical) WHERE org_id IS NOT NULL
+                         -- Global FDIC rows (org_id IS NULL) intentionally allow same-canonical-name
+                         -- with distinct fdic_ids — FDIC dataset legitimately has e.g. multiple
+                         -- "Security Bank and Trust" institutions with different cert numbers.
   classification (bank | bridge | private_credit | unknown)
   fdic_id (nullable), nmls_id (nullable)
   notes, created_at, updated_at
@@ -596,7 +616,7 @@ UI auto-updates without refresh (existing polling pattern)
 2. **GC / contractors as first-class.** Lower priority for v1 — `gc_validations` keeps `gc_name` text and we add a `contractors` table later when same GC recurs.
 3. **Cross-org global tables.** `lenders` could partially be global (FDIC list is the same for everyone). Same for some entity data. Not for v1; per-org isolation is simpler and the marginal cost is small.
 4. **Signal key registry.** Adopt a `signal_definitions` table for known keys + their value schemas? Or just enforce in application code? Lean toward application code for v1 (fewer moving parts).
-5. **Property normalization.** What's the canonical `address_normalized` algorithm? USPS normalization library? Simple lower-case + trim + strip-punctuation? Realie may return its own normalized form we can adopt.
+5. **Property `address_normalized` canonicalization.** Today's `normalize_address()` SQL function only strips punctuation + lowercases — same shape of fragility as the original `normalize_text()` (since fixed in 00021 for borrowers/entities/lenders). Same address ingested in different formats creates duplicate property rows. Right answer is USPS-style canonicalization (suffix expansion `Street`/`St`, directional `N`/`North`, unit-separator parsing) plus adopting Realie's `addressFull` as the canonical when present. **Tracked in [ROADMAP.md → Data integrity — canonical keys](./ROADMAP.md#data-integrity--canonical-keys-and-the-matchers-that-enforce-them) → "Property `address_normalized` canonicalization".** ~1-2d.
 
 ---
 
