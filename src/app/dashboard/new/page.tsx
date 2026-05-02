@@ -23,6 +23,7 @@ import {
   Scale,
   Sparkles,
   Shield,
+  Home,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -37,6 +38,10 @@ export default function NewValidationPage() {
   const [gcName, setGcName] = useState("");
   const [gcLicense, setGcLicense] = useState("");
   const [gcState, setGcState] = useState("");
+  // One address per line — sent as string[] to the API. Pre-filled from
+  // doc-ingest extraction when the borrower's intake doc lists properties.
+  // Lender can edit before running.
+  const [propertyAddresses, setPropertyAddresses] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +53,16 @@ export default function NewValidationPage() {
     if (data.gc_name) setGcName(data.gc_name);
     if (data.gc_license_number) setGcLicense(data.gc_license_number);
     if (data.gc_state) setGcState(data.gc_state);
+    if (data.property_addresses && data.property_addresses.length > 0) {
+      // Append, don't replace — lender may have already typed some.
+      setPropertyAddresses((prev) => {
+        const existing = prev.split("\n").map((s) => s.trim()).filter(Boolean);
+        const combined = [...existing, ...data.property_addresses].filter(
+          (addr, i, arr) => arr.indexOf(addr) === i,
+        );
+        return combined.join("\n");
+      });
+    }
     const filledCount = [
       data.borrower_name,
       data.borrower_entity_name,
@@ -55,8 +70,12 @@ export default function NewValidationPage() {
       data.guarantor_name,
       data.gc_name,
     ].filter(Boolean).length;
-    if (filledCount > 0) {
-      toast.success(`Pre-filled ${filledCount} field${filledCount === 1 ? "" : "s"} from the document. Review before running.`);
+    const addressCount = data.property_addresses?.length ?? 0;
+    if (filledCount > 0 || addressCount > 0) {
+      const parts: string[] = [];
+      if (filledCount > 0) parts.push(`${filledCount} field${filledCount === 1 ? "" : "s"}`);
+      if (addressCount > 0) parts.push(`${addressCount} address${addressCount === 1 ? "" : "es"}`);
+      toast.success(`Pre-filled ${parts.join(" + ")} from the document. Review before running.`);
     } else {
       toast.warning("Document parsed but no fields could be extracted with confidence.");
     }
@@ -66,6 +85,11 @@ export default function NewValidationPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    const addressList = propertyAddresses
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     try {
       const res = await fetch("/api/validations", {
@@ -79,6 +103,7 @@ export default function NewValidationPage() {
           gc_name: gcName || null,
           gc_license_number: gcLicense || null,
           gc_state: gcState || null,
+          property_addresses: addressList.length > 0 ? addressList : undefined,
         }),
       });
 
@@ -198,6 +223,37 @@ export default function NewValidationPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
+              <Home className="h-4 w-4" />
+              Property Addresses
+              <span className="text-sm font-normal text-muted-foreground">
+                (optional)
+              </span>
+            </CardTitle>
+            <CardDescription>
+              Borrower&apos;s past or current properties — one per line. We deed-verify
+              ownership against Realie alongside the rest of the validation. Skip
+              this and we&apos;ll auto-discover current holdings via owner-name search;
+              completed flips need addresses to verify.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <textarea
+              className="w-full min-h-[100px] rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none disabled:opacity-50"
+              placeholder={"1310 Rosalia Ave, Garden Grove, CA 92840\n123 Main St, Sunnyvale, CA 94089\n…"}
+              value={propertyAddresses}
+              onChange={(e) => setPropertyAddresses(e.target.value)}
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground">
+              One per line · max 50 · ~$0.50 per address. Pre-filled from the
+              uploaded doc when present — edit or remove freely before running.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
               <HardHat className="h-4 w-4" />
               General Contractor
               <span className="text-sm font-normal text-muted-foreground">
@@ -257,6 +313,9 @@ export default function NewValidationPage() {
                   { icon: Scale, label: "Litigation screening" },
                   { icon: Shield, label: "Sanctions / PEP screening" },
                   ...(gcName ? [{ icon: HardHat, label: "GC validation" }] : []),
+                  ...(propertyAddresses.trim()
+                    ? [{ icon: Home, label: "Verifying property addresses (deed chain)" }]
+                    : []),
                   { icon: Sparkles, label: "AI risk analysis" },
                 ].map((step, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">

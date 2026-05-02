@@ -75,7 +75,7 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 - **DocIngest already extracts `property_addresses: string[]` but the form ignores that field.** ⚠️ See gap below.
 
 ### Gaps
-- **G1.1 — Property addresses dropped on the floor.** `DocIngest` returns `property_addresses` but [`applyExtraction` in /dashboard/new/page.tsx](../src/app/dashboard/new/page.tsx) doesn't use it. Realie/Regrid does owner-name discovery, which only finds CURRENT holdings — every completed flip on the intake xlsx is invisible. **Fix:** wire `property_addresses` straight into the verification pipeline so deed-chain runs alongside owner-name discovery in Stage 2. (~0.5 day. Highest-leverage demo unlock available.)
+- ~~**G1.1 — Property addresses dropped on the floor.**~~ ✅ **Shipped 2026-05-02.** `DocIngest`'s `property_addresses` extraction now flows into a Property Addresses textarea on the form, sends in the API request, and the validation API runs `verifyAddresses()` in `after()` against the lender-supplied list. AI memo regenerates with verified-flip stats included. Drop the Truong xlsx → see deed-verified flips on the detail page.
 - **G1.2 — Co-borrower / multi-guarantor can't be modeled.** Schema is single-guarantor; Truong example has Kim Thanh Thi Truong on most loans. Needs `validation_borrowers` join (or borrower-multiplicity on `borrower_validations`). Track in [DATA-MODEL.md](./DATA-MODEL.md). (~1 day.)
 - **G1.3 — No "have we seen this borrower" check.** Lender can re-validate a borrower they did 3 weeks ago without realizing it. (B4 below addresses.)
 
@@ -103,7 +103,7 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 - Inline progress card during validation creation (each pillar shows its loader). ✅
 
 ### Gaps
-- **G2.1 — Verified-flips deed-chain is a separate manual step.** Today it's pasted into VerifiedTrackRecord on the detail page after the run completes. Should be one Stage 1+2 motion: doc-ingest → addresses → verified flips run in parallel with the rest. (See G1.1.)
+- ~~**G2.1 — Verified-flips deed-chain is a separate manual step.**~~ ✅ **Shipped 2026-05-02 with G1.1.** When intake addresses are supplied, deed-verification runs in `after()` alongside the rest of the validation pipeline. The manual VerifiedTrackRecord paste flow remains for top-ups.
 - **G2.2 — TransUnion address validation pending Noah's logins.** Adapter is scoped, build is ~1 day once logins land.
 - **G2.3 — GC outside CA is manual.** Multi-state adapters (FL/TX/NY) are post-NPLA / customer-driven.
 
@@ -336,11 +336,11 @@ A single ordered list. Each item names the journey stage it lives at, the strate
 0. **Bug bash + UX polish.** Anything caught in real-use sessions ships within hours. Live-fix culture, not weekly cadence. (Recent example: AI memo `severity` schema widening shipped same-day.)
 
 **Batch 1 — Close the journey (5-6 days). Goal: one continuous flow from intake to handoff.**
-1. **G1.1 + G2.1 — Doc-ingest addresses → Verified Track Record at run time.** Closes the address paradox; deed-verified flips appear on first submit. 0.5 day. *Stage 1+2.*
+1. ~~**G1.1 + G2.1 — Doc-ingest addresses → Verified Track Record at run time.**~~ ✅ Shipped 2026-05-02. Deed-verified flips appear automatically on first submit; AI memo regenerates with verified-flip stats. *Stage 1+2.*
 2. **G3.1 — Pull VerifiedTrackRecord above the fold** + auto-populate. 0.5 day. *Stage 3.*
 3. **G5.1 — "Evaluate against my investors →" CTA** on detail page. 0.5 day. *Stage 5.*
 4. **G6.2 — "Generate handoff for top-match" CTA** on evaluate results. 0.5 day. *Stage 6.*
-5. **G3.5 — Hide standalone single-check pages** (move to a "Tools" submenu or delete). 0.5 day. *Cross-cutting.*
+5. ~~**G3.5 — Hide standalone single-check pages**~~ ✅ Shipped 2026-05-02 (sidebar nav cleanup). Page files unlinked but kept; delete in a follow-up if confirmed unused.
 6. **B5 — Activity feed UI** + per-detail-page strip. 2 days. *Cross-cutting workspace + closes G3.3.*
 7. **G3.2 — "Send share link" CTA** with Resend template. 0.5 day. *Stage 3.*
 

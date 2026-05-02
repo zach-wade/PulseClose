@@ -23,6 +23,8 @@ import { emitActivity } from "@/lib/events/emit";
 import { materializeLitigationCases } from "@/lib/litigation/materialize";
 import { buildGCSummary } from "@/lib/gc/summary";
 import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
+import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
+import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
 // Allow up to 60s for vendor API calls + AI analysis
 export const maxDuration = 60;
@@ -75,7 +77,18 @@ export async function POST(request: Request) {
     gc_name,
     gc_license_number,
     gc_state,
+    property_addresses,
   } = body;
+
+  // Optional addresses pulled from intake doc (or hand-typed). We deed-verify
+  // these in after() — the response stays snappy and the detail page picks up
+  // verified_flips on its next poll cycle. Cap matches the share-link path.
+  const addressesToVerify: string[] = Array.isArray(property_addresses)
+    ? property_addresses
+        .map((a: unknown) => (typeof a === "string" ? a.trim() : ""))
+        .filter((a: string) => a.length > 0)
+        .slice(0, MAX_ADDRESSES)
+    : [];
 
   // Check plan limits
   const { data: org } = await supabase
@@ -559,39 +572,134 @@ export async function POST(request: Request) {
     // the work alive in Vercel serverless past the response — a plain
     // fire-and-forget promise was getting killed when the function returned,
     // which is why some validations were missing AI memos.
+    //
+    // When the lender supplied addresses to deed-verify, we SKIP this initial
+    // memo and let the verifyAddresses block (10b below) regenerate the memo
+    // after it inserts verified_flips. Otherwise the two `after()` blocks
+    // race and the staler memo can win the final UPDATE. The verify block
+    // calls regenerateAiMemoForValidation which produces a strictly richer
+    // memo anyway (it includes verified-flip stats).
     const validationId = validation.id;
-    after(() =>
-      withErrorLog(`validations.aiAnalysis[${validationId}]`, async () => {
-        const aiAnalysis = await generateValidationAnalysis({
-          borrower_name,
-          entity_name: borrower_entity_name,
-          guarantor_name: guarantor_name || null,
-          entity_result: entityResult,
-          properties,
-          litigation_results: litigationResults,
-          gc_result: gcResult,
-          sanctions_result: sanctionsResult,
-          experience_tier: experienceTier,
-          overall_status: overallStatus,
-          confidence_score: confidenceScore,
-          risk_factors: factors,
-          tier,
-        });
-        if (aiAnalysis) {
-          // schema_version=2 is stamped inside generateValidationAnalysis;
-          // the 00016 CHECK constraint requires the key, which is set.
-          await supabase
-            .from("borrower_validations")
-            .update({
-              ai_analysis: aiAnalysis,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", validationId);
-        } else {
-          console.warn(`AI analysis returned null for validation ${validationId}`);
-        }
-      }),
-    );
+    const willVerifyAddresses = addressesToVerify.length > 0 && !!process.env.REALIE_API_KEY;
+    if (!willVerifyAddresses) {
+      after(() =>
+        withErrorLog(`validations.aiAnalysis[${validationId}]`, async () => {
+          const aiAnalysis = await generateValidationAnalysis({
+            borrower_name,
+            entity_name: borrower_entity_name,
+            guarantor_name: guarantor_name || null,
+            entity_result: entityResult,
+            properties,
+            litigation_results: litigationResults,
+            gc_result: gcResult,
+            sanctions_result: sanctionsResult,
+            experience_tier: experienceTier,
+            overall_status: overallStatus,
+            confidence_score: confidenceScore,
+            risk_factors: factors,
+            tier,
+          });
+          if (aiAnalysis) {
+            // schema_version=2 is stamped inside generateValidationAnalysis;
+            // the 00016 CHECK constraint requires the key, which is set.
+            await supabase
+              .from("borrower_validations")
+              .update({
+                ai_analysis: aiAnalysis,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", validationId);
+          } else {
+            console.warn(`AI analysis returned null for validation ${validationId}`);
+          }
+        }),
+      );
+    }
+
+    // 10b. Deed-verify any addresses the lender supplied (intake doc or
+    // typed). Runs in after() so the response stays under the 60s budget
+    // even for the 30+ flips a real Truong-style intake produces. Detail
+    // page polls and verified_flips appear on the next cycle.
+    if (addressesToVerify.length > 0) {
+      const realieKey = process.env.REALIE_API_KEY;
+      if (!realieKey) {
+        console.warn(
+          `[validations] property_addresses supplied but REALIE_API_KEY is unset — skipping deed verification (validation_id=${validation.id})`,
+        );
+        // No deed verification → fall through to a normal AI memo regen so the
+        // user still gets a memo. Reuse the helper for parity.
+        after(() =>
+          withErrorLog(`validations.aiAnalysisFallback[${validationId}]`, () =>
+            regenerateAiMemoForValidation(supabase, validationId),
+          ),
+        );
+      } else {
+        const orgId = profile.org_id;
+        after(() =>
+          withErrorLog(`validations.verifyAddresses[${validationId}]`, async () => {
+            const verified = await verifyAddresses({
+              borrower_name,
+              entity_name: borrower_entity_name,
+              fallback_state: entity_state,
+              addresses: addressesToVerify,
+              realie_key: realieKey,
+            });
+            // Replace any prior rows so a re-submit produces a clean snapshot.
+            await supabase.from("verified_flips").delete().eq("validation_id", validationId);
+            await insertOrThrow(
+              supabase.from("verified_flips").insert(
+                verified.map((v) => ({
+                  validation_id: validationId,
+                  submitted_address: v.submitted_address,
+                  resolved_address: v.resolved_address,
+                  match_status: v.match_status,
+                  acquisition_date: v.acquisition_date,
+                  acquisition_price: v.acquisition_price,
+                  disposition_date: v.disposition_date,
+                  disposition_price: v.disposition_price,
+                  hold_months: v.hold_months,
+                  profit: v.profit,
+                  current_owner: v.current_owner,
+                  grantor_chain: v.grantor_chain,
+                  source: "Realie",
+                  raw_response: v.error ? { _error: true, _message: v.error } : null,
+                })),
+              ),
+              `verified_flips insert at-creation (validation_id=${validationId}, count=${verified.length})`,
+            );
+            // Usage records — same shape as the manual /api/track-record/verify.
+            await supabase.from("usage_records").insert(
+              verified.map(() => ({
+                org_id: orgId,
+                validation_id: validationId,
+                check_type: "address_verify",
+                data_source: "realie",
+                cost_cents: 50,
+                response_status: "success" as const,
+              })),
+            );
+            // Regenerate the AI memo so it references the verified-flip
+            // stats (realized profit, confirmed sales count, etc.). The
+            // initial memo at create-time runs in parallel with this block
+            // and won't see verified flips; this re-run replaces it. The
+            // helper recomputes risk_factors before generating, so we get
+            // the right tier + factors for free.
+            await regenerateAiMemoForValidation(supabase, validationId);
+            void emitActivity(supabase, {
+              orgId,
+              actorUserId: profile.id,
+              verb: "updated",
+              subjectType: "validation",
+              subjectId: validationId,
+              metadata: {
+                addresses_verified: verified.length,
+                source: "intake",
+              },
+            });
+          }),
+        );
+      }
+    }
 
     // 11. Increment usage counter
     await supabase
