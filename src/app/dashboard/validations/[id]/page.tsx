@@ -20,6 +20,7 @@ import {
   Star,
   FileDown,
   Sparkles,
+  Calculator,
 } from "lucide-react";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { TrackRecordTable } from "@/components/dashboard/track-record-table";
@@ -274,7 +275,25 @@ export default function ValidationDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button
+            render={
+              <Link
+                href={{
+                  pathname: "/dashboard/evaluate",
+                  query: {
+                    borrower: data.borrower_name,
+                    state: data.entity_checks[0]?.state ?? "",
+                    experience: data.experience_tier ?? "",
+                  },
+                }}
+              />
+            }
+            title="Evaluate this borrower's deal against your configured investors. Pre-fills borrower name, state, and experience tier; you supply loan-specific terms."
+          >
+            <Calculator className="mr-2 h-4 w-4" />
+            Evaluate against my investors
+          </Button>
           <Button
             variant="outline"
             onClick={() => window.open(`/validations/${data.id}/risk-methodology`, "_blank")}

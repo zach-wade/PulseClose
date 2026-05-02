@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,7 +80,24 @@ function ResultBadge({ result }: { result: "pass" | "conditional" | "fail" }) {
   return <Badge variant="destructive">Ineligible</Badge>;
 }
 
-export default function EvaluatePage() {
+function EvaluatePageInner() {
+  // Pre-fill from URL params when navigated from a validation detail page
+  // (G5.1 — "Evaluate against my investors" CTA). Only borrower-side
+  // signals come through; loan-specific fields stay defaults so the lender
+  // is forced to think about them.
+  const searchParams = useSearchParams();
+  const initialBorrower = searchParams.get("borrower") ?? "";
+  const initialState = searchParams.get("state") ?? "";
+  const initialExperienceParam = searchParams.get("experience");
+  // Validation experience_tier is 1-4 where 1 = most experienced (10+
+  // properties) and 4 = none visible. The evaluate form takes a "deal
+  // count" integer where higher = more experienced. Translate roughly:
+  // tier 1 → 10, tier 2 → 5, tier 3 → 2, tier 4 → 0.
+  const tierToExperience: Record<string, string> = { "1": "10", "2": "5", "3": "2", "4": "0" };
+  const initialExperience = initialExperienceParam && tierToExperience[initialExperienceParam]
+    ? tierToExperience[initialExperienceParam]
+    : "5";
+
   const [recent, setRecent] = useState<RecentEvaluation[]>([]);
   const [investorCount, setInvestorCount] = useState<number | null>(null);
   const [investorLoadError, setInvestorLoadError] = useState<string | null>(null);
@@ -90,17 +108,17 @@ export default function EvaluatePage() {
   // Form state
   const [loanType, setLoanType] = useState<typeof LOAN_TYPES[number]>("bridge");
   const [propertyType, setPropertyType] = useState<typeof PROPERTY_TYPES[number]>("sfr");
-  const [propertyState, setPropertyState] = useState("CA");
+  const [propertyState, setPropertyState] = useState(initialState || "CA");
   const [purchasePrice, setPurchasePrice] = useState("500000");
   const [loanAmount, setLoanAmount] = useState("375000");
   const [arv, setArv] = useState("");
   const [rehabBudget, setRehabBudget] = useState("");
   const [borrowerFico, setBorrowerFico] = useState("720");
-  const [borrowerExperience, setBorrowerExperience] = useState("5");
+  const [borrowerExperience, setBorrowerExperience] = useState(initialExperience);
   const [occupancy, setOccupancy] = useState<typeof OCCUPANCIES[number]>("non_owner_occupied");
   const [loanPurpose, setLoanPurpose] = useState<typeof LOAN_PURPOSES[number]>("purchase");
   const [isRural, setIsRural] = useState(false);
-  const [borrowerName, setBorrowerName] = useState("");
+  const [borrowerName, setBorrowerName] = useState(initialBorrower);
   const [propertyAddress, setPropertyAddress] = useState("");
 
   useEffect(() => {
@@ -423,6 +441,40 @@ export default function EvaluatePage() {
         </Card>
       )}
 
+      {/*
+        G6.2 — once at least one investor passes (or is conditional), prompt
+        the lender to head back to the borrower's validation page where the
+        HandoffCard lives. Dashboard search isn't shipped yet (B3) so we
+        link to the validation list and let the lender click the matching
+        borrower; the CTA's job is to make the validate→evaluate→handoff
+        chain perceptible without leaving the user dead-ended on results.
+      */}
+      {sortedResults && sortedResults.some((r) => r.result === "pass" || r.result === "conditional") && (
+        <Card className="border-info/30 bg-info/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <div className="rounded-md bg-info/10 p-2 shrink-0">
+              <ChevronRight className="h-4 w-4 text-info" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Ready for the investor handoff?</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {borrowerName
+                  ? `Open ${borrowerName}'s validation and use the Handoff card to generate the polished Excel + PDF.`
+                  : "Open the borrower's validation and use the Handoff card to generate the polished Excel + PDF."}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href="/dashboard" />}
+            >
+              Open validation
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {recent.length > 0 && (
         <Card>
           <CardHeader>
@@ -456,5 +508,16 @@ export default function EvaluatePage() {
         </Card>
       )}
     </div>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary on Next 16 — same lesson
+// as PR 14 (Compare page). Without this, prerender of /dashboard/evaluate
+// fails the build and Vercel keeps serving the prior deploy.
+export default function EvaluatePage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+      <EvaluatePageInner />
+    </Suspense>
   );
 }
