@@ -77,7 +77,10 @@ export const aiAnalysisV2 = z.object({
   })),
   risks: z.array(z.object({
     factor_key: z.string(),
-    severity: z.enum(["critical", "moderate", "minor"]),
+    // Mirrors FactorSeverity in src/lib/risk/factors.ts minus "none" (excluded
+    // factors are skipped by the prompt). The AI is told to copy the
+    // severity from the deterministic factor block verbatim.
+    severity: z.enum(["critical", "moderate", "minor", "informational"]),
     narrative: z.string(),
   })),
   recommendations: z.array(z.object({

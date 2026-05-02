@@ -20,6 +20,7 @@ import {
   TrendingDown,
   Minus,
   AlertTriangle,
+  Info,
   Lightbulb,
   CheckCircle2,
   ChevronDown,
@@ -171,7 +172,7 @@ function V2Body({
 }: {
   data: {
     strengths: { title: string; narrative: string }[];
-    risks: { factor_key: string; severity: "critical" | "moderate" | "minor"; narrative: string }[];
+    risks: { factor_key: string; severity: "critical" | "moderate" | "minor" | "informational"; narrative: string }[];
     recommendations: { priority: "must" | "should" | "consider"; narrative: string }[];
   };
   onJumpToFactor?: (factorKey: string) => void;
@@ -209,10 +210,12 @@ function V2Body({
 
       {data.risks.length > 0 && (
         <Section title="Risks">
-          {data.risks.map((r, i) => (
+          {data.risks.map((r, i) => {
+            const Icon = r.severity === "informational" ? Info : AlertTriangle;
+            return (
             <Block key={i} compact={compact} severity={r.severity}>
               <div className="flex items-start gap-2">
-                <AlertTriangle className={`h-4 w-4 mt-0.5 shrink-0 ${severityColor(r.severity)}`} />
+                <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${severityColor(r.severity)}`} />
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium">{humanizeFactorKey(r.factor_key)}</p>
@@ -233,7 +236,8 @@ function V2Body({
                 </div>
               </div>
             </Block>
-          ))}
+            );
+          })}
         </Section>
       )}
 
@@ -282,7 +286,7 @@ function Block({
 }: {
   children: React.ReactNode;
   compact: boolean;
-  severity?: "critical" | "moderate" | "minor";
+  severity?: "critical" | "moderate" | "minor" | "informational";
 }) {
   const accent =
     severity === "critical"
@@ -291,7 +295,9 @@ function Block({
         ? "border-l-amber-400"
         : severity === "minor"
           ? "border-l-yellow-300"
-          : "border-l-slate-200";
+          : severity === "informational"
+            ? "border-l-sky-300"
+            : "border-l-slate-200";
   return (
     <div className={`border-l-2 pl-3 ${accent} ${compact ? "py-1" : "py-1.5"}`}>
       {children}
@@ -299,14 +305,16 @@ function Block({
   );
 }
 
-function severityColor(s: "critical" | "moderate" | "minor"): string {
+function severityColor(s: "critical" | "moderate" | "minor" | "informational"): string {
   if (s === "critical") return "text-red-500";
   if (s === "moderate") return "text-amber-500";
-  return "text-yellow-500";
+  if (s === "minor") return "text-yellow-500";
+  return "text-sky-500";
 }
 
-function severityBadgeColor(s: "critical" | "moderate" | "minor"): string {
+function severityBadgeColor(s: "critical" | "moderate" | "minor" | "informational"): string {
   if (s === "critical") return "border-red-300 text-red-700";
   if (s === "moderate") return "border-amber-300 text-amber-700";
-  return "border-yellow-300 text-yellow-700";
+  if (s === "minor") return "border-yellow-300 text-yellow-700";
+  return "border-sky-300 text-sky-700";
 }

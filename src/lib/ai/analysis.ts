@@ -49,7 +49,7 @@ export interface ValidationAnalysisV2 {
   strengths: { title: string; narrative: string }[];
   risks: {
     factor_key: string;
-    severity: "critical" | "moderate" | "minor";
+    severity: "critical" | "moderate" | "minor" | "informational";
     narrative: string;
   }[];
   recommendations: {
@@ -269,7 +269,7 @@ Respond with a JSON object matching this exact structure (Story Mode v2):
   "risks": [
     {
       "factor_key": "MUST be one of the deterministic factor_keys listed above (entity_status, active_fed_litigation, dismissed_litigation, sanctions_hit, gc_license_issue, extended_hold, lender_concentration, foreclosure_distress, market_outlier, market_outlier_unavailable). Use the literal key, not a label.",
-      "severity": "critical | moderate | minor — match what's in the deterministic factors block above",
+      "severity": "critical | moderate | minor | informational — copy verbatim from the deterministic factors block above",
       "narrative": "1-2 sentence narrative for this risk grounded in the data, calling out specific properties / cases / lenders by name where relevant"
     }
   ],
@@ -318,6 +318,12 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
     if (!Array.isArray(analysis.strengths)) analysis.strengths = [];
     if (!Array.isArray(analysis.risks)) analysis.risks = [];
     if (!Array.isArray(analysis.recommendations)) analysis.recommendations = [];
+    // Defensive: coerce any out-of-enum severity to "minor" so a single bad
+    // value can't blank the entire memo (the v2 schema parse is strict).
+    const allowed = new Set(["critical", "moderate", "minor", "informational"]);
+    analysis.risks = analysis.risks.map((r) =>
+      allowed.has(r.severity) ? r : { ...r, severity: "minor" },
+    );
     return analysis;
   } catch (err) {
     console.error("AI analysis generation failed:", err);
