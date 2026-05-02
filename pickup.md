@@ -369,39 +369,78 @@ real-world test for the lender intake flow.
 
    Recommendation: ship the 2-day bundle (#2 + #3 + #4) before serious
    lender outreach. Ask Damon what Insignia's actual policy is before
-   committing to ZDR cost.
+   committing to ZDR cost. **DECIDE BEFORE A1** — Investor PDF parser
+   adds another Claude consumer and would need to be retrofitted.
 
 2. **What to do with the Truong xlsx** — the user has it; runbook calls for
    testing doc ingest with it. Either Claude tests via API or user walks
    the UI manually.
 
+3. **Print-CSS physical test** — `/handoff/[id]` and
+   `/validations/[id]/risk-methodology` print rules look right in DevTools
+   but page-break behavior under real printer drivers has never been
+   physically verified on paper. Deferred manual item from PR 5. Should
+   happen before NPLA. ~30 min with a printer.
+
+4. **OpenSanctions trial expiry — 2026-05-28** (~26 days). Three options:
+   (a) Pay for OpenSanctions production tier, (b) Fall back to OFAC SDN
+   direct only (free, less coverage), (c) Negotiate trial extension.
+   System auto-falls-back to OFAC if API key fails, so worst case is a
+   silent degradation in sanctions coverage on 5/28. Decide by ~5/24.
+
+5. **Cobalt rate limits during demo days** — 2026-05-02 testing hit a 429
+   on the entity lookup (resolved gracefully via 1h backoff + "Manual
+   verification recommended" flag), but a back-to-back demo session
+   running 5+ validations could hit the same wall in front of a fund.
+   Options: (a) Ask Damon whether Insignia has a higher-rate Cobalt
+   account, (b) Pre-load 2-3 demo validations with cached `liveData=false`
+   so the demo path doesn't depend on live Cobalt calls, (c) Pay for
+   Cobalt enterprise tier. Decide before NPLA dry-runs (~6/15).
+
+6. **Co-borrower / multi-guarantor schema (G1.2)** — Most TT loans have
+   Kim Thanh Thi Truong as co-borrower; today schema is single-guarantor.
+   Ask Damon: does Insignia's intake flow always have ≤1 guarantor, or do
+   we need to model multi-borrower / multi-guarantor before a real
+   customer hits it? ~1d schema change + UI updates if yes.
+
+7. **AI privacy 2-day bundle scope** — same decision as #1, but mechanically:
+   should the depersonalized prompt store the actual borrower name on the
+   server-side and only send placeholders to Claude, or replace before
+   prompt build (cleaner) vs. post-process Claude's output (riskier)? Pick
+   when starting #1.
+
 ---
 
 ## Next session — what to pick up
 
-Per [docs/ROADMAP.md](docs/ROADMAP.md) Recommended sequence, the next batch
-in priority order is **Batch 1 — close the journey** (5-6 days). One
-continuous flow from intake to handoff, instead of 5 disconnected screens.
+**Batch 1 (close the journey) is COMPLETE except B5.** Status as of
+2026-05-02:
 
-- **G1.1 + G2.1 — Doc-ingest addresses → Verified Track Record at run
-  time** (0.5d). DocIngest already extracts `property_addresses: string[]`
-  but the form ignores it. Wire it through so deed-chain runs alongside
-  the 4 pillars on first submit. Closes the address paradox + sets up
-  the demo "drop xlsx → see deed-verified flips" wow.
-- **G3.1 — VerifiedTrackRecord above the fold** (0.5d). Pull the card up
-  next to the Track Record pillar; auto-populate from intake doc.
-- **G5.1 — "Evaluate against my investors →" CTA** on validation detail
-  (0.5d). Routes to `/dashboard/evaluate` with this validation pre-loaded.
-- **G6.2 — "Generate handoff for top-match investor" CTA** on evaluate
-  results (0.5d).
-- **G3.5 — Drop standalone tool pages from sidebar** ✅ (shipped 2026-05-02).
-  Page files unlinked but kept in `/dashboard/{entity,gc,litigation,track-record}/`
-  for now — delete in a follow-up if confirmed unused.
-- **B5 — Activity feed UI** (2d). Universal `activity_events` already
-  populating; this is just the read+render layer. New page `/dashboard/activity`
-  + per-detail-page strip showing borrower-side events (G3.3).
-- **G3.2 — "Send share link" CTA** on detail page (0.5d). Resend template +
-  copy-link modal. Activity event `sent_share_link`.
+- ✅ G1.1 + G2.1 (intake addresses → deed verify at run time, `6db0fbc`)
+- ✅ G3.1 (pillar evidence above operational layer, `b3bd964`)
+- ✅ G3.2 (Send share link to borrower CTA + Resend, `544381a`)
+- ✅ G3.5 (sidebar tools gone, page files deleted in `0943fc7`)
+- ✅ G5.1 (validate → evaluate CTA, `ab3795e`)
+- ✅ G6.2 (evaluate → handoff hint card, `ab3795e`)
+- ✅ Robustness sweep — AI max_tokens defense, Realie owner-filter
+  canonicalization, sent_handoff activity emission, redundant Export
+  PDF button removed, scripts/cleanup-canonical-duplicates.ts (`0943fc7`)
+- ⏳ B5 — Activity feed UI (~2d). All 7 emit verbs populating
+  `activity_events`; just needs read+render layer.
+
+**Recommended next pick:** **B5 Activity feed UI**. It closes G3.3
+(borrower-side activity invisible to lender) and gives the demo the
+"live workspace" feel that turns PulseClose from a one-shot report
+into a daily-driver tool.
+
+Or in priority order if B5 feels too big right now:
+- **Address parser edge cases** (~0.5d, Stage 2). Handle "71 WEBBER WAY 77"
+  and similar — single small case left from the Truong test.
+- **Cobalt entity-name normalizer** (~1h). Adopts the canonical pattern;
+  removes noisy "Registered name X differs from search Y" warnings.
+- **Confidence-score audit + tooltip (G4.2, 0.5d).** Bare percentage today;
+  needs hover with contributing signals OR rename to "Validation
+  completeness" if that's what it actually measures.
 
 Then **Batch 2 — Tier A capital stickiness + outcome substrate** (8-10d):
 - AI privacy 2-day bundle (PII redaction + depersonalized prompt + per-org
@@ -411,9 +450,10 @@ Then **Batch 2 — Tier A capital stickiness + outcome substrate** (8-10d):
   performance.
 - A2 Counter-offer (2d), A3 Borrower capital PDF (1.5d), B1 Watchlist (0.5d).
 
-If asked "what's next?" without direction: **start Batch 1 with G1.1**.
-It's a half-day fix that turns the demo from "current holdings" to
-"deed-verified track record" — the single biggest wow available.
+If asked "what's next?" without direction: **start B5 (activity feed UI)**.
+It's the only Batch 1 item left and is mostly a read+render layer on
+schema that's already live — should be 2 days at the tested velocity but
+could compress to 1 day with focus.
 
 ---
 
@@ -486,7 +526,11 @@ scripts/backfill-litigation-cases.ts    Idempotent litigation_cases backfill
 scripts/find-test-co.ts                 Find Test Co + plan/usage state
 scripts/promote-to-internal.ts          Flip an org to `internal` plan
 scripts/cleanup-broken-validations.ts   Find + delete broken-pillar validations
+scripts/cleanup-canonical-duplicates.ts Productized 00021 duplicate-merger
+                                        (dry-run by default; --apply to execute)
 scripts/review-validation.ts            Pull full snapshot for a validation_id
+scripts/review-validation-quick.ts      Compact one-screen status report —
+                                        pillar counts + ai_analysis + flips
 scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xlsx
 ```
 
@@ -573,9 +617,10 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
   `query_name`. Works when there ARE matches; on a clean run, the
   additional_persons list is invisible. Future fix: persist
   `additional_persons text[]` on `sanctions_checks`.
-- **Multi-borrower validations** — Kim Thanh Thi Truong (co-borrower on
-  most TT Investment Properties loans) can't be modeled cleanly today;
-  schema is single guarantor. Real-world usage will hit this.
+- **Multi-borrower validations (G1.2)** — Kim Thanh Thi Truong
+  (co-borrower on most TT Investment Properties loans) can't be modeled
+  cleanly today; schema is single guarantor. Real-world usage will hit
+  this. Damon-decision item — see Open decisions #6.
 - **Existing pre-PR-13 validations** in any tenant that ran during the
   ~24h silent-insert window have empty pillar tables and can't be back-
   filled (vendor data not reproducible without re-spending API budget).
@@ -583,7 +628,38 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
 - **Print CSS on `/handoff/[id]` and `/validations/[id]/risk-methodology`**
   has not been physically tested on real paper. The print rules look
   right in DevTools but page-break behavior under real printer drivers
-  needs a one-time manual check.
-- **AI privacy posture** — see Open decisions above. Today every borrower
-  name + property + sanctions match goes through Anthropic's Claude. ZDR
-  is on the contract by default; Insignia hasn't been asked their stance.
+  needs a one-time manual check. See Open decisions #3.
+- **AI privacy posture** — see Open decisions #1 + #7. Today every
+  borrower name + property + sanctions match goes through Anthropic's
+  Claude. ZDR is on the contract by default; Insignia hasn't been asked
+  their stance. **Decide before A1 (Investor PDF parser).**
+- **Person-name 2-token false-positive limit.** Token-set matcher treats
+  `"Kim An"` ⊆ `"An Soon Kim"` as a match. Real fix requires DOB / SSN /
+  address fingerprinting. Documented in ROADMAP.md → Data integrity. Not
+  a bug, but the demo narrative should not lean on 2-token matches.
+- **`address_normalized` not USPS-canonical.** Same property ingested in
+  different formats creates duplicate property rows. Tracked in ROADMAP.md
+  Foundations. ~1-2d when worked. Mitigation: prefer Realie's `addressFull`
+  as canonical when available.
+- **Address parser edge cases** — `71 WEBBER WAY 77, BUENA PARK` returned
+  "Address not found" because the `77` between street and city tripped
+  the parser. Fix: tokenize → identify state-code anchor → strip
+  everything between. ~0.5d.
+
+---
+
+## Operational risk register (NPLA pre-flight checklist)
+
+Items to run/check/decide before NPLA. Most are not on the roadmap as
+"build" items — they're operational. Order by deadline.
+
+| Date | Item | Action | Owner |
+|---|---|---|---|
+| ~5/15 | AI privacy posture | Decide ZDR vs 2-day bundle. Ship before A1. | User → Damon question |
+| ~5/24 | OpenSanctions trial (5/28 expiry) | Decide pay vs OFAC-only fallback | User |
+| ~6/15 | Cobalt rate limits for demo | Pre-load demo validations OR upgrade tier OR borrow Insignia's account | User → Damon |
+| ~6/15 | Print test (CSS on paper) | Print `/handoff/[id]` + `/validations/[id]/risk-methodology` on real paper, fix any margins/page-breaks | User |
+| ~6/15 | Migration idempotency on fresh tenant | Spin up a 2nd test org, run all 21 migrations clean, validate one xlsx through full flow | User OR Claude via script |
+| ~6/15 | Insignia testimonial collection | Quotable line from Damon or Noah. Ask through working sessions, don't make it a deliverable. | User |
+| ~6/15 | Demo collateral | One-page leave-behind, 3 talk tracks (lender / fund / consulting), trial-start mechanic | User |
+| ~6/20 | Demo dry-run with Damon | Walk the runbook end-to-end, time it, identify rough edges | User + Damon |
