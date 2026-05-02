@@ -58,30 +58,56 @@ function parseAddressForState(input: string, fallbackState?: string): ResolvedAd
   return { street, state };
 }
 
-function normalizeName(s: string | null | undefined): string {
-  if (!s) return "";
+// Tokenize a name into lowercase alphanumeric tokens. Handles the format
+// drift between Realie ("LASTNAME, FIRSTNAME[-MIDDLE]") and lender input
+// ("Firstname Middle Lastname") by ignoring word order entirely. Strips
+// punctuation, suffixes (LLC/Inc/etc.), and short noise tokens.
+const ENTITY_SUFFIX_TOKENS = new Set([
+  "llc", "inc", "incorporated", "corp", "corporation",
+  "ltd", "limited", "lp", "llp", "trust", "company", "co",
+]);
+
+function tokenize(s: string | null | undefined, opts: { stripEntitySuffixes: boolean }): string[] {
+  if (!s) return [];
   return s
     .toLowerCase()
-    .replace(/[.,;:'"()/\\&]/g, " ")
-    .replace(/\b(llc|inc|incorporated|corp|corporation|ltd|limited|lp|llp|trust|company|co)\b\.?/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2)
+    .filter((t) => !opts.stripEntitySuffixes || !ENTITY_SUFFIX_TOKENS.has(t));
+}
+
+function tokenSetMatch(deedTokens: string[], claimedTokens: string[]): boolean {
+  if (deedTokens.length === 0 || claimedTokens.length === 0) return false;
+  const deedSet = new Set(deedTokens);
+  const claimedSet = new Set(claimedTokens);
+  // The shorter set must be entirely contained in the longer set. With 2+
+  // tokens this avoids false positives on common surnames; with 1 token
+  // we require it to be 3+ chars (so "an" or "jr" alone won't match).
+  const [smaller, larger] =
+    deedSet.size <= claimedSet.size ? [deedSet, claimedSet] : [claimedSet, deedSet];
+  if (smaller.size === 1) {
+    const [only] = smaller;
+    if (only.length < 3) return false;
+    return larger.has(only);
+  }
+  for (const t of smaller) if (!larger.has(t)) return false;
+  return true;
 }
 
 function isPersonMatch(deedName: string | null | undefined, claimed: string): boolean {
   if (!deedName || !claimed) return false;
-  const a = deedName.toLowerCase().replace(/\s+/g, "");
-  const b = claimed.toLowerCase().replace(/\s+/g, "");
-  if (a === b) return true;
-  return a.includes(b) || b.includes(a);
+  return tokenSetMatch(
+    tokenize(deedName, { stripEntitySuffixes: false }),
+    tokenize(claimed, { stripEntitySuffixes: false }),
+  );
 }
 
 function isEntityMatch(deedName: string | null | undefined, claimed: string): boolean {
-  const a = normalizeName(deedName);
-  const b = normalizeName(claimed);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  return a.includes(b) || b.includes(a);
+  if (!deedName || !claimed) return false;
+  return tokenSetMatch(
+    tokenize(deedName, { stripEntitySuffixes: true }),
+    tokenize(claimed, { stripEntitySuffixes: true }),
+  );
 }
 
 function isAnyMatch(
