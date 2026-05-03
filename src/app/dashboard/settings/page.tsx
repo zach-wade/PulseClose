@@ -32,6 +32,7 @@ import {
   Copy,
   RefreshCw,
   Check,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,6 +50,7 @@ interface SettingsData {
     plan: string;
     created_at: string;
     stripe_subscription_id: string | null;
+    ai_extraction_enabled: boolean;
   } | null;
   team: {
     id: string;
@@ -85,6 +87,34 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
   const [copied, setCopied] = useState(false);
+  const [aiToggleSaving, setAiToggleSaving] = useState(false);
+
+  async function handleAiToggle(next: boolean) {
+    if (!data?.org) return;
+    setAiToggleSaving(true);
+    // Optimistic — revert on failure so the UI doesn't lie about state.
+    const prev = data.org.ai_extraction_enabled;
+    setData({ ...data, org: { ...data.org, ai_extraction_enabled: next } });
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ai_extraction_enabled: next }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Update failed" }));
+        toast.error(error || "Update failed");
+        setData({ ...data, org: { ...data.org, ai_extraction_enabled: prev } });
+      } else {
+        toast.success(next ? "AI extraction enabled" : "AI extraction disabled");
+      }
+    } catch {
+      toast.error("Update failed");
+      setData({ ...data, org: { ...data.org, ai_extraction_enabled: prev } });
+    } finally {
+      setAiToggleSaving(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -188,6 +218,44 @@ export default function SettingsPage() {
                       })
                     : "—"}
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                AI &amp; Privacy
+              </CardTitle>
+              <CardDescription>
+                Controls whether borrower documents and risk memos pass through
+                Anthropic Claude. PulseClose redacts SSNs, phones, and emails
+                before any LLM call, and the risk memo prompt uses placeholder
+                tokens for borrower / entity / property names. Use this toggle
+                if your org policy forbids any LLM exposure of borrower data.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">AI extraction &amp; risk memo</p>
+                  <p className="text-xs text-muted-foreground">
+                    {data.org?.ai_extraction_enabled
+                      ? "Enabled — doc ingestion auto-fills the form, share-link uploads extract addresses, and validations get a Story Mode risk memo."
+                      : "Disabled — fill the form manually; validations still run with deterministic risk factors but no AI memo."}
+                  </p>
+                </div>
+                <Button
+                  variant={data.org?.ai_extraction_enabled ? "outline" : "default"}
+                  size="sm"
+                  disabled={aiToggleSaving}
+                  onClick={() =>
+                    handleAiToggle(!data.org?.ai_extraction_enabled)
+                  }
+                >
+                  {data.org?.ai_extraction_enabled ? "Disable" : "Enable"}
+                </Button>
               </div>
             </CardContent>
           </Card>

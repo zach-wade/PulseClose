@@ -26,7 +26,7 @@ export async function regenerateAiMemoForValidation(
   const { data: validation } = await supabase
     .from("borrower_validations")
     .select(
-      "id, borrower_name, borrower_entity_name, guarantor_name, experience_tier, overall_status, confidence_score",
+      "id, org_id, borrower_name, borrower_entity_name, guarantor_name, experience_tier, overall_status, confidence_score",
     )
     .eq("id", validationId)
     .single();
@@ -148,6 +148,7 @@ export async function regenerateAiMemoForValidation(
   const verified_flips: VerifiedFlipForAI[] = (verifiedRes.data ?? []) as VerifiedFlipForAI[];
 
   const aiAnalysis = await generateValidationAnalysis({
+    org_id: validation.org_id,
     borrower_name: validation.borrower_name,
     entity_name: validation.borrower_entity_name ?? "",
     guarantor_name: validation.guarantor_name,

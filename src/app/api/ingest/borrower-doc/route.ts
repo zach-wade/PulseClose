@@ -8,6 +8,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import ExcelJS from "exceljs";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { AiDisabledError, requireAiEnabled } from "@/lib/ai/check-enabled";
+import { scrubPii } from "@/lib/ai/redact-pii";
 
 export const maxDuration = 60;
 
@@ -106,6 +108,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "AI ingestion not configured" }, { status: 503 });
   }
 
+  try {
+    await requireAiEnabled(profile.org_id);
+  } catch (err) {
+    if (err instanceof AiDisabledError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 503 },
+      );
+    }
+    throw err;
+  }
+
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
@@ -128,15 +142,26 @@ export async function POST(request: Request) {
 
   let userContent: Anthropic.Messages.ContentBlockParam[];
   if (isPdf) {
+    // PDFs ship as base64 to Claude's native PDF support; pre-extracting
+    // text would lose table layout that drives address parsing. The
+    // strict-mode answer here is the per-org AI toggle, not regex scrub.
     userContent = [
       await pdfToContentBlock(buffer),
       { type: "text", text: PROMPT },
     ];
   } else if (isExcel) {
-    const text = await spreadsheetToText(buffer);
+    const raw = await spreadsheetToText(buffer);
+    const { text, counts } = scrubPii(raw);
+    if (counts.ssn || counts.phone || counts.email) {
+      console.info(`[ingest] PII redacted from xlsx: ssn=${counts.ssn} phone=${counts.phone} email=${counts.email}`);
+    }
     userContent = [{ type: "text", text: `Spreadsheet contents:\n\n${text}\n\n${PROMPT}` }];
   } else if (isCsv || isText) {
-    const text = csvToText(buffer);
+    const raw = csvToText(buffer);
+    const { text, counts } = scrubPii(raw);
+    if (counts.ssn || counts.phone || counts.email) {
+      console.info(`[ingest] PII redacted from csv/txt: ssn=${counts.ssn} phone=${counts.phone} email=${counts.email}`);
+    }
     userContent = [{ type: "text", text: `Document contents:\n\n${text}\n\n${PROMPT}` }];
   } else {
     return NextResponse.json({ error: "Unsupported file format" }, { status: 415 });

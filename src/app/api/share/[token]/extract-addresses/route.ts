@@ -9,6 +9,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import ExcelJS from "exceljs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { AiDisabledError, requireAiEnabled } from "@/lib/ai/check-enabled";
+import { scrubPii } from "@/lib/ai/redact-pii";
 
 export const maxDuration = 60;
 
@@ -61,11 +63,25 @@ export async function POST(
   const supabase = createAdminClient();
   const { data: validation } = await supabase
     .from("borrower_validations")
-    .select("id")
+    .select("id, org_id")
     .eq("share_token", token)
     .maybeSingle();
   if (!validation) {
     return NextResponse.json({ error: "Share link not found" }, { status: 404 });
+  }
+
+  // The borrower's upload still routes through the LENDER's org policy —
+  // if the lender disabled AI extraction, the borrower must paste manually.
+  try {
+    await requireAiEnabled(validation.org_id);
+  } catch (err) {
+    if (err instanceof AiDisabledError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 503 },
+      );
+    }
+    throw err;
   }
 
   const form = await request.formData();
@@ -86,6 +102,8 @@ export async function POST(
 
   let userContent: Anthropic.Messages.ContentBlockParam[];
   if (isPdf) {
+    // PDFs go to Claude's native PDF support as base64. Pre-redaction
+    // would require extracting text first and losing table structure.
     userContent = [
       {
         type: "document",
@@ -94,10 +112,18 @@ export async function POST(
       { type: "text", text: PROMPT },
     ];
   } else if (isExcel) {
-    const text = await spreadsheetToText(buffer);
+    const raw = await spreadsheetToText(buffer);
+    const { text, counts } = scrubPii(raw);
+    if (counts.ssn || counts.phone || counts.email) {
+      console.info(`[share-extract] PII redacted from xlsx: ssn=${counts.ssn} phone=${counts.phone} email=${counts.email}`);
+    }
     userContent = [{ type: "text", text: `Spreadsheet contents:\n\n${text}\n\n${PROMPT}` }];
   } else if (isText) {
-    userContent = [{ type: "text", text: `Document contents:\n\n${buffer.toString("utf-8")}\n\n${PROMPT}` }];
+    const { text, counts } = scrubPii(buffer.toString("utf-8"));
+    if (counts.ssn || counts.phone || counts.email) {
+      console.info(`[share-extract] PII redacted from text: ssn=${counts.ssn} phone=${counts.phone} email=${counts.email}`);
+    }
+    userContent = [{ type: "text", text: `Document contents:\n\n${text}\n\n${PROMPT}` }];
   } else {
     return NextResponse.json({ error: "Unsupported file format" }, { status: 415 });
   }

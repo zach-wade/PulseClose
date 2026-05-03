@@ -606,6 +606,7 @@ export async function POST(request: Request) {
       after(() =>
         withErrorLog(`validations.aiAnalysis[${validationId}]`, async () => {
           const aiAnalysis = await generateValidationAnalysis({
+            org_id: profile.org_id,
             borrower_name,
             entity_name: borrower_entity_name,
             guarantor_name: guarantor_name || null,

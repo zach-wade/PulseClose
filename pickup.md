@@ -134,43 +134,51 @@ violates them is on a clear path to silent failure.
 
 ---
 
-## Open data-quality questions for Damon (NPLA prep)
+## Action items for outside persons
 
-These surfaced during the 2026-05-02 Truong validation testing. Worth
-confirming with Damon before serious lender outreach since the
-interpretation drives both demo narrative and what the product
-"validates" honestly.
+Single-source list of everything blocked on someone other than Zach +
+Claude. Bundle into the next Damon sync; don't ship anything that
+materially depends on these without an answer.
 
-1. **Truong xlsx — what do the addresses represent?** Of the 24 addresses
-   in the "Borrower Track Record" sheet, only 3 (1259 Almaden, 10245
-   Bouvais, 7449 Willowwick) show Kim or her family in Realie's deed
-   chain. The other 20+ properties have unrelated current owners (KIM,
-   AN SOON · CORONA CLAY CO · KIM, AN NGUYEN · LE, AN K · etc.) and
-   Realie's transfer history shows no past Kim ownership. Two
+### For Damon (Insignia)
+
+1. **Truong xlsx — what do those 24 addresses represent?** Only 3
+   (1259 Almaden, 10245 Bouvais, 7449 Willowwick) show Kim or family
+   in Realie's deed chain. The other 20+ have unrelated current owners
+   (KIM, AN SOON · CORONA CLAY CO · KIM, AN NGUYEN · LE, AN K · etc.)
+   and Realie's transfer history shows no past Kim ownership. Two
    interpretations:
-   - (a) **Realie's deed-history coverage gap.** Realie has strong
-     CA current-ownership but historical transfers depend on county
+   - (a) **Realie deed-history coverage gap.** Realie has strong CA
+     current-ownership but historical transfers depend on county
      scraping. Older flips Kim sold years ago may not surface.
      **C2 BatchData closes this gap.**
-   - (b) **Insignia's intake template lists financed-but-not-owned
-     properties.** Kim could be a guarantor / co-signer / fund
-     contributor on these without ever taking deed. The demo
-     interpretation matters: validating a "borrower track record"
-     means the borrower OWNED these, not just funded them.
-2. **Co-borrower modeling.** Most TT Investment Properties loans have
-   Kim Thanh Thi Truong as co-borrower (likely wife). Schema is
-   single-guarantor today (G1.2 in roadmap). Does Damon's intake flow
-   need both names persisted in our domain model, or is single-guarantor
-   acceptable for v1?
-3. **Cobalt rate limits during demo days.** During testing, Cobalt
-   rate-limited on the entity lookup (429); our backoff path handled
-   it gracefully but a back-to-back demo session could hit the wall in
-   front of a fund. Insignia have a higher-rate Cobalt account, or
-   should we pre-load demo validations with cached `liveData=false`?
-4. **Address parser edge cases** — `71 WEBBER WAY 77, BUENA PARK`
-   returned "Address not found" because `77` between street name and
-   city tripped the parser. What address shapes does Insignia's intake
-   typically have (`Apt 5` / `#5` / `Unit 5` / building numbers)?
+   - (b) **Insignia intake template lists financed-but-not-owned
+     properties.** Kim could be guarantor / co-signer / fund
+     contributor without ever taking deed.
+   Demo narrative depends on the answer — "validates a borrower track
+   record" means OWNED, not just funded.
+
+2. **Co-borrower modeling (G1.2).** Most TT Investment Properties loans
+   have Kim Thanh Thi Truong as co-borrower (likely wife). Schema is
+   single-guarantor today. Does Insignia's intake flow need both names
+   persisted, or is single-guarantor acceptable for v1? ~1d schema
+   change + UI updates if yes. Affects whether G1.2 ships pre- or
+   post-NPLA.
+
+3. **Address parser — typical Insignia intake shapes?** `71 WEBBER WAY
+   77, BUENA PARK` returned "Address not found" because `77` between
+   street and city tripped the parser. What address shapes does
+   Insignia typically receive (`Apt 5` / `#5` / `Unit 5` / building
+   numbers)? Drives G2.4 fix priority and shape coverage.
+
+4. **AI privacy — Insignia's actual policy?** Borrower intake docs +
+   AI memos go through Anthropic. ZDR is on by default. We're shipping
+   the 2-day bundle (PII redaction + depersonalized prompt + per-org
+   toggle) regardless. Knowing Insignia's stance only affects whether
+   we need to pursue ZDR contract or Bedrock-in-tenancy post-NPLA.
+
+5. **Testimonial / quotable line** (from Damon or Noah). Ask through
+   working sessions, don't make it a deliverable. NPLA collateral.
 
 ---
 
@@ -285,10 +293,12 @@ populated within ~30s.
    page-break / margin / color rules.
 6. **NPLA pre-flight, ~1 week out:** verify all 21 migrations idempotent
    on a fresh tenant.
-7. **Decide on AI/data privacy stance** before A1 ships (A1 adds another
-   Claude consumer). Recommended: ship the 2-day bundle (PII redaction
-   + depersonalized prompt + per-org `ai_extraction_enabled` toggle)
-   before any non-Insignia outreach.
+7. **Rotate OpenSanctions trial key** before 2026-05-28. New key in
+   `OPENSANCTIONS_API_KEY` in Vercel env (and `.env.local`). Verify
+   with one validation post-rotation.
+8. **Rotate Cobalt API keys** for demo-day capacity (~6/10). Multiple
+   keys in env; rotation logic TBD when implementing — could be
+   round-robin in `src/lib/adapters/cobalt.ts` or env-swap pre-demo.
 
 ---
 
@@ -333,44 +343,35 @@ populated within ~30s.
 
 ## Open decisions / questions for the user
 
-1. **Insignia + outside AI** — borrower intake docs and AI memos go through
-   Anthropic. Asked but not yet decided. Options:
-   - Anthropic ZDR contract (cleanest answer, ~$5-15K/mo enterprise tier)
-   - **PII redaction pre-flight on doc ingestion** (~1 day, ship-able)
-   - **Depersonalized AI memo prompt** (placeholders not real names, ~0.5 day)
-   - **Per-org `ai_extraction_enabled` toggle** (~0.5 day)
-   - AWS Bedrock with Anthropic in customer tenancy (post-NPLA, big lift)
-
-   Recommendation: ship the 2-day bundle (#2 + #3 + #4) before serious
-   lender outreach. Ask Damon what Insignia's actual policy is before
-   committing to ZDR cost. **DECIDE BEFORE A1** — Investor PDF parser
-   adds another Claude consumer and would need to be retrofitted.
+1. **AI privacy** — ✅ DECIDED 2026-05-02: ship the 2-day bundle
+   (PII redaction on doc ingestion + depersonalized AI memo prompt +
+   per-org `ai_extraction_enabled` toggle) before A1. Sub-decision still
+   open: redact pre-prompt-build (cleaner) vs. post-process Claude
+   output (riskier) — pick when starting the bundle. Insignia's actual
+   policy still pending Damon (see Action items #4); only affects
+   whether we pursue ZDR contract or Bedrock-in-tenancy post-NPLA.
 
 2. **Print-CSS physical test** — `/handoff/[id]` and
-   `/validations/[id]/risk-methodology` print rules look right in DevTools
-   but page-break behavior under real printer drivers has never been
-   physically verified on paper. Deferred manual item from PR 5. Should
-   happen before NPLA. ~30 min with a printer.
+   `/validations/[id]/risk-methodology` print rules look right in
+   DevTools but page-break behavior under real printer drivers has
+   never been physically verified on paper. Deferred manual item from
+   PR 5. ~30 min with a printer. Should happen before NPLA.
 
-3. **OpenSanctions trial expiry — 2026-05-28** (~26 days). Three options:
-   (a) Pay for OpenSanctions production tier, (b) Fall back to OFAC SDN
-   direct only (free, less coverage), (c) Negotiate trial extension.
-   System auto-falls-back to OFAC if API key fails, so worst case is a
-   silent degradation in sanctions coverage on 5/28. Decide by ~5/24.
+3. **OpenSanctions trial (expires 2026-05-28)** — ✅ DECIDED 2026-05-02:
+   rotate keys to extend trial coverage. System auto-falls-back to
+   OFAC SDN direct (free) if a key fails, so even if rotation stops
+   working we degrade gracefully (not silently — `monitor_runs.adapter_results`
+   surfaces fallback). Re-evaluate paid tier post-NPLA if Insignia
+   demos start showing sanctions coverage gaps.
 
-4. **Cobalt rate limits during demo days** — Decide before NPLA dry-runs
-   (~6/15). Options: ask Damon for Insignia's account, pre-load demo
-   validations with `liveData=false` cached, or pay Cobalt enterprise.
+4. **Cobalt rate limits during demo days** — ✅ DECIDED 2026-05-02:
+   rotate keys across multiple Cobalt accounts for demo-day capacity.
+   Cobalt remains the only SOS scraper provider; if rotation hits
+   ceiling during a live demo, fall back to cached `liveData=false`
+   pre-loaded for the validation in question.
 
-5. **Co-borrower / multi-guarantor schema (G1.2)** — Damon-question.
-   ~1d schema change + UI updates if yes. Affects whether we ship G1.2
-   pre- or post-NPLA.
-
-6. **AI privacy 2-day bundle scope** — same decision as #1, but mechanically:
-   should the depersonalized prompt store the actual borrower name on the
-   server-side and only send placeholders to Claude, or replace before
-   prompt build (cleaner) vs. post-process Claude's output (riskier)?
-   Pick when starting #1.
+5. **Co-borrower / multi-guarantor schema (G1.2)** — moved to
+   Action items for outside persons (Damon decision). See above.
 
 ---
 
@@ -380,11 +381,12 @@ populated within ~30s.
 B5 Activity feed UI (149a3dd). The platform now has a continuous flow
 from intake to handoff to monitor to activity feed.
 
-**Recommended next pick:** **AI privacy 2-day bundle** (Open decisions #1).
-This is gating Batch 2 — A1 Investor PDF parser adds another Claude
-consumer that would need to be retrofitted. Decide stance + ship the
-bundle (PII redaction + depersonalized prompt + per-org toggle) before
-A1.
+**Recommended next pick:** **AI privacy 2-day bundle** (Open decisions #1
+— stance decided 2026-05-02). Implement PII redaction on doc ingestion
++ depersonalized AI memo prompt + per-org `ai_extraction_enabled`
+toggle. Sub-decision when starting: pre-prompt-build redaction (cleaner)
+vs. post-process Claude output (riskier) — recommend pre-prompt-build.
+This unblocks A1.
 
 **Then Batch 2 — Tier A capital stickiness + outcome substrate (8-10d):**
 - **A1 — Investor PDF parser** (3d) — NPLA hero feature. Fund manager
@@ -643,11 +645,11 @@ Items to run/check/decide before NPLA. Most are not on the roadmap as
 
 | Date | Item | Action | Owner |
 |---|---|---|---|
-| ~5/15 | AI privacy posture | Decide ZDR vs 2-day bundle. Ship before A1. | User → Damon question |
-| ~5/24 | OpenSanctions trial (5/28 expiry) | Decide pay vs OFAC-only fallback | User |
-| ~6/15 | Cobalt rate limits for demo | Pre-load demo validations OR upgrade tier OR borrow Insignia's account | User → Damon |
+| Now | AI privacy 2-day bundle | ✅ Decided. Ship PII redaction + depersonalized prompt + per-org toggle before A1 starts. | Claude |
+| ~5/27 | OpenSanctions key rotation | ✅ Decided. Rotate trial keys; auto-falls-back to OFAC if rotation fails. | User |
+| ~6/10 | Cobalt key rotation for demo | ✅ Decided. Rotate across multiple keys; cached `liveData=false` as backstop for any single demo validation. | User |
 | ~6/15 | Print test (CSS on paper) | Print `/handoff/[id]` + `/validations/[id]/risk-methodology` on real paper, fix any margins/page-breaks | User |
 | ~6/15 | Migration idempotency on fresh tenant | Spin up a 2nd test org, run all 21 migrations clean, validate one xlsx through full flow | User OR Claude via script |
-| ~6/15 | Insignia testimonial collection | Quotable line from Damon or Noah. Ask through working sessions, don't make it a deliverable. | User |
 | ~6/15 | Demo collateral | One-page leave-behind, 3 talk tracks (lender / fund / consulting), trial-start mechanic | User |
+| Next Damon sync | Outside-person bundle | Walk through Action items #1-5: Truong xlsx interpretation, co-borrower schema, address shapes, Insignia AI policy, testimonial ask | User + Damon |
 | ~6/20 | Demo dry-run with Damon | Walk the runbook end-to-end, time it, identify rough edges | User + Damon |

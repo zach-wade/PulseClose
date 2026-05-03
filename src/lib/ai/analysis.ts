@@ -9,6 +9,13 @@ import type {
 import { extractRealieDetails } from "@/lib/adapters/extract";
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
 import { humanizeFactorKey } from "@/lib/risk/factors";
+import { isAiEnabled } from "@/lib/ai/check-enabled";
+import {
+  buildRedactionMap,
+  redact,
+  unredactObject,
+  findLeftoverTokens,
+} from "@/lib/ai/redact";
 
 // v1 shape — preserved for legacy reads. Old validations keep this forever;
 // new validations write v2 below. Dual-renderer in
@@ -72,6 +79,7 @@ export interface VerifiedFlipForAI {
 }
 
 interface AnalysisInput {
+  org_id: string;
   borrower_name: string;
   entity_name: string;
   guarantor_name: string | null;
@@ -94,6 +102,14 @@ export async function generateValidationAnalysis(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.warn("ANTHROPIC_API_KEY not set — skipping AI analysis");
+    return null;
+  }
+
+  // Per-org strict-mode toggle. Returning null is the same path as a key
+  // miss — callers already guard on null and skip the ai_analysis update,
+  // so the validation lands without a memo (factors + tier still compute
+  // deterministically). UI shows "AI memo disabled for this organization".
+  if (!(await isAiEnabled(input.org_id))) {
     return null;
   }
 
@@ -192,7 +208,39 @@ ${input.sanctions_result.matches.length > 0
 
   const tierWord = input.tier.toLowerCase();
 
+  // Build the PII redaction map BEFORE constructing the prompt. Real
+  // names / addresses / lender labels in the prompt and in the parsed
+  // response get tokenized → sent → unredacted. Claude never sees the
+  // real PII for the memo path.
+  const redactionMap = buildRedactionMap({
+    borrower_name: input.borrower_name,
+    entity_name: input.entity_name,
+    guarantor_name: input.guarantor_name,
+    registered_agent: input.entity_result.registered_agent,
+    property_addresses: [
+      ...input.properties.map((p) => p.property_address),
+      ...flips.map((f) => f.submitted_address),
+      ...flips
+        .map((f) => f.resolved_address)
+        .filter((a): a is string => !!a),
+    ],
+    lender_names: lenderList,
+    gc_name: input.gc_result?.gc_name ?? null,
+    litigation_entity_names: input.litigation_results.map((l) => l.entity_name),
+    sanctions_match_names:
+      input.sanctions_result?.matches.map((m) => m.matched_name) ?? [],
+  });
+
   const prompt = `You are a senior credit analyst at a bridge lending firm. Analyze this borrower validation data and produce a structured risk assessment.
+
+PRIVACY TOKENS — preserve verbatim.
+Borrower / entity / property / lender / GC / litigation party / sanctions
+match identifiers in the data below have been replaced with bracketed
+tokens like [[BORROWER]], [[ENTITY]], [[PROPERTY_1]], [[LENDER_2]],
+etc. Use the EXACT token strings in your narrative — do not paraphrase
+("the borrower"), do not invent names, do not omit the brackets. Anything
+not surrounded by [[ ]] is real and should also be cited verbatim
+(amounts, percentages, dates, factor keys).
 
 CRITICAL INSTRUCTION — risk tier is NOT yours to set.
 The risk tier is computed deterministically from the named factors below
@@ -288,6 +336,10 @@ Rules for the structured output:
 
 Use bridge lending terminology naturally. Be direct and specific — no buzzwords. Reference actual numbers and findings from the data.`;
 
+  // Forward-redact the prompt as the last step before send. The real PII
+  // never leaves this process — Claude only sees [[TOKEN]] placeholders.
+  const redactedPrompt = redact(prompt, redactionMap);
+
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -296,7 +348,7 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
       // with many risk factors; same Claude truncation class as the
       // doc-ingest bug (b3bd964). Bumped defensively before it bites.
       max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: redactedPrompt }],
     });
 
     const text =
@@ -309,7 +361,22 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
       return null;
     }
 
-    const analysis = JSON.parse(jsonMatch[0]) as ValidationAnalysisV2;
+    const parsed = JSON.parse(jsonMatch[0]) as ValidationAnalysisV2;
+    // Reverse-redact every string in the parsed object before any
+    // downstream processing. This is the boundary where placeholders go
+    // back to real names.
+    const analysis = unredactObject(parsed, redactionMap);
+    // Safety: if Claude truncated or paraphrased a token mid-stream, the
+    // unredacted object will still contain [[…]] patterns. Log them so
+    // we can audit, but ship the memo anyway — a single weird placeholder
+    // beats a blank memo.
+    const leftover = findLeftoverTokens(analysis);
+    if (leftover.length > 0) {
+      console.warn(
+        `AI memo unredaction left ${leftover.length} unmapped token(s):`,
+        Array.from(new Set(leftover)).slice(0, 10),
+      );
+    }
     // Hard-overwrite risk_rating with the deterministic tier so the AI
     // can never accidentally publish a tier that disagrees with the
     // factor math, even if the prompt instruction is ignored.
