@@ -318,7 +318,7 @@ Respond with a JSON object matching this exact structure (Story Mode v2):
     {
       "factor_key": "MUST be one of the deterministic factor_keys listed above (entity_status, active_fed_litigation, dismissed_litigation, sanctions_hit, gc_license_issue, extended_hold, lender_concentration, foreclosure_distress, market_outlier, market_outlier_unavailable). Use the literal key, not a label.",
       "severity": "critical | moderate | minor | informational — copy verbatim from the deterministic factors block above",
-      "narrative": "1-2 sentence narrative for this risk grounded in the data, calling out specific properties / cases / lenders by name where relevant"
+      "narrative": "1-2 sentence narrative for this risk grounded in the data, calling out specific properties / cases / lenders using their bracketed tokens (e.g. [[PROPERTY_1]], [[LENDER_2]]) where relevant"
     }
   ],
   "recommendations": [

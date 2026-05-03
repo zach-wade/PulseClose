@@ -25,12 +25,12 @@ export async function isAiEnabled(orgId: string): Promise<boolean> {
     .select("ai_extraction_enabled")
     .eq("id", orgId)
     .maybeSingle();
-  // Fail-open on lookup error — a transient DB hiccup shouldn't strand
-  // the user with the strict-mode error message. If the row genuinely
-  // doesn't exist (orgless caller, which shouldn't happen), default to
-  // disabled so we don't silently leak PII.
-  if (error) return true;
-  if (!data) return false;
+  // Fail CLOSED on lookup error or missing row. This is a privacy gate —
+  // if we can't confirm the org consented to LLM exposure, we don't
+  // expose. A transient DB hiccup that blocks AI extraction shows a
+  // clear error to the user (paste manually); a hiccup that silently
+  // sends opted-out PII to Claude is a privacy violation we can't undo.
+  if (error || !data) return false;
   return data.ai_extraction_enabled !== false;
 }
 

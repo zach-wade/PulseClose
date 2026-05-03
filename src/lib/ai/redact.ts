@@ -40,10 +40,43 @@ export interface RedactionInput {
 // codes, "LLC") would over-match across the prompt.
 const MIN_REAL_LENGTH = 3;
 
+// Entity / lender legal suffix that commonly appears stripped in
+// downstream narrative ("TT Investment Properties" vs the registered
+// "TT Investment Properties, LLC"). Mirrors the canonical-name dedup
+// list in src/lib/domain/upsert.ts; if you extend that list, extend
+// this one too — divergence creates a redaction gap.
+const ENTITY_SUFFIX_RE =
+  /,?\s+(LLC|L\.L\.C\.|Inc\.?|Corp\.?|Corporation|Co\.?|Company|LP|L\.P\.|LLP|Ltd\.?|Limited|Trust)\s*$/i;
+
+function entityVariants(name: string): string[] {
+  const out = [name];
+  const stripped = name.replace(ENTITY_SUFFIX_RE, "").trim();
+  if (stripped && stripped !== name && stripped.length >= MIN_REAL_LENGTH) {
+    out.push(stripped);
+  }
+  return out;
+}
+
+function addressVariants(addr: string): string[] {
+  // Factor explanations and Realie narrative often cite just the street
+  // line ("1310 Rosalia Ave") rather than the full ", City, ST ZIP"
+  // form. Without the street alias, the partial form leaks past the
+  // forward replace.
+  const out = [addr];
+  const street = addr.split(",")[0].trim();
+  if (street && street !== addr && street.length >= MIN_REAL_LENGTH) {
+    out.push(street);
+  }
+  return out;
+}
+
 export function buildRedactionMap(input: RedactionInput): RedactionMap {
   const entries: RedactionEntry[] = [];
   const seen = new Set<string>();
 
+  // Multiple reals can map to the same token (e.g. an address's full
+  // form + street-only form both unredact to the full address — the
+  // last write wins on collision, so order matters: full first).
   function add(token: string, real: string | null | undefined) {
     if (!real) return;
     const trimmed = real.trim();
@@ -54,15 +87,22 @@ export function buildRedactionMap(input: RedactionInput): RedactionMap {
   }
 
   add("[[BORROWER]]", input.borrower_name);
-  add("[[ENTITY]]", input.entity_name);
+  entityVariants(input.entity_name).forEach((v) => add("[[ENTITY]]", v));
   add("[[GUARANTOR]]", input.guarantor_name);
   add("[[REG_AGENT]]", input.registered_agent);
-  add("[[GC]]", input.gc_name);
-  input.property_addresses.forEach((a, i) => add(`[[PROPERTY_${i + 1}]]`, a));
-  input.lender_names.forEach((n, i) => add(`[[LENDER_${i + 1}]]`, n));
-  input.litigation_entity_names.forEach((n, i) =>
-    add(`[[LIT_PARTY_${i + 1}]]`, n),
-  );
+  if (input.gc_name) entityVariants(input.gc_name).forEach((v) => add("[[GC]]", v));
+  input.property_addresses.forEach((a, i) => {
+    const token = `[[PROPERTY_${i + 1}]]`;
+    addressVariants(a).forEach((v) => add(token, v));
+  });
+  input.lender_names.forEach((n, i) => {
+    const token = `[[LENDER_${i + 1}]]`;
+    entityVariants(n).forEach((v) => add(token, v));
+  });
+  input.litigation_entity_names.forEach((n, i) => {
+    const token = `[[LIT_PARTY_${i + 1}]]`;
+    entityVariants(n).forEach((v) => add(token, v));
+  });
   input.sanctions_match_names.forEach((n, i) =>
     add(`[[SANCTIONS_MATCH_${i + 1}]]`, n),
   );
@@ -93,16 +133,27 @@ export function redact(text: string, map: RedactionMap): string {
 
 const TOKEN_RE = /\[\[[A-Z_0-9]+\]\]/g;
 
+// Token → real lookup. When the same token has multiple aliases (e.g.
+// [[PROPERTY_1]] = full + street form), the FIRST entry wins so the
+// canonical/longest form is what the unredacted memo shows.
+function buildByToken(map: RedactionMap): Map<string, string> {
+  const byToken = new Map<string, string>();
+  for (const e of map.entries) {
+    if (!byToken.has(e.token)) byToken.set(e.token, e.real);
+  }
+  return byToken;
+}
+
 export function unredactString(text: string, map: RedactionMap): string {
   if (map.entries.length === 0) return text;
-  const byToken = new Map(map.entries.map((e) => [e.token, e.real]));
+  const byToken = buildByToken(map);
   return text.replace(TOKEN_RE, (m) => byToken.get(m) ?? m);
 }
 
 // Walk a parsed JSON object and unredact every string leaf.
 export function unredactObject<T>(obj: T, map: RedactionMap): T {
   if (map.entries.length === 0) return obj;
-  const byToken = new Map(map.entries.map((e) => [e.token, e.real]));
+  const byToken = buildByToken(map);
   function walk(v: unknown): unknown {
     if (typeof v === "string") {
       return v.replace(TOKEN_RE, (m) => byToken.get(m) ?? m);

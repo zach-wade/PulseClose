@@ -230,10 +230,13 @@ export default function SettingsPage() {
               </CardTitle>
               <CardDescription>
                 Controls whether borrower documents and risk memos pass through
-                Anthropic Claude. PulseClose redacts SSNs, phones, and emails
-                before any LLM call, and the risk memo prompt uses placeholder
-                tokens for borrower / entity / property names. Use this toggle
-                if your org policy forbids any LLM exposure of borrower data.
+                Anthropic Claude. PulseClose strips SSNs, phones, and emails
+                from spreadsheet / CSV inputs before sending (PDFs go to
+                Claude&apos;s native PDF support intact), and the risk memo
+                prompt uses placeholder tokens for borrower / entity /
+                property / lender names so Claude never sees them. Use this
+                toggle if your org policy forbids any LLM exposure of
+                borrower data, including via PDF.
               </CardDescription>
             </CardHeader>
             <CardContent>
