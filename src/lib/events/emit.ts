@@ -36,6 +36,8 @@ export type ActivityVerb =
   | "uploaded_photo"
   | "uploaded_document"
   | "reported_outcome"
+  | "subscribed_to_monitor"
+  | "unsubscribed_from_monitor"
   | "overrode_factor"
   | "compared"
   | "regenerated_memo";

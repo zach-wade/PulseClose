@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { emitActivity } from "@/lib/events/emit";
 
 export async function GET(
   _request: Request,
@@ -40,6 +41,7 @@ interface PutBody {
   enabled?: boolean;
   cadence?: "daily" | "weekly" | "monthly";
   notify_emails?: string[];
+  critical_only?: boolean;
 }
 
 export async function PUT(
@@ -66,7 +68,7 @@ export async function PUT(
 
   const { data: existing } = await supabase
     .from("monitor_subscriptions")
-    .select("id")
+    .select("id, enabled")
     .eq("validation_id", id)
     .maybeSingle();
 
@@ -75,6 +77,7 @@ export async function PUT(
     if (body.enabled !== undefined) updates.enabled = body.enabled;
     if (body.cadence !== undefined) updates.cadence = body.cadence;
     if (body.notify_emails !== undefined) updates.notify_emails = body.notify_emails;
+    if (body.critical_only !== undefined) updates.critical_only = body.critical_only;
     const { data, error } = await supabase
       .from("monitor_subscriptions")
       .update(updates)
@@ -82,6 +85,18 @@ export async function PUT(
       .select("*")
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // Emit only when the enabled bit actually flips so cadence / email
+    // edits don't spam the activity feed.
+    if (body.enabled !== undefined && body.enabled !== existing.enabled) {
+      void emitActivity(supabase, {
+        orgId: profile.org_id,
+        actorUserId: profile.id,
+        verb: body.enabled ? "subscribed_to_monitor" : "unsubscribed_from_monitor",
+        subjectType: "validation",
+        subjectId: id,
+        metadata: { subscription_id: existing.id, scope: "validation" },
+      });
+    }
     return NextResponse.json(data);
   }
 
@@ -95,10 +110,19 @@ export async function PUT(
       enabled: body.enabled ?? true,
       cadence: body.cadence ?? "weekly",
       notify_emails: body.notify_emails ?? [profile.email],
+      critical_only: body.critical_only ?? false,
       next_run_at: new Date().toISOString(),  // first run on next cron tick
     })
     .select("*")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "subscribed_to_monitor",
+    subjectType: "validation",
+    subjectId: id,
+    metadata: { subscription_id: data.id, scope: "validation" },
+  });
   return NextResponse.json(data, { status: 201 });
 }

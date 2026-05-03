@@ -482,7 +482,11 @@ export default function ValidationDetailPage() {
       <HandoffCard validationId={data.id} initial={data.handoff_data} />
 
       {/* Continuous monitoring */}
-      <MonitorCard validationId={data.id} />
+      <MonitorCard
+        validationId={data.id}
+        borrowerId={data.primary_borrower_id}
+        borrowerName={data.borrower_name}
+      />
 
       {/* Deal outcome (E1) — what actually happened to this loan after
           the validation ran. Drives reputation, performance, and

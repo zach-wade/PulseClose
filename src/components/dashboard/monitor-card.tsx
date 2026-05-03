@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Bell, BellOff, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Bell, BellOff, AlertTriangle, CheckCircle2, Eye } from "lucide-react";
 
 interface MonitorChange {
   field: string;
@@ -33,6 +33,19 @@ interface MonitorSubscription {
   next_run_at: string;
   last_run_at: string | null;
   notify_emails: string[];
+  critical_only?: boolean;
+}
+
+// Borrower-level subs are templates — they have no next_run_at /
+// last_run_at because the cron skips them. Reuses the same edit
+// controls as the validation-level sub (cadence / recipients /
+// critical_only).
+interface BorrowerSubscription {
+  id: string;
+  enabled: boolean;
+  cadence: "daily" | "weekly" | "monthly";
+  notify_emails: string[];
+  critical_only: boolean;
 }
 
 interface State {
@@ -42,12 +55,20 @@ interface State {
 
 const CADENCES = ["daily", "weekly", "monthly"] as const;
 
-export function MonitorCard({ validationId }: { validationId: string }) {
+interface MonitorCardProps {
+  validationId: string;
+  borrowerId?: string | null;
+  borrowerName?: string | null;
+}
+
+export function MonitorCard({ validationId, borrowerId, borrowerName }: MonitorCardProps) {
   const [state, setState] = useState<State>({ subscription: null, runs: [] });
   const [loading, setLoading] = useState(true);
   const [emailInput, setEmailInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [borrowerSub, setBorrowerSub] = useState<BorrowerSubscription | null>(null);
+  const [borrowerBusy, setBorrowerBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -58,10 +79,27 @@ export function MonitorCard({ validationId }: { validationId: string }) {
       setLoading(false);
     }
   }
+  async function loadBorrowerSub() {
+    if (!borrowerId) return;
+    try {
+      const res = await fetch(`/api/borrowers/${borrowerId}/monitor`);
+      if (res.ok) {
+        const { subscription } = (await res.json()) as {
+          subscription: BorrowerSubscription | null;
+        };
+        setBorrowerSub(subscription);
+      }
+    } catch {
+      // Soft-fail — the borrower-level UI is a nice-to-have on top of
+      // the per-validation card; if it can't load, hide rather than
+      // block the whole card.
+    }
+  }
   useEffect(() => {
     load();
+    loadBorrowerSub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validationId]);
+  }, [validationId, borrowerId]);
 
   async function update(patch: Partial<MonitorSubscription>) {
     setBusy(true);
@@ -78,6 +116,27 @@ export function MonitorCard({ validationId }: { validationId: string }) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function updateBorrower(patch: Partial<BorrowerSubscription>) {
+    if (!borrowerId) return;
+    setBorrowerBusy(true);
+    try {
+      const res = await fetch(`/api/borrowers/${borrowerId}/monitor`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error(`Borrower watchlist update failed (${res.status})`);
+      const { subscription } = (await res.json()) as {
+        subscription: BorrowerSubscription | null;
+      };
+      setBorrowerSub(subscription);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBorrowerBusy(false);
     }
   }
 
@@ -191,6 +250,15 @@ export function MonitorCard({ validationId }: { validationId: string }) {
                   Add
                 </Button>
               </div>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                <input
+                  type="checkbox"
+                  checked={sub.critical_only ?? false}
+                  disabled={busy}
+                  onChange={(e) => update({ critical_only: e.target.checked })}
+                />
+                Email only on <span className="font-medium">critical</span> changes (entity dissolved, sanctions hit, new active federal litigation)
+              </label>
             </div>
 
             {lastRun && (
@@ -230,6 +298,68 @@ export function MonitorCard({ validationId }: { validationId: string }) {
               </div>
             )}
           </>
+        )}
+
+        {/* B1 — borrower watchlist. Lets the lender opt every FUTURE
+            validation for this borrower into monitoring with one click,
+            so a re-engaged deal months later doesn't lose the lock-in. */}
+        {borrowerId && (
+          <div className="pt-3 border-t border-border/50 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  Watch this borrower
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {borrowerSub?.enabled
+                    ? `Every new validation for ${borrowerName ?? "this borrower"} auto-enables monitoring (${borrowerSub.cadence}${borrowerSub.critical_only ? ", critical-only" : ""}).`
+                    : `Off — new validations for ${borrowerName ?? "this borrower"} won't auto-enable monitoring.`}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant={borrowerSub?.enabled ? "outline" : "default"}
+                disabled={borrowerBusy}
+                onClick={() =>
+                  updateBorrower({ enabled: !(borrowerSub?.enabled ?? false) })
+                }
+              >
+                {borrowerSub?.enabled ? "Stop watching" : "Watch borrower"}
+              </Button>
+            </div>
+            {borrowerSub?.enabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <select
+                  className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs"
+                  value={borrowerSub.cadence}
+                  onChange={(e) =>
+                    updateBorrower({
+                      cadence: e.target.value as BorrowerSubscription["cadence"],
+                    })
+                  }
+                  disabled={borrowerBusy}
+                >
+                  {CADENCES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={borrowerSub.critical_only}
+                    disabled={borrowerBusy}
+                    onChange={(e) =>
+                      updateBorrower({ critical_only: e.target.checked })
+                    }
+                  />
+                  Critical-only
+                </label>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

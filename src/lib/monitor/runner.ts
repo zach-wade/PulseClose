@@ -60,6 +60,11 @@ interface SubscriptionRow {
   cadence: "daily" | "weekly" | "monthly";
   notify_emails: string[];
   enabled: boolean;
+  // critical_only filters notifyChanges to severity="critical" — present
+  // on B1 borrower-level subs and on validation-level subs that
+  // inherited from one. Defaults false on legacy rows (column added
+  // with default false in 00025).
+  critical_only?: boolean;
 }
 
 const CADENCE_MS: Record<SubscriptionRow["cadence"], number> = {
@@ -391,12 +396,20 @@ export async function notifyChanges(
   publicBaseUrl: string,
 ): Promise<boolean> {
   if (sub.notify_emails.length === 0) return false;
+  // critical_only filters BEFORE deciding whether to send at all — a
+  // borrower-level sub configured for critical-only shouldn't email on
+  // a filing-date drift even though we still recorded the change in
+  // monitor_runs.changes (so the activity feed shows it).
+  const filtered = sub.critical_only
+    ? changes.filter((c) => c.severity === "critical")
+    : changes;
+  if (filtered.length === 0) return false;
   const validationUrl = `${publicBaseUrl}/dashboard/validations/${sub.validation_id}`;
-  const subject = `PulseClose: ${changes.length} change${changes.length === 1 ? "" : "s"} on ${borrower.borrower_name}`;
+  const subject = `PulseClose: ${filtered.length} change${filtered.length === 1 ? "" : "s"} on ${borrower.borrower_name}`;
   const html = buildEmailHtml({
     borrower: borrower.borrower_name,
     entity: borrower.borrower_entity_name,
-    changes,
+    changes: filtered,
     validationUrl,
   });
   return sendEmail({ to: sub.notify_emails, subject, html });

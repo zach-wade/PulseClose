@@ -165,6 +165,55 @@ export async function POST(request: Request) {
     );
   }
 
+  // B1 — borrower watchlist inheritance. If the lender has a
+  // borrower-level monitor subscription on this borrower, materialize a
+  // matching validation-level sub so this new validation is monitored
+  // automatically without the lender remembering to flip the toggle.
+  // Best-effort: a failure here doesn't block validation creation.
+  try {
+    const { data: borrowerSub } = await supabase
+      .from("monitor_subscriptions")
+      .select("cadence, notify_emails, critical_only")
+      .eq("org_id", profile.org_id)
+      .eq("borrower_id", primaryBorrowerId)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (borrowerSub) {
+      const { data: newSub } = await supabase
+        .from("monitor_subscriptions")
+        .insert({
+          validation_id: validation.id,
+          org_id: profile.org_id,
+          enabled: true,
+          cadence: borrowerSub.cadence,
+          notify_emails: borrowerSub.notify_emails ?? [],
+          critical_only: borrowerSub.critical_only ?? false,
+          next_run_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (newSub) {
+        void emitActivity(supabase, {
+          orgId: profile.org_id,
+          actorUserId: profile.id,
+          verb: "subscribed_to_monitor",
+          subjectType: "validation",
+          subjectId: validation.id,
+          metadata: {
+            subscription_id: newSub.id,
+            inherited_from_borrower: true,
+            borrower_id: primaryBorrowerId,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[validations] borrower-monitor inheritance failed (validation=${validation.id}):`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   // 2. Run all checks in parallel via adapter
   const adapter = getAdapter();
 

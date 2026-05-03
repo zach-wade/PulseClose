@@ -38,10 +38,17 @@ export async function GET(request: Request) {
   // Pick up due subscriptions. Cap at 25/run to stay under maxDuration
   // even if a vendor call hangs; remaining due subs roll into the next
   // tick.
+  //
+  // B1 — borrower-level subs (validation_id IS NULL) are templates only;
+  // they're materialized into per-validation subs by the validations
+  // POST handler. The cron skips them so runSubscription never sees a
+  // null validation_id. (Belt + suspenders: the runner also requires a
+  // non-null validation_id to fetch the validation context.)
   const { data: dueSubs } = await supabase
     .from("monitor_subscriptions")
     .select("*")
     .eq("enabled", true)
+    .not("validation_id", "is", null)
     .lte("next_run_at", new Date().toISOString())
     .order("next_run_at", { ascending: true })
     .limit(25);
