@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { InvestorExtractModal } from "./extract-modal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -196,9 +197,16 @@ export default function InvestorsAdminPage() {
                       </Button>
                     </>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={() => startEdit(inv)}>
-                      Edit criteria
-                    </Button>
+                    <>
+                      <InvestorExtractModal
+                        investorId={inv.id}
+                        investorName={inv.display_name}
+                        onAccepted={refresh}
+                      />
+                      <Button size="sm" variant="outline" onClick={() => startEdit(inv)}>
+                        Edit criteria
+                      </Button>
+                    </>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => handleDelete(inv.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />

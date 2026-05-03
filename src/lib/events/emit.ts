@@ -32,6 +32,7 @@ export type ActivityVerb =
   | "downloaded_handoff"
   | "evaluated_deal"
   | "extracted_doc"
+  | "extracted_investor_criteria"
   | "uploaded_photo"
   | "uploaded_document"
   | "reported_outcome"
