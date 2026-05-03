@@ -31,6 +31,7 @@ import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-recor
 import { WhyThisRating } from "@/components/dashboard/why-this-rating";
 import { HandoffCard } from "@/components/dashboard/handoff-card";
 import { MonitorCard } from "@/components/dashboard/monitor-card";
+import { DealOutcomeCard, type DealOutcome } from "@/components/dashboard/deal-outcome-card";
 import { AIMemo } from "@/components/dashboard/ai-memo";
 import { ActivityStrip } from "@/components/dashboard/activity-strip";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
@@ -81,6 +82,7 @@ interface ValidationDetail {
     preparer_name?: string | null;
     preparer_email?: string | null;
   } | null;
+  deal_outcome: DealOutcome | null;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -481,6 +483,11 @@ export default function ValidationDetailPage() {
 
       {/* Continuous monitoring */}
       <MonitorCard validationId={data.id} />
+
+      {/* Deal outcome (E1) — what actually happened to this loan after
+          the validation ran. Drives reputation, performance, and
+          cross-tenant analytics; without it Stage 5+6 are unmeasurable. */}
+      <DealOutcomeCard validationId={data.id} initial={data.deal_outcome} />
 
       {/* Activity on this validation — surfaces borrower-side events
           (share-link sends, monitor runs, signal applications) that the

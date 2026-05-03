@@ -152,6 +152,25 @@ export type HandoffDataV1 = z.infer<typeof handoffDataV1>;
 export const parseHandoffDataV1 = safe(handoffDataV1);
 export const parseHandoffDataV1Strict = strict(handoffDataV1, "handoff_data");
 
+// ── deal_outcomes.outcome_data ────────────────────────────────────────────
+// Per-status optional fields. The `status` column on deal_outcomes is the
+// source of truth for which fields are meaningful; everything in here is
+// optional so a Withdrawn outcome doesn't have to fake a close_date.
+//
+// close_date is ISO date (YYYY-MM-DD), not timestamp — outcome dates are
+// reported by the lender and rarely include time-of-day precision.
+
+export const dealOutcomeDataV1 = z.object({
+  schema_version: schemaVersion,
+  close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  funded_amount: z.number().positive().nullable().optional(),
+  extension_reason: z.string().nullable().optional(),
+  default_cause: z.string().nullable().optional(),
+});
+export type DealOutcomeDataV1 = z.infer<typeof dealOutcomeDataV1>;
+export const parseDealOutcomeDataV1 = safe(dealOutcomeDataV1);
+export const parseDealOutcomeDataV1Strict = strict(dealOutcomeDataV1, "deal_outcome_data");
+
 // ── investor_criteria.criteria_value ──────────────────────────────────────
 // Discriminated union keyed by criteria_key. Caller passes the key alongside
 // the value; we look up the right shape and validate.

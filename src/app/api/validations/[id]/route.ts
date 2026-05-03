@@ -27,6 +27,7 @@ export async function GET(
     sanctionsRes,
     verifiedFlipsRes,
     riskFactorsRes,
+    dealOutcomeRes,
   ] = await Promise.all([
     supabase
       .from("borrower_validations")
@@ -73,6 +74,11 @@ export async function GET(
       .select("*")
       .eq("validation_id", id)
       .order("computed_at", { ascending: false }),
+    supabase
+      .from("deal_outcomes")
+      .select("id, status, outcome_data, lender_user_id, created_at, updated_at")
+      .eq("validation_id", id)
+      .maybeSingle(),
   ]);
 
   if (validationRes.error || !validationRes.data) {
@@ -96,5 +102,6 @@ export async function GET(
     verified_flips: verifiedFlipsRes.data ?? [],
     risk_factors: riskFactors,
     tier,
+    deal_outcome: dealOutcomeRes.data ?? null,
   });
 }
