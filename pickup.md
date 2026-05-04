@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-05-02 end-of-session)
+# PulseClose — Session Pickup (2026-05-04 end-of-session)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
@@ -23,14 +23,10 @@
 SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
 22-23, 2026; ~7 weeks out).
 
-**Production health:** ✅ All 22 PRs since 2026-04-30 live and verified.
-The 2026-05-02 testing pass with the Truong xlsx surfaced 7 bugs that
-got fixed live, plus a comprehensive robustness sweep applying the new
-design principles across the codebase.
+**Production health:** ✅ All commits since 2026-04-30 live and verified.
 
-**Batch 1 (close the journey) — ✅ COMPLETE.** One continuous flow from
-intake to handoff to monitor to activity feed. The platform now feels
-like a live workspace, not a one-shot report.
+**Batch 1 (close the journey) — ✅ COMPLETE 2026-05-02.** One continuous
+flow from intake to handoff to monitor to activity feed.
 
 ```
 Batch 1 ships in order (all 2026-05-02):
@@ -44,6 +40,33 @@ Batch 1 ships in order (all 2026-05-02):
     sent_handoff emit, redundant button, cleanup script)        0943fc7
   B5         activity feed UI + per-detail strip + sidebar      149a3dd
 ```
+
+**AI privacy 2-day bundle — ✅ SHIPPED 2026-05-03.** Per-org
+`ai_extraction_enabled` toggle, regex PII scrub on text doc inputs,
+token-based depersonalization for the AI memo (Claude never sees
+borrower / entity / property names in the memo path). 5 audit-pass
+fixes including a critical address-shortening leak that synthetic
+round-trip testing surfaced.
+
+```
+AI privacy bundle:
+  00022 + check-enabled + redact-pii + redact + settings UI    4515531
+  Audit-pass fixes (fail-closed, alias forms, leak scan)        a277c23
+```
+
+**Batch 2 (capital stickiness + outcome substrate) — ✅ COMPLETE
+2026-05-04.** Three features in sequence:
+
+```
+Batch 2 ships in order (all 2026-05-04):
+  E1   Deal outcomes capture (00023 + dual-log + DealOutcomeCard)  27a31f4
+  A1   Investor PDF parser (00024 + extract.ts + extract-modal)    3f36429
+  B1   Borrower watchlist (00025 + critical_only + inheritance)    3d2c273
+```
+
+E1 unlocks E2/E3/A4/A5 (everything reputation/performance). A1 is the
+NPLA hero feature — Damon can demo a real fund's PDF live. B1 closes
+G7.1 (lock-in evaporation when lender forgets to enable monitoring).
 
 **The matcher/dedup story** (the headline data-quality work):
 ```
@@ -132,6 +155,63 @@ violates them is on a clear path to silent failure.
 - **B5 Activity feed UI (149a3dd):** `GET /api/activity` + `/dashboard/activity`
   feed + per-validation `<ActivityStrip />` + sidebar nav. Closes Batch 1.
 
+### 2026-05-03 — AI privacy 2-day bundle (a277c23)
+
+- **00022 + check-enabled (4515531):** per-org `ai_extraction_enabled`
+  toggle (default true; orgs opt OUT). `requireAiEnabled(orgId)` gates
+  every Claude call (borrower-doc, share-extract, AI memo). 503 with
+  code `AI_DISABLED` for the UI to handle. Settings page gets an "AI &
+  Privacy" card on the Org tab.
+- **redact-pii.ts (4515531):** regex-based scrub of SSN / phone / email
+  from text-derived doc inputs (xlsx / csv / txt). Counts logged.
+  PDFs ride the per-org toggle — pre-extracting text would lose table
+  structure.
+- **redact.ts + analysis.ts (4515531):** token-based depersonalization.
+  borrower / entity / guarantor / registered_agent / property /
+  lender / GC / litigation party / sanctions match names get replaced
+  with `[[TOKEN]]` placeholders BEFORE the prompt is sent. Parsed
+  response walked + unredacted before storage. Leftover-token scan
+  catches model-side token corruption.
+- **Audit-pass fixes (a277c23):** 5 bugs caught reviewing critically.
+  Fail-CLOSED on lookup error (was fail-open, would have leaked PII
+  during DB hiccups). Schema example aligned with token instruction
+  (was contradicting). Settings UI honestly calls out the PDF gap.
+  CRITICAL leak: `1310 Rosalia Ave` (street form) wasn't caught by the
+  full-form `1310 Rosalia Ave, San Jose, CA 95128` map entry — added
+  `addressVariants()` (street alias) + `entityVariants()` (legal-suffix
+  stripped alias). byToken map switched to first-write-wins so
+  `[[PROPERTY_1]]` unredacts to the canonical full address, not the
+  street alias.
+
+### 2026-05-04 — Batch 2 (capital stickiness + outcome substrate)
+
+- **E1 — Deal outcomes capture (27a31f4):** new `deal_outcomes` table
+  (00023) + dual-log (audit_log + activity_events `reported_outcome`).
+  Status enum `withdrawn|funded|extended|repaid|defaulted`. Per-status
+  optional fields in `outcome_data` JSONB (close_date, funded_amount,
+  extension_reason, default_cause). UPSERT on validation_id
+  (idempotent). `DealOutcomeCard` rendered between Monitor and Activity
+  on the validation detail page.
+- **A1 — Investor PDF parser (3f36429):** new
+  `investor_criteria_extractions` audit table (00024). PDF → Claude
+  extract → preview modal → accept-and-supersede flow. First new Claude
+  consumer post-bundle — `requireAiEnabled` enforced; PII scrub
+  applied; no depersonalization needed (criteria are categorical).
+  `extract.ts` produces `{ criteria_key, criteria_value, confidence }`
+  rows. Modal lets user toggle rows + edit JSON inline before save.
+  Token counts persisted for cost analytics.
+- **B1 — Borrower watchlist (3d2c273):** alters `monitor_subscriptions`
+  (00025) — `borrower_id` (nullable FK), `critical_only` (bool),
+  drops `validation_id` NOT NULL, scope_check CHECK (per-validation
+  XOR per-borrower). New `/api/borrowers/[id]/monitor` route. Cron
+  filters `validation_id IS NOT NULL` so it skips template rows.
+  `runner.notifyChanges` filters by severity when `critical_only=true`.
+  `validations` POST reads borrower-level template after `upsertBorrower`
+  and materializes a per-validation sub on every new validation, with
+  `inherited_from_borrower=true` activity metadata. MonitorCard gets a
+  "Watch this borrower" toggle below the per-validation controls;
+  both scopes get a critical-only checkbox.
+
 ---
 
 ## Action items for outside persons
@@ -182,9 +262,9 @@ materially depends on these without an answer.
 
 ---
 
-## Database state (as of 2026-05-02 end-of-session)
+## Database state (as of 2026-05-04 end-of-session)
 
-**Migrations applied (21 total):**
+**Migrations applied (25 total):**
 ```
 00001 foundation                        Core tables
 00002 handle_new_user                   Auto-create user/org on signup
@@ -209,6 +289,11 @@ materially depends on these without an answer.
 00020 internal_plan                     `internal` plan tier (unlimited)
 00021 canonical_name_dedup              canonicalize_name() + normalized_canonical
                                         generated cols + org-scoped UNIQUE indexes
+00022 ai_privacy                        organizations.ai_extraction_enabled toggle
+00023 deal_outcomes                     E1 — outcome capture per validation
+00024 investor_extractions              A1 — investor PDF extraction audit trail
+00025 borrower_monitor                  B1 — monitor_subscriptions.borrower_id +
+                                        critical_only + scope_check
 ```
 
 **Row counts (live as of 2026-05-02):**
@@ -271,32 +356,45 @@ populated within ~30s.
 
 ---
 
-## Manual items the user should do (post-Batch-1)
+## Manual items the user should do (post-Batch-2)
 
-1. **Re-test Batch 1 end-to-end with B5 verification.** Drop Truong xlsx
-   → run validation → on detail page, scroll to bottom: `<ActivityStrip />`
-   should show created + updated events for this run. Click "See all" →
-   routes to `/dashboard/activity?subject_id=<id>`.
-2. **Test Activity feed at `/dashboard/activity`.** Verb-filter pills
-   should work; "Load more" appears when >50 events. Day grouping shows.
-3. **Test Send Share Link** (G3.2). On Truong validation, click
-   "Send to borrower" on VerifiedTrackRecord card; type your own email
-   + a test message; click Send. Should arrive within seconds with the
-   borrower-facing share link. Activity feed gets `sent_share_link` row.
-4. **Test handoff download → activity event.** Download Excel from
-   HandoffCard. Activity feed gets `sent_handoff` row with
-   `metadata.artifact = "excel"`.
-5. **Walk the demo runbook** at
+1. **Smoke-test Batch 2 on prod.**
+   - **E1:** open any validation, scroll to "Deal outcome" card,
+     click "Set outcome" → Funded → enter close_date + funded_amount
+     → Save. Card should re-render with the saved status. `/dashboard/activity`
+     gets a `reported_outcome` row.
+   - **A1:** `/dashboard/evaluate/investors` → "Upload PDF" on a
+     sample investor → upload a real fund's guidelines PDF → preview
+     opens with extracted rows + confidence chips → tweak / deselect
+     → Accept N rows. Investor card should re-render with new
+     criteria; `investor_criteria` rows have `source='pdf_parse'`;
+     `investor_criteria_extractions` has the audit row with token
+     counts.
+   - **B1:** on a validation detail page, scroll to MonitorCard →
+     "Watch this borrower" toggle → Watch borrower. Run a NEW
+     validation for the same borrower (drop the Truong xlsx again) →
+     after POST, the new validation should auto-have an enabled
+     monitor sub with `inherited_from_borrower=true` in the activity
+     metadata. Toggle critical-only on; induce a non-critical change
+     (filing-date drift); confirm no email.
+2. **Re-test Batch 1 / AI privacy bundle end-to-end** if you haven't
+   yet:
+   - Drop Truong xlsx → run validation → AI memo references "Kim An
+     Truong" / "TT Investment Properties, LLC" by full name (round-trip
+     proof). Activity strip shows events.
+   - Open Settings → AI & Privacy → Disable → re-upload xlsx → expect
+     503 with friendly message. Re-enable.
+3. **Walk the demo runbook** at
    `/Users/zachwade/.claude/plans/ok-so-now-what-delightful-lark.md`
    (Phase 1-7). Includes the deferred print test for `/handoff/[id]`
    and `/validations/[id]/risk-methodology` — physically print to verify
    page-break / margin / color rules.
-6. **NPLA pre-flight, ~1 week out:** verify all 21 migrations idempotent
-   on a fresh tenant.
-7. **Rotate OpenSanctions trial key** before 2026-05-28. New key in
+4. **NPLA pre-flight, ~1 week out:** verify all 25 migrations
+   idempotent on a fresh tenant.
+5. **Rotate OpenSanctions trial key** before 2026-05-28. New key in
    `OPENSANCTIONS_API_KEY` in Vercel env (and `.env.local`). Verify
    with one validation post-rotation.
-8. **Rotate Cobalt API keys** for demo-day capacity (~6/10). Multiple
+6. **Rotate Cobalt API keys** for demo-day capacity (~6/10). Multiple
    keys in env; rotation logic TBD when implementing — could be
    round-robin in `src/lib/adapters/cobalt.ts` or env-swap pre-demo.
 
@@ -332,6 +430,10 @@ populated within ~30s.
 | **Sidebar cohesion (G3.5)** | Working | 4 nav items (Validations / Activity / Evaluate / Investors / Usage); standalone tool pages deleted |
 | **Canonical-name dedup (00021)** | Working | borrowers / entities / lenders dedup-keyed by canonical token-sorted form |
 | **Tokenize-and-set name matcher** | Working | verify-core + validations/route + realie owner-search filter |
+| **AI privacy bundle (00022)** | Working | per-org `ai_extraction_enabled` toggle + PII scrub + tokenized memo prompt + leftover-token safety scan |
+| **Deal outcomes capture (E1, 00023)** | Working | DealOutcomeCard between Monitor and Activity; UPSERT on validation_id; dual-log to audit_log + activity_events |
+| **Investor PDF parser (A1, 00024)** | Working | "Upload PDF" on investor card → Claude → preview modal → accept-and-supersede; audit trail in `investor_criteria_extractions` with token counts |
+| **Borrower watchlist (B1, 00025)** | Working | "Watch this borrower" toggle on MonitorCard; new validations auto-inherit; critical-only filter on both scopes |
 | Stripe billing | Working | $299 / $499 / $799 + `internal` (unlimited, SQL-only) |
 | Test Co `internal` plan | Live | Unlimited validations for the founder org |
 | Sanctions card "Names Screened" | Working | Now includes officers/agent derived from matches |
@@ -377,42 +479,45 @@ populated within ~30s.
 
 ## Next session — what to pick up
 
-**Batch 1 — close the journey: ✅ COMPLETE.** All 7 items shipped including
-B5 Activity feed UI (149a3dd). The platform now has a continuous flow
-from intake to handoff to monitor to activity feed.
+**Batch 1 ✅ COMPLETE 2026-05-02.**
+**AI privacy bundle ✅ SHIPPED 2026-05-03.**
+**Batch 2 ✅ COMPLETE 2026-05-04 (E1 + A1 + B1).**
 
-**Recommended next pick:** **AI privacy 2-day bundle** (Open decisions #1
-— stance decided 2026-05-02). Implement PII redaction on doc ingestion
-+ depersonalized AI memo prompt + per-org `ai_extraction_enabled`
-toggle. Sub-decision when starting: pre-prompt-build redaction (cleaner)
-vs. post-process Claude output (riskier) — recommend pre-prompt-build.
-This unblocks A1.
+**Recommended next pick: Batch 3 candidates.** With outcomes captured
+(E1) and the NPLA hero shipped (A1), the next leverage points are
+either reputation (uses E1 row volume) or workspace polish (B2 + B3 +
+the G filler set). Pick by what Damon's seeing in real testing:
 
-**Then Batch 2 — Tier A capital stickiness + outcome substrate (8-10d):**
-- **A1 — Investor PDF parser** (3d) — NPLA hero feature. Fund manager
-  uploads guidelines PDF → Claude extracts criteria → preview → save.
-  Damon can demo this live with a real fund's PDF.
-- **E1 — Deal outcomes capture** (1d) — blocker for everything
-  reputation/performance. Validation detail "Update deal status" button
-  with statuses: Withdrawn / Funded / Extended / Repaid / Defaulted.
-- **A2 — Counter-offer / repricing calculator** (2d).
-- **A3 — Borrower capital-availability PDF** (1.5d).
-- **B1 — Borrower watchlist (one-click monitor)** (0.5d).
+- **A2 — Counter-offer / repricing calculator (2d).** Failed deals get
+  "drop loan $25K → passes at 7.75%" suggestions. Pairs naturally with
+  A1 since both live on the evaluate page.
+- **A3 — Borrower capital-availability PDF (1.5d).** Once eligible at
+  ≥1 investor, generate a borrower-facing single-pager. Stored in
+  `documents` (purpose=`borrower_capital_summary`).
+- **B2 — Portfolio health dashboard (2d).** Tier × flag count grid for
+  the org's borrower book; "first thing the lender opens in the
+  morning." With outcome data flowing in, this can include funded /
+  defaulted counts.
+- **B3 — Validation search + filter + CSV export (2d).** Top-of-
+  dashboard search with autocomplete on borrower / entity / property.
 
-**Smaller fillers (any time):**
-- **Address parser edge cases (G2.4, 0.5d).** Handle `71 WEBBER WAY 77`
-  and similar — single small case left from the Truong test.
-- **Cobalt entity-name normalizer (~1h).** Adopts the canonical pattern;
-  removes noisy "Registered name X differs from search Y" warnings.
-- **Confidence-score audit + tooltip (G4.2, 0.5d).** Bare percentage
-  today; needs hover with contributing signals OR rename to "Validation
+**Smaller fillers (any time, ~half day each):**
+- **G2.4 — address parser edge cases.** Handle `71 WEBBER WAY 77` and
+  similar. Single small case left from the Truong test.
+- **G4.1 — methodology PDF download.** Today opens new tab needing
+  Cmd+P; should be one-click download via server-render.
+- **G4.2 — confidence-score audit + tooltip.** Bare percentage today;
+  needs hover with contributing signals OR rename to "Validation
   completeness".
-- **Methodology PDF download (G4.1, 0.5d).** Today opens new tab needing
-  Cmd+P; should be one-click download via server-render to PDF.
+- **G3.4 — "Add GC after the fact"** action on the detail page.
+- **G7.1 — org-level "monitor every new validation by default"** in
+  Settings (now that B1 has the borrower-level template, an org-level
+  default is the natural extension).
+- **G7.2 — "next run in N hours"** indicator on MonitorCard (~15 min).
 
-**If asked "what's next?" without direction:** decide AI privacy stance
-(Open #1), then ship A1. Both block the highest-leverage NPLA demo
-moment.
+**If asked "what's next?" without direction:** ship A2 + A3 to round
+out the evaluate → handoff arc; demo-day surface area is now the
+limiting factor, not feature count.
 
 ---
 
