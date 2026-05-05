@@ -1,300 +1,234 @@
-# PulseClose -- Product Strategy & Future Ideas
+# PulseClose — Product Strategy & Future Direction
 
-*Internal planning document. Last updated April 2026.*
+**Last updated 2026-05-05.** Replaces the April 2026 version, which
+predated Path B data model, AI memo Story Mode v2, sanctions screening,
+the AI privacy bundle, and Batch 2 (E1 / A1 / B1).
 
----
-
-## Where we are today
-
-PulseClose is a borrower validation platform for bridge lenders, built by a solo technical founder with one design partner: Insignia Capital Corp. The product just crossed the threshold from "demo with stub data" to "real vendor data flowing through the system" in April 2026.
-
-**What works today:**
-
-- **Entity validation** -- Cobalt Intelligence SOS lookup across all 50 states. Returns entity status, formation date, registered agent, last filing date.
-- **Track record verification** -- Regrid owner-name property search surfaces current holdings. ATTOM enriches each property with sale history, acquisition/disposition prices, and hold periods.
-- **Litigation screening** -- CourtListener searches federal courts for bankruptcy filings and lawsuits against borrower entities.
-- **GC validation** -- CSLB scraping for California contractor licenses. Returns license status, classification, disciplinary actions, bond/insurance info.
-- **Billing** -- Stripe integration with three tiers: Starter ($299/mo, 20 checks), Professional ($499/mo, 50 checks), Enterprise ($799/mo, unlimited). Usage metering tracks every vendor API call with org, check type, cost, and timestamp.
-- **AI analysis** -- Claude generates underwriting memos from validation data with confidence scores and experience tier classification (Tier 1-4).
-
-The infrastructure is Next.js on Vercel, Supabase for auth and database, RLS on all tables. The schema is normalized -- separate tables for entity checks, track record entries, GC validations, and litigation checks. No JSONB blobs.
-
-This is early. One design partner, zero revenue, product just started returning real data. But the architecture is sound, the vendor integrations are proven, and the core validation workflow works end to end.
+> Internal planning document. Pairs with [docs/ROADMAP.md](docs/ROADMAP.md)
+> (the journey-organized backlog), [docs/DISTRIBUTION-STRATEGY.md](docs/DISTRIBUTION-STRATEGY.md)
+> (the 2026 distribution playbook), and [pickup.md](pickup.md) (current
+> session state). Read [pickup.md](pickup.md) first if resuming work.
 
 ---
 
-## Current data gaps
+## The brand stack
 
-Being honest about what the product cannot do yet:
+Three brands, one strategy. Get this right; everything else follows.
 
-**Track record is incomplete.** Regrid returns properties currently owned by a borrower entity. ATTOM enriches each address with sale history. But there is no way to search for historical transactions by owner name -- only current holdings. The test borrower (TT Investment Properties) has completed roughly 75 flips over the past decade. PulseClose found 25 current holdings. The 50 completed and sold projects are invisible. This is the single biggest gap in the product. A borrower who has done 75 deals looks like someone who has done 25.
+- **Wade Intel** (parent / authority brand) — `wadeintel.com`. Operator-led lender tech methodology firm. Owns the *category language*.
+  - Newsletter: **Build Buy Borrow** at `buildbuyborrow.substack.com`
+  - Open framework: **5-Concept Loan Framework**, GitHub `wade-intel/loan-framework`, CC BY 4.0
+- **PulseClose** (product) — `pulseclose.com` (WordPress marketing) + `app.pulseclose.com` (Next.js authenticated product). The implementation of the methodology Wade Intel publishes.
+- **Build Buy Borrow** (newsletter) — the distribution flywheel. Authority-first content; PulseClose is sidebar/footer only.
 
-**Litigation is federal only.** CourtListener covers federal courts -- bankruptcy, federal civil suits. Most litigation that matters for bridge lending (mechanic's liens, breach of contract, fraud claims, landlord-tenant disputes) happens at the state level. A borrower with three active state court lawsuits would show as "clear" today.
-
-**GC validation is California only.** CSLB works well for CA contractors, but there is no coverage for any other state. A borrower using a GC in Florida, Texas, or New York gets no validation at all.
-
-**No entity-to-person resolution.** If a borrower operates through five LLCs, PulseClose can validate each LLC individually but cannot discover the full network of entities a person controls. Each LLC is searched in isolation.
-
-**No sanctions or OFAC screening.** The product does not check borrower names or entities against OFAC SDN lists, BIS denied persons, or any other sanctions database. This is a basic compliance check that most lenders expect.
-
-**No foreclosure, lis pendens, or UCC lien data.** ATTOM has these endpoints -- we have the API key -- but the adapters have not been built yet.
-
-**No document verification.** Borrower-submitted documents (insurance certs, financial statements, entity docs) are taken at face value. No OCR extraction, no cross-referencing against validation data.
+The Lenny model: newsletter / framework / open content builds the
+category authority; the product is sold to the audience the authority
+attracts, not by the authority itself.
 
 ---
 
-## Competitive landscape
+## Where we are today (2026-05-05)
 
-| Company | What they do | Relationship to PulseClose |
-|---|---|---|
-| **Elementix** | Borrower intelligence, pre-origination. 109.5M transaction database, signature-based entity resolution across LLCs. | Complementary, not competitive. They focus on borrower sourcing and relationship mapping. Could be a data partner for entity resolution. |
-| **SFR Analytics / Private Lender Radar** | Borrower sourcing and lender market intelligence. Tracks 40K+ lenders and their borrower relationships. | Different product category. They help lenders find borrowers; PulseClose validates borrowers lenders already have. |
-| **Lend Engine** | AI-native loan origination system with built-in borrower validation. | The biggest competitive threat if they execute. An LOS that bundles validation removes the need for a standalone product. Watch closely. |
-| **Middesk** | Horizontal KYB platform. Business identity verification, SOS filings, TIN matching, watchlist screening. | Not lending-specific. No track record, no GC validation, no litigation screening. But they could add it. |
-| **HouseCanary** | Property analytics and valuation. | Adjacent. Complements PulseClose for property-level risk. Not competitive. |
-| **Ocrolus** | Document analysis and data extraction from financial docs. | Complementary. Could solve PulseClose's document verification gap. |
-| **Built Technologies** | Construction draw management and inspection. | Adjacent. Their inspection data could feed into GC validation. $83M revenue, well-funded. |
+PulseClose is a multi-tenant SaaS borrower-validation platform for
+bridge lenders. Live at `app.pulseclose.com`, real vendor data,
+production-stable through 25 migrations. NPLA Atlantic City
+(2026-06-22/23) is the forcing function — ~7 weeks out.
 
-**The gap PulseClose occupies:** No one does combined entity validation + track record verification + GC validation + litigation screening in a single product. GC validation for bridge lending has zero competitors. The question is whether that gap is a real market or a feature that gets absorbed into broader platforms.
+### What works in production
 
----
+**Validation pipeline (Stages 1-3):**
+- **Entity validation** — Cobalt Intelligence SOS lookup, all 50 states. 30s timeout, rate-limit backoff (1h on 429).
+- **Track record verification** — Realie owner-name property search → ATTOM enrichment for sale history. Regrid as fallback. Trust-but-verify deed-chain matching against borrower-submitted addresses.
+- **Litigation screening** — CourtListener (federal courts, bankruptcy + civil). Materialized into structured cards in `litigation_cases`.
+- **GC validation** — CSLB scrape for CA contractors. Other states = manual (multi-state adapters are post-NPLA).
+- **Sanctions / PEP screening** — OpenSanctions API with OFAC SDN direct as auto-fallback. Names Screened includes officers + registered agent from the entity filing.
+- **Risk factors + tier rebuild** — 9 deterministic factors, override-and-rerun via atomic `recompute_risk_factors_atomic` RPC. AI never picks the tier.
+- **AI memo (Story Mode v2)** — strengths / risks / recommendations narrative blocks, regenerates on factor recompute. PII-redacted via token-based depersonalization (Claude never sees real borrower / entity / property names in the memo path).
 
-## Near-term improvements (next 30 days)
+**Lender workflow (Stages 4-7):**
+- **Override-and-rerun** is the product, not a workaround. Lender disagrees, system recomputes atomically, memo regenerates.
+- **Investor evaluation engine** — multi-investor eligibility + leverage matrix + rate adjusters. Pre-filled deal form from validation context.
+- **Investor PDF parser (A1)** — fund manager uploads guidelines PDF, Claude extracts criteria with confidence per row, lender accepts/edits before save. Audit trail in `investor_criteria_extractions`. **NPLA hero feature.**
+- **Investor handoff** — Excel + PDF generation. `sent_handoff` activity event.
+- **Continuous monitoring** — entity SOS, federal litigation, sanctions screens re-run on cadence (daily/weekly/monthly). Per-adapter status tracking. Email on changes. **Critical-only filter** for deal-flow noise control.
+- **Borrower watchlist (B1)** — borrower-level monitoring template auto-inherits into new validations for the same borrower. Closes the lock-in evaporation gap.
+- **Deal outcome capture (E1)** — Withdrawn / Funded / Extended / Repaid / Defaulted with per-status optional fields. **The substrate everything reputation/performance work depends on.**
 
-### 1. BatchData integration -- historical deed search by owner name
+**Workspace primitives:**
+- **Activity feed (B5)** — `/dashboard/activity` + per-validation strip. Universal `activity_events` table; every state change emits.
+- **Universal infra** — `documents` (Supabase Storage), `notification_preferences`, `activity_events` from migration 00017. No per-feature reinventions.
+- **Comparative borrower view (S1)** — side-by-side diff of two validations.
+- **Risk methodology PDF (S5)** — printable methodology view at `/validations/[id]/risk-methodology`.
+- **Auth + RLS** — Supabase, org-scoped, RLS on every table.
+- **Stripe billing** — Starter $299 / Pro $499 / Enterprise $799 / Internal (unlimited, SQL-only). Usage metering on every vendor API call.
 
-**What:** BatchData offers a self-serve API that can search deed records by owner name, returning historical buy/sell transactions. This closes the biggest data gap -- the difference between showing 25 current holdings and showing 75 completed projects.
+### Architecture (corrects April 2026 doc)
 
-**Effort:** ~3 days. New adapter, API integration, merge historical deeds into track record entries.
-
-**Cost:** $0.01 per API call. At current volume, negligible.
-
-**Why now:** This is the single most impactful improvement possible. A borrower's track record is the most important factor in bridge lending underwriting, and we are currently missing 60-70% of it.
-
-### 2. OFAC/sanctions screening
-
-**What:** Check borrower names and entity names against OFAC SDN list and OpenSanctions database. Return clear/match/partial-match with details.
-
-**Effort:** ~2 days. OpenSanctions provides a free bulk download. OFAC SDN list is freely available from Treasury.
-
-**Cost:** Free data. Only cost is storage and matching logic.
-
-**Why now:** Transforms PulseClose from a due diligence tool into a compliance tool. OFAC enforcement on non-bank lenders is intensifying. This is table stakes for any lender with institutional capital.
-
-### 3. Better AI underwriting memos
-
-**What:** Improve the Claude prompt to produce structured memos with specific risk callouts, experience tier justification with supporting evidence, comparable deal analysis, and a clear recommendation summary.
-
-**Effort:** A few hours of prompt engineering and output format iteration.
-
-**Cost:** Marginal increase in token usage, pennies per memo.
-
-**Why now:** The memo is the primary output credit committees see. A better memo makes every other validation more valuable.
-
-### 4. Fix remaining production bugs
-
-**What:** Supabase RLS edge cases (some queries fail silently when profile lookup returns null), error handling for vendor API timeouts, loading states that don't recover gracefully.
-
-**Effort:** 1-2 days.
-
-**Cost:** None.
-
-**Why now:** Before onboarding any paying customer, these need to be solid.
-
-### 5. ATTOM foreclosure/lis pendens endpoints
-
-**What:** ATTOM already provides foreclosure filings and lis pendens data through endpoints we have access to. Build adapter methods to query these per-property and per-borrower.
-
-**Effort:** 1-2 days. Adapter pattern already exists, just new endpoint methods.
-
-**Cost:** Covered under existing ATTOM API key.
-
-**Why now:** Foreclosure history is directly relevant to borrower risk assessment. Free to add with existing credentials.
+- **Path B normalized data model** — borrowers / entities / properties / lenders are FK-referenced from `borrower_validations`. Snapshot tables (`entity_checks`, `track_record_entries`, etc.) carry `org_id` for RLS performance.
+- **JSONB used heavily, with schema versioning** — every JSONB column has a Zod schema in `src/lib/schemas/jsonb.ts`, a `schema_version` field, and a CHECK constraint. (The April doc claim "no JSONB blobs" was always wrong; this is the corrected statement.)
+- **Canonical-name dedup** — `normalized_canonical` generated columns + Postgres `canonicalize_name()` function + JS `canonicalizeName()` mirror. Drift between SQL and JS creates infinite duplicates instead of dedupes.
+- **Tokenize-and-set name matching** — verify-core deed-chain matcher, validations input warning, Realie owner filter all canonical token-subset, never substring.
+- **AI privacy bundle (00022)** — per-org `ai_extraction_enabled` toggle, regex PII scrub on text doc inputs, token-based depersonalization for AI memo. Fails CLOSED on lookup error. See [docs/PRIVACY-POSTURE.md](docs/PRIVACY-POSTURE.md).
+- **Cross-cutting design principles** — 11 codified in [docs/ROADMAP.md](docs/ROADMAP.md). Every new matcher / dedup key / Claude consumer that violates one is on a clear path to silent failure.
 
 ---
 
-## Medium-term features (next quarter)
+## Honest current data gaps
 
-### 1. OpenCorporates integration -- person-to-entity discovery
+The product cannot do these things yet, and saying so to lenders is
+better than overpromising:
 
-**What:** Given a person's name, find all LLCs, corps, and other entities they are listed as an officer, director, or agent for. Resolves the entity network problem.
-
-**Effort:** ~2 days.
-
-**Cost:** Free tier at 200 requests/month. Paid plans start around $2,800/year.
-
-**Dependency:** None. Self-serve API.
-
-### 2. Unicourt -- state court litigation
-
-**What:** State court case search across 40+ states. Covers the civil litigation, mechanic's liens, and breach of contract cases that CourtListener misses.
-
-**Effort:** ~3 days.
-
-**Cost:** ~$500/month.
-
-**Dependency:** Wait until paying customers justify the recurring cost. Federal-only litigation is acceptable for launch; state coverage is the upgrade.
-
-### 3. Multi-state GC validation
-
-**What:** Build scraping adapters for Florida (DBPR), Texas (TDLR), and New York (NYC DOB) contractor licensing boards. Same pattern as CSLB adapter.
-
-**Effort:** ~1 week per state. Each state has a different website structure and data format.
-
-**Cost:** No API cost. Development time only.
-
-**Dependency:** Customer demand by state. Prioritize based on where design partner's borrowers operate.
-
-### 4. PDF report export
-
-**What:** Generate a structured, downloadable PDF validation report. Cover page, executive summary, detailed findings per check type, confidence scores, flags, and sources.
-
-**Effort:** ~3-4 days. PDF generation in Next.js (react-pdf or puppeteer-based).
-
-**Cost:** Negligible compute.
-
-**Dependency:** None, but get the data quality right first. A PDF locks in whatever the product shows.
-
-### 5. Continuous monitoring
-
-**What:** Scheduled polling for changes: entity status changes (SOS filings), new litigation filings, GC license expirations or suspensions. Alert lenders when a borrower's risk profile changes mid-loan.
-
-**Effort:** ~1 week. Requires job scheduling, change detection logic, and notification system.
-
-**Cost:** Incremental API costs per monitored entity.
-
-**Dependency:** Meaningful customer base to justify the infrastructure. This converts one-time validation fees into recurring subscription revenue -- but only matters when there are enough borrowers being monitored.
-
-### 6. LOS API integrations
-
-**What:** Webhook or REST API that loan origination systems (Bryt, LendingWise, Baseline) can call to trigger validation and receive structured results.
-
-**Effort:** ~1 week for API design, auth, and documentation.
-
-**Cost:** None.
-
-**Dependency:** Requires those LOS vendors to care about PulseClose. This is a BD problem, not a technical one. Build it when a lender asks for it because they use a specific LOS.
+- **Historical deed coverage is partial.** Realie has strong CA current-ownership but historical transfers depend on county scraping. Older flips a borrower sold years ago may not surface. **C2 BatchData ($200-500/mo) closes this** — vendor-cost decision pending.
+- **Litigation is federal-only.** Most litigation that matters for bridge lending (mechanic's liens, breach of contract, lis pendens, foreclosures) happens at the state level. Roadmap C6 splits the litigation pillar by category once we add a state-court vendor.
+- **GC validation is California-only.** Multi-state CSLB-equivalent adapters (FL/TX/NY) are post-NPLA / customer-driven.
+- **Co-borrower / multi-guarantor schema (G1.2)** — single guarantor field today. Most TT Investment Properties loans have Kim Thanh Thi Truong as co-borrower (likely wife). Damon-decision item.
+- **Address parser edge cases** — `71 WEBBER WAY 77, BUENA PARK` shape returned "Address not found" because the `77` between street and city tripped the parser. Surfaced during 2026-05-02 Truong testing. ~0.5d to fix.
+- **Person-name 2-token false positive limit** — token-set matcher treats `"Kim An"` ⊆ `"An Soon Kim"` as a match. Real fix requires DOB / SSN / address fingerprinting (deferred — privacy implications).
+- **`address_normalized` not USPS-canonical** — same property in different formats creates duplicate property rows. Roadmap Foundations item.
+- **Print CSS not physically tested** — handoff + risk-methodology print rules look right in DevTools but page-break behavior under real printer drivers untested. Pre-NPLA manual item.
 
 ---
 
-## Market expansion opportunities
+## Strategic position
 
-Ranked by attractiveness based on reuse of existing engine, market size, and go-to-market feasibility:
+### Distribution thesis (per memory + DISTRIBUTION-STRATEGY)
 
-| Rank | Market | Size / Growth | Engine Reuse | Why it works | Key risk |
-|------|--------|---------------|-------------|-------------|----------|
-| 1 | **DSCR rental loans** | 54% YoY growth in origination volume | ~90% | Same borrowers, same entities, same GCs. Add rental income verification. | Borrower profiles slightly different (buy-and-hold vs. flip). |
-| 2 | **SBA 7(a) lending** | $25B/year program | ~80% | New SBA verification requirements create regulatory tailwind. Entity + litigation checks directly applicable. | SBA ecosystem has established vendors. Breaking in requires compliance certification. |
-| 3 | **Ground-up construction** | Natural extension of bridge lending | ~85% | GC validation module is a genuine differentiator here. Construction lenders have the most to lose from GC fraud. | Longer project timelines mean monitoring becomes essential, not optional. |
-| 4 | **UK bridging finance** | GBP 13.4B market, 150+ lenders | ~60% | Fragmented market with no dominant validation platform. | Requires Companies House + Land Registry integrations. Different legal framework. Non-trivial localization. |
-| 5 | **Insurance / subcontractor validation** | Large but diffuse | ~40% | Sell GC validation as an API to insurance carriers underwriting contractor policies. | Different buyer, different sales motion. Distraction risk. |
+**Capital-provider endorsement is the only organic distribution path.**
+Lender-peer outreach doesn't work in this niche; lenders trust
+funds-they-borrow-from + their existing CRM more than any product
+demo. Therefore:
 
----
+- Damon-only outreach pre-NPLA (no independent lender / fund outreach)
+- Insignia is the design partner; their endorsement is the wedge for the next 5-10 lenders
+- NPLA is the forcing function for the first quote-able testimonial
+- Wade Intel = methodology authority. PulseClose = implementation. Build Buy Borrow = distribution flywheel.
 
-## Long-shot bets (12-24 months)
+Full mechanics in [docs/DISTRIBUTION-STRATEGY.md](docs/DISTRIBUTION-STRATEGY.md).
 
-### 1. Cross-lender borrower reputation graph
+### Why this niche, why now
 
-**The idea:** As more lenders validate borrowers through PulseClose, accumulate anonymized loan performance outcomes. Did the borrower complete the project on time? Was there a default? Over time, this becomes a "bridge lending FICO" -- a reputation score no individual lender can build alone.
+- **The category language doesn't exist yet.** No incumbent owns "borrower validation for bridge lenders" as a body of knowledge. LendingWise / Liquid Logics / Mortgage Office are LOS / fund-management / horizontal tools — none have ongoing methodology content. Wade Intel can plant the methodology flag uncontested.
+- **The compliance pressure is real and rising.** OFAC has cited unwitting bridge lenders in 2024-2025 for funding sanctioned-borrower properties. State AG offices are paying attention. "We do borrower validation in a Google Sheet" is becoming an existential risk position.
+- **The AI moment is right.** Doc ingestion (Truong xlsx → form pre-fill in 5s) and Story Mode AI memos turn a 2-hour underwriting task into a 5-minute review. PulseClose-with-AI is plausibly 20x faster than manual; pre-AI, the gap was 5x and not enough to switch.
 
-**Why it could be huge:** Bridge lending has no equivalent of a credit bureau. Lenders rely on self-reported track records and word of mouth. A trusted, data-backed reputation score would be worth significant pricing power.
+### IP / partnership posture (per memory)
 
-**Why it's hard:** Requires critical mass of lenders sharing outcome data. Lenders view borrower relationships as proprietary. Trust, privacy, and legal structure problems are harder than the technical build.
-
-**What would need to be true:** 20+ active lenders on the platform, a data-sharing agreement that protects individual lender identity, and enough volume to make the scores statistically meaningful.
-
-### 2. Fraud ring detection
-
-**The idea:** Graph analysis across all validations to detect suspicious patterns: the same GC appearing across multiple defaulting borrowers, the same registered agent filing entities for apparently unrelated parties, the same property being valued at wildly different amounts in concurrent loan applications.
-
-**Why it could be huge:** Mortgage fraud on investment properties hit 1-in-43 applications in Q4 2025. Lenders lose billions. Pattern detection across lenders catches what individual lenders cannot see.
-
-**Why it's hard:** Requires significant volume to detect signal above noise. False positives could damage borrower relationships. Start with heuristic rules, graduate to graph neural networks only with sufficient data.
-
-**What would need to be true:** Hundreds of validations per month across multiple lenders. A tolerance among customers for investigative-style flagging.
-
-### 3. Automated underwriting memos
-
-**The idea:** LLM generates a full, credit-committee-ready underwriting memo from validation data. Not a summary paragraph -- a complete 3-5 page memo with risk factors, mitigants, comparables, and recommendation.
-
-**Why it could be huge:** Saves 2-4 hours of analyst time per deal. Fastest path to expanding revenue per validation. Every lender writes these memos.
-
-**Why it's hard:** The Colorado AI Act (effective June 2026) and similar state laws may require explainability and human review for AI-driven lending decisions. The line between "AI-assisted memo" and "AI-driven decision" is legally unclear.
-
-**What would need to be true:** Clear legal guidance on AI in lending decisions, or a product design that keeps the AI firmly in the "tool" category with explicit human-in-the-loop.
-
-### 4. Climate risk scoring
-
-**The idea:** Embed First Street or Jupiter Intelligence property-level flood, fire, and wind risk into validation reports. Show lenders the climate exposure of collateral properties.
-
-**Why it could be huge:** Insurance costs are repricing climate risk faster than property values. A property in a flood zone with a cancelled insurance policy is a different risk than the appraisal suggests.
-
-**Why it's hard:** It isn't technically hard. But climate risk is becoming table stakes -- every proptech platform will offer it. Differentiator value is low.
-
-**What would need to be true:** A customer willing to pay more for climate data in the validation report.
-
-### 5. Satellite construction monitoring
-
-**The idea:** Planet Labs imagery combined with permit data to auto-verify construction milestones for draw management. Lender can see whether a roof was actually installed before releasing a draw.
-
-**Why it could be huge:** Draw fraud is a real and expensive problem. Automated verification could replace or supplement physical inspections.
-
-**Why it's hard:** This is a genuine computer vision challenge. Built Technologies has $83M in revenue and has not fully cracked automated visual inspection. Resolution, cloud cover, angle variation, and the diversity of construction sites make this genuinely difficult.
-
-**What would need to be true:** Dramatic improvement in satellite imagery resolution and CV models, or a willingness to use drone imagery instead of satellite.
-
-### 6. Compliance automation
-
-**The idea:** Automated verification that loan documents meet state-specific regulatory requirements. Fifteen-plus states have tightened private lending laws since January 2025. Lenders operating across states face a patchwork of requirements.
-
-**Why it could be huge:** Compliance is expensive, error-prone, and mandatory. Automation has clear ROI.
-
-**Why it's hard:** Requires deep legal expertise to encode accurately. Errors have legal consequences. Needs ongoing maintenance as regulations change.
-
-**What would need to be true:** A partnership with a compliance-focused law firm, or a very narrow initial scope (one state, one loan type).
+Zach Wade owns all PulseClose IP. Insignia is design-partner, not co-owner. Possible future partnership structures (JV, JV-fund, parallel SaaS) determine compensation only — never IP. Build dual-use; generalize Module 1 (evaluate-against-investors) so it's usable beyond Insignia. Multi-tenant infrastructure stays alive regardless of partnership choice.
 
 ---
 
-## Macro tailwinds
+## Pricing posture
 
-- **Private credit expansion.** Private credit AUM at $1.3T, projected to reach $2T by 2027. Banks continuing to retreat from direct lending, creating space for alternative lenders who need better validation tools.
-- **Alternative lender market share.** Non-bank lenders now close 37% of non-agency commercial real estate deals, up from ~25% three years ago.
-- **Fraud risk elevated.** Mortgage fraud risk on investment property applications hit 1-in-43 in Q4 2025. Lenders are actively looking for better screening.
-- **CFPB weakened, states filling the gap.** Federal consumer protection enforcement has pulled back, but state regulators and attorneys general are stepping in. OFAC enforcement specifically is intensifying against non-bank financial entities.
-- **CTA gutted for domestic entities.** The Corporate Transparency Act's beneficial ownership requirements were rolled back for domestic companies. Lenders can no longer rely on FinCEN for entity verification -- they have to do it themselves.
-- **Structural housing shortage.** 3.8 million home deficit, estimated 7.5 years to close at current build rates. Structurally bullish for fix-and-flip and ground-up construction activity.
-- **Tariff-driven cost inflation.** Tariffs pushing construction material costs up approximately 6%, compressing rehab margins. Tighter margins make GC selection and validation more consequential -- a bad GC on a tight-margin flip is the difference between profit and loss.
+Current tiers (see [docs/PRICING-STRATEGY.md](docs/PRICING-STRATEGY.md) for full rationale):
 
----
+| Plan | Monthly | Checks | Notes |
+|---|---|---|---|
+| Starter | $299 | 20 | Single-user lender |
+| Professional | $499 | 50 | Small team |
+| Enterprise | $799 | Unlimited | Mid-market lender |
+| Internal | — | Unlimited | SQL-only; founder/QA orgs |
 
-## Macro risks
+**Three packaging hypotheses to test post-NPLA:**
 
-- **Credit deterioration.** Private lending is growing fast with loosening underwriting standards. A wave of defaults could cause lenders to pull back from the market entirely, shrinking the customer base.
-- **State AI regulation.** The Colorado AI Act (June 2026) and similar legislation in other states could constrain AI-driven risk scoring and underwriting memo generation. Compliance requirements are still unclear.
-- **Construction cost inflation.** Tariff-driven cost increases could slow fix-and-flip volume if margins compress below viability for borrowers.
-- **Large lender internalization.** If the biggest bridge lenders (Kiavi, RCN Capital, Lima One) build internal validation tools, the addressable market for an external product shrinks to mid-market and smaller lenders.
-- **AI-native LOS bundling.** Lend Engine or a similar AI-native loan origination system could bundle validation into the LOS, commoditizing standalone validation and making it a feature rather than a product.
+1. **Fund tier ($1,499-2,499/mo)** — bundles A1 (investor PDF parser), A2 (counter-offer calculator), A3 (borrower capital-availability PDF), B1 (borrower watchlist), A4 future (per-investor performance dashboard). Targets fund principals doing 50-200 deals/year.
+2. **Per-validation overage** — $30/check above the cap on Starter and Pro. Stripe metered billing.
+3. **Annual prepay discount** — 2 months free. Anchor for fund tier especially.
 
----
-
-## Recommended API stack
-
-| Vendor | Function | Status | Self-serve? | Cost | Priority |
-|--------|----------|--------|-------------|------|----------|
-| **Cobalt Intelligence** | Entity SOS lookup, 50 states | Live | Yes | Per-lookup pricing | Have it |
-| **Regrid** | Owner-name property search | Live | Yes | Token-based | Have it |
-| **ATTOM** | Sale history, property details | Live (partial) | Yes | Per-call pricing | Have it |
-| **CourtListener** | Federal court litigation search | Live | Yes | Free (donate) | Have it |
-| **CSLB** | CA contractor license validation | Live | N/A (scraping) | Free | Have it |
-| **BatchData** | Historical deed search by owner name | Not started | Yes | $0.01/call | **Now** |
-| **OpenSanctions** | OFAC/SDN/sanctions screening | Not started | Yes | Free | **Now** |
-| **OpenCorporates** | Person-to-entity discovery | Not started | Yes | Free tier (200/mo), ~$2,800/yr paid | Next quarter |
-| **Unicourt** | State court litigation, 40+ states | Not started | Yes | ~$500/mo | Next quarter |
-| **DataTree / First American** | Gold-standard deed and title records | Not started | No (enterprise sales) | Enterprise pricing | Later |
-| **BuildFax** | Building permit history | Not started | Yes | $1-3/lookup | Later |
-| **First Street** | Property-level climate risk (flood/fire/wind) | Not started | Yes | Per-property pricing | Later |
-| **Sayari** | Deep entity intelligence, UBO, sanctions | Not started | No (enterprise sales) | $50K+/year | Later |
+Damon question at NPLA: does fund tier resonate, or do funds want to bundle it into a per-deal cost?
 
 ---
 
-*This is a living document. Updated as the product, market, and competitive landscape evolve.*
+## Roadmap (forward)
+
+Full backlog in [docs/ROADMAP.md](docs/ROADMAP.md). High-level slate:
+
+### Pre-NPLA polish (~5-7 days)
+
+- **A2** Counter-offer / repricing calculator (2d) — pairs with A1 on evaluate
+- **A3** Borrower capital-availability PDF (1.5d) — borrower-facing single-pager
+- **B2** Portfolio health dashboard (2d) — "first thing the lender opens"; uses E1 outcomes
+- **B3** Validation search + filter + CSV export (2d)
+
+### Half-day fillers (any time)
+
+- G2.4 — address parser edge cases
+- G4.1 — methodology PDF download (one-click vs Cmd+P)
+- G4.2 — confidence-score audit + tooltip
+- G3.4 — add GC after-the-fact action
+- G7.1 — org-level monitor default (extends B1)
+- G7.2 — "next run in N hours" indicator (~15 min)
+
+### Post-NPLA / vendor-cost-gated
+
+- **C2** BatchData historical deeds (2-3d, $200-500/mo) — closes the deed coverage gap
+- **C1** Geo-tagged photo verification (3d) — major fraud lever
+- **C5** Bank statement parser → liquidity factor (2d)
+- **D2** Slack/Teams notifications (1.5d)
+- **D1** Email-forward deal submission (3d)
+- **D5** Public REST API (2d) — required for any lender embedding PulseClose data into their UW system
+
+### Reputation + cross-tenant (post-E1 row volume + density)
+
+- **E2** Borrower reputation score (3d)
+- **E3** Anonymized cross-tenant consensus (4-5d full feature; needs 10+ lenders + legal review)
+- **E4** Public borrower profile, opt-in (2d)
+- **A4** Investor performance dashboard (3d)
+- **A5** Originator scorecard for investors (2d)
+
+### Damon-gated (don't build until decision)
+
+- **G1.2** Co-borrower / multi-guarantor schema
+- **C3** Reverse phone/email
+- **G2.2** TransUnion address validation (gated on Noah's logins)
+
+---
+
+## Long-shot bets (the bigger swings)
+
+These don't make sense at our current stage but are worth naming:
+
+- **Lender-side autopilot.** Once we have outcome data flowing (E1) plus reputation scores (E2) plus cross-tenant consensus (E3), we can build the "auto-decline / auto-approve / route-to-human" router that a non-credit-officer could safely operate. This is when PulseClose stops being a tool and becomes infrastructure.
+- **The borrower-facing brand.** E4 (public borrower profile) lets a strong-track-record borrower publish their verified PulseClose history at `pulseclose.com/borrower/[uuid]`. Per-element opt-in. Two-sided marketplace primitive. Defer activation until we have lender-side density that makes the certification valuable to borrowers.
+- **Capital-availability marketplace.** Once A3 + A4 + cross-tenant consensus exist, a borrower with strong PulseClose history could ping multiple investors with a pre-validated package and get back rate-and-terms in <24h. This is the fund-side product that turns Wade Intel into a multi-product company.
+- **The 5-Concept Framework as standard.** If Wade Intel becomes the citation source for "how to validate a borrower in private lending," that's a moat that compounds for years even if PulseClose itself is overtaken on a feature axis.
+
+---
+
+## Operating constraints (keep in mind)
+
+- **Solo technical founder.** Velocity is days-not-weeks for code, but every doc / sales conversation / vendor procurement touches the same person. Distribution time-budget is the binding constraint, not code velocity.
+- **Damon-only outreach pre-NPLA.** No independent lender outreach. Damon is sole conduit. Capacity unconstrained on the engineering side.
+- **NPLA is 7 weeks out.** Major features land before NPLA only if they make demos materially better. A2/A3 yes. C2 BatchData no (vendor cost decision pending).
+- **OpenSanctions trial expires 2026-05-28.** Auto-falls-back to OFAC SDN direct. Decision: rotate trial keys (per pickup.md Open decisions #3).
+- **Cobalt rate-limit risk during demo days.** Decision: rotate keys across multiple Cobalt accounts (per pickup.md Open decisions #4).
+- **AI privacy bundle gates A1 and any future Claude consumer.** ZDR is on by default; depersonalization runs server-side; per-org toggle is the strict-mode kill switch. See [docs/PRIVACY-POSTURE.md](docs/PRIVACY-POSTURE.md).
+
+---
+
+## What changed since the April 2026 strategy doc
+
+For anyone resuming this and trying to reconcile against the previous version:
+
+| April 2026 said | Reality 2026-05-05 |
+|---|---|
+| "Schema is normalized — separate tables, no JSONB blobs" | We use JSONB heavily, with schema-versioned Zod parsers + CHECK constraints. Path B + JSONB is the correct architecture for what we're building. |
+| "No sanctions or OFAC screening" | OpenSanctions + OFAC fallback shipped (2026-04 in the P0 corrections push). |
+| "AI analysis: Claude generates underwriting memos" | Story Mode v2 with explicit strengths/risks/recommendations + dual renderer for v1 legacy + token-based PII depersonalization (2026-05-03). |
+| "Track record is incomplete — 25 of 75 historical flips visible" | Truth, but mitigation now exists via trust-but-verify (deed-chain matcher against borrower-submitted addresses) + canonical-name dedup. C2 BatchData closes the residual gap. |
+| "Litigation is federal only" | Still true. State coverage is C6, post-NPLA. |
+| "GC California only" | Still true. |
+| "Module 8 of original BridgeFlow platform" | Module 1 (evaluate-against-investors) is now generalized and shipped at `/dashboard/evaluate`. PulseClose is a standalone product, not a module. |
+
+---
+
+## Reference paths
+
+- **Active repo:** `/Users/zachwade/code/active/pulseclose`
+- **Production app:** https://app.pulseclose.com
+- **Marketing site:** https://pulseclose.com (WordPress, content version-controlled in [wordpress/](wordpress/))
+- **Wade Intel:** https://wadeintel.com
+- **Build Buy Borrow:** https://buildbuyborrow.substack.com
+- **5-Concept Framework:** GitHub `wade-intel/loan-framework` (mirror at `/Users/zachwade/code/active/wade-intel-loan-framework`)
+- **Vercel project:** `buildfolios-projects-e8f9d80e/pulseclose`
+- **Supabase project ref:** `oazwscmgyqknwatqgtyc`
+- **GitHub:** https://github.com/zach-wade/PulseClose

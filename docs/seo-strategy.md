@@ -1,309 +1,287 @@
-# PulseClose SEO Strategy
+# PulseClose SEO Strategy (programmatic + on-page)
 
-Last updated: 2026-03-31
+**Last updated 2026-05-05.** Rescoped from the original March 31, 2026
+plan after research showed traditional programmatic SEO has decayed
+hard since Google's Helpful Content System (HCS) updates and the rise
+of AI Overviews / LLM-mediated search.
 
-## The Opportunity
-
-Nobody owns the "borrower validation for bridge lenders" niche in search. Existing competitors (LendingWise, Juniper Square, Lendflow, LoanBoss) are either generic LOS platforms, fund management tools, or horizontal fintech infra. None of them are producing content at the intersection of bridge lending + borrower due diligence + software automation.
-
-PulseClose can realistically rank page 1 for most target keywords within 3-6 months with consistent execution.
-
----
-
-## Target Keywords
-
-### Commercial Intent (Bottom of Funnel — Highest Conversion)
-
-| Keyword | Competition | Priority |
-|---------|------------|----------|
-| borrower verification software | Low | P0 |
-| bridge loan underwriting software | Low | P0 |
-| borrower entity verification tool | Very low | P0 |
-| automated borrower due diligence | Low | P0 |
-| hard money loan origination software | Medium | P1 |
-| private lending software | Medium | P1 |
-| borrower track record verification | Very low | P1 |
-| contractor license verification for lenders | Very low | P1 |
-| litigation screening for loan underwriting | Very low | P1 |
-| bridge lending CRM software | Medium | P2 |
-| real estate borrower background check software | Low | P2 |
-
-### Problem-Aware (Mid Funnel — Pain Point Driven)
-
-These searchers know they have a problem but haven't found a solution yet.
-
-| Keyword | Content Type |
-|---------|-------------|
-| bridge loan default prevention | Blog post |
-| borrower fraud detection private lending | Blog post |
-| how to reduce bridge loan defaults | Guide |
-| bad borrower red flags hard money | Blog post |
-| bridge lender due diligence checklist | Downloadable + blog |
-| common bridge lending mistakes | Blog post |
-| hard money loan gone wrong | Blog post |
-| how to vet real estate developers | Guide |
-| contractor fraud bridge lending | Blog post |
-| the problem with self-reported track records | Blog post |
-
-### Informational (Top of Funnel)
-
-| Keyword | Content Type |
-|---------|-------------|
-| how to verify borrower entity for bridge loan | Blog / guide |
-| how to check borrower litigation history | Blog / guide |
-| how to do SOS lookup for lending | Blog / guide |
-| how to verify contractor license by state | Programmatic pages |
-| how to check for lis pendens on borrower | Blog |
-| how to check PACER for borrower bankruptcy | Blog |
-| what is borrower entity validation | Glossary |
-| what is lis pendens | Glossary |
-| what is experience tier classification | Glossary |
-| secretary of state entity search for lenders | Guide / programmatic |
-
-### Competitor Capture
-
-| Keyword | Content Type |
-|---------|-------------|
-| LendingWise alternative | Comparison page |
-| Juniper Square alternative for bridge lenders | Comparison page |
-| best bridge lending software 2026 | Comparison / roundup |
-| bridge loan underwriting software comparison | Comparison page |
+> This is now a **tactical sub-doc**. The lead distribution doc is
+> [DISTRIBUTION-STRATEGY.md](DISTRIBUTION-STRATEGY.md), which covers
+> the broader Wade-Intel-as-authority + Build-Buy-Borrow-as-flywheel
+> playbook. This doc covers programmatic SEO and on-page content
+> specifically — the GEO/AEO retrofit on what's already shipped, plus
+> what to build next.
 
 ---
 
-## Programmatic SEO Pages
+## TL;DR — what changed and what we kept
 
-These are the highest-leverage play. Hundreds of pages, each targeting unique long-tail queries that bridge lenders and their staff already search for.
+The original plan was 300+ pages: 50 state SOS guides, 50 contractor
+license guides, 100 county lien searches, 100+ glossary terms, 30 city
+markets, 12 pillar blog posts. Total estimated effort: 6+ months solo.
 
-### Tier 1: SOS Entity Lookup by State (50 pages)
+**The 2026 reality** (full sources in [DISTRIBUTION-STRATEGY.md](DISTRIBUTION-STRATEGY.md)):
 
-**URL:** `/guides/sos-lookup/[state]`
-**Title pattern:** `[State] Secretary of State Entity Search: Guide for Lenders`
-**Target queries:** "[state] SOS business entity search", "[state] LLC lookup", "[state] secretary of state entity search"
+- Organic CTR fell 58-61% on AI-Overview-present queries (Seer Sept 2025; ALM antitrust filings)
+- HCS-suppression risk: high-volume thin templated content now penalizes the *whole site*, not just the templated pages
+- LLM citations convert 11x better than traditional organic clicks (HockeyStack 2025)
+- 58% of B2B tech buyers now use AI search in initial vendor research
 
-**Content per page:**
-- Direct link to state SOS portal
-- Step-by-step lookup instructions specific to that state
-- What data is available (formation date, agent, good standing, annual report status)
-- Common gotchas for that state (e.g., TX requires long-polling, DE uses a unique filing system)
-- Processing times / data freshness
-- CTA: "Skip the manual search. PulseClose checks all 50 states in seconds."
+**The pivot:** stop trying to rank, start trying to be cited. Same
+calorie count, dramatically different outcome.
 
-**Implementation:** Static pages generated from a data file with state-specific info. Can start with the top 15 bridge lending states (CA, FL, TX, NY, AZ, NV, CO, GA, NC, TN, OH, IL, PA, NJ, MD) and expand to all 50.
+### Keep / Kill / Rescope
 
-### Tier 2: Contractor License Lookup by State (50 pages)
-
-**URL:** `/guides/contractor-license/[state]`
-**Title pattern:** `How to Verify a Contractor License in [State] ([Board] Lookup)`
-**Target queries:** "[state] contractor license verification", "CSLB lookup" (CA), "DBPR contractor search" (FL)
-
-**Content per page:**
-- Licensing board name and portal link
-- License types relevant to construction/rehab (General Building, General Engineering, specialty)
-- How to search by name vs license number
-- What to check: expiration, disciplinary actions, insurance/bond status
-- Red flags specific to that state
-- CTA to PulseClose GC validation
-
-### Tier 3: County Lien & Recording Search (Top 100 Counties)
-
-**URL:** `/guides/lien-search/[state]/[county]`
-**Title pattern:** `[County] County Lien Search: Guide for Bridge Lenders`
-**Target queries:** "[county] county lien search", "[county] county recorder search", "[county] lis pendens search"
-
-**Content per page:**
-- County recorder office contact info and portal link
-- How to search for liens, lis pendens, judgments, NODs
-- Filing types relevant to bridge lenders
-- Online vs in-person search availability
-- Typical turnaround times and costs
-- CTA to PulseClose litigation screening
-
-**Start with top 50 counties by bridge loan volume:**
-LA County, Miami-Dade, Maricopa, Harris, Clark (NV), King (WA), Cook (IL), Dallas, Fulton (GA), Mecklenburg (NC), etc.
-
-### Tier 4: Bridge Lending Glossary (100+ terms)
-
-**URL:** `/glossary/[term]`
-**Title pattern:** `What Is [Term]? | Bridge Lending Glossary`
-
-**Priority terms:**
-- lis pendens, mechanics lien, notice of default, deed of trust
-- bridge loan, hard money loan, private lending
-- borrower entity, experience tier, track record verification
-- construction holdback, draw schedule, loan-to-value, loan-to-cost
-- SOS filing, registered agent, good standing
-- PACER, bankruptcy search, foreclosure
-
-**Implementation:** Static pages from a terms data file. Each page: definition, why it matters to bridge lenders, related terms, CTA.
-
-### Tier 5: Market Pages (Top 30 Cities)
-
-**URL:** `/markets/[city]`
-**Title pattern:** `Bridge Lending in [City]: Borrower Validation for [Region]`
-**Target queries:** "[city] bridge lending", "[city] hard money lender", "[city] private lending"
-
-Lower priority — implement after Tiers 1-4 are live.
+| Asset | Verdict | Status (2026-05-05) |
+|---|---|---|
+| 15 state SOS guides | RESCOPE → DEPLOYED | Drafts on WP via `publish-guides.ts`. FAQPage schema + named-expert byline + last-reviewed date baked in. Promote to `publish` after a final read. |
+| 35 unwritten state SOS guides | KILL | The 15 we have cover ~85% of bridge volume. Reallocating cycles. |
+| 100 county lien guides | KILL | Worst HCS-risk shape. Near-zero LLM citation upside. |
+| 50 contractor license guides | KILL pre-NPLA | Revisit only after a multi-state customer asks. |
+| 100+ glossary terms | CAP at 25-30 | First 20 deployed (drafts). Add 5-10 high-intent terms (e.g. "experience tier classification", "non-recourse bridge loan"). Stop. |
+| 12-post blog calendar | RESCOPE → 6 pillars / 6 months | 1 written + deployed. 1 deep pillar/month through October. Each is named-expert primary-source, 2,000-3,500 words, FAQ schema. |
+| 30 city market pages | KILL | Lowest-priority tier; abandon. |
 
 ---
 
-## Blog Content Calendar
+## What's deployed today (as of 2026-05-05)
 
-### Month 1: Foundation
+All content lives in WordPress at `pulseclose.com`, version-controlled
+in this repo's [wordpress/](../wordpress/) directory.
 
-| Week | Title | Funnel Stage |
-|------|-------|-------------|
-| 1 | The Complete Guide to Bridge Loan Borrower Due Diligence | Pillar (TOFU) |
-| 2 | 5 Red Flags in a Bridge Loan Application That Signal Fraud | TOFU |
-| 3 | How to Check If a Borrower's LLC Is Actually in Good Standing | MOFU |
-| 4 | The Bridge Lender's Borrower Validation Checklist (Free Template) | MOFU |
+### Top-level pages (5 published, 1 draft)
 
-### Month 2: Problem Awareness
+| URL | Status | Source |
+|---|---|---|
+| `pulseclose.com/` (Home) | publish | `wordpress/scripts/update-home.ts` |
+| `pulseclose.com/about/` | publish | `wordpress/scripts/update-all-pages.ts` |
+| `pulseclose.com/features/` | publish | same |
+| `pulseclose.com/pricing/` | publish | same |
+| `pulseclose.com/demo/` | publish | same |
+| `pulseclose.com/privacy-policy/` | draft | manual |
 
-| Week | Title | Funnel Stage |
-|------|-------|-------------|
-| 1 | Why SOS Lookups Are Broken (and What Bridge Lenders Should Do) | MOFU |
-| 2 | The Problem with Self-Reported Borrower Track Records | MOFU |
-| 3 | How to Verify a Contractor's License Before Funding a Rehab Loan | MOFU |
-| 4 | Bridge Loan Default Prevention: What the Data Says | TOFU |
+### Blog posts (1 draft)
 
-### Month 3: Decision Stage
+| URL | Status | Source |
+|---|---|---|
+| `/posts/bridge-loan-borrower-due-diligence` | draft | `wordpress/content/posts/bridge-loan-borrower-due-diligence.md` |
 
-| Week | Title | Funnel Stage |
-|------|-------|-------------|
-| 1 | Manual vs. Automated Borrower Validation: Time and Cost Comparison | BOFU |
-| 2 | PACER Search for Private Lenders: A Step-by-Step Guide | MOFU |
-| 3 | How to Screen Borrowers for Lis Pendens Before Lending | MOFU |
-| 4 | Bridge Lending Software Comparison: 2026 Buyer's Guide | BOFU |
+Pillar TOFU post. Authored before GEO retrofit; needs a pass to
+restructure into explicit Q-A blocks before promoting to publish.
 
-### Ongoing (2x/week after Month 3)
+### Glossary (20 drafts under `/glossary/`)
 
-Rotate between:
-- State-specific SOS/GC content (supports programmatic pages)
-- Industry trend pieces (supports topical authority)
-- Case studies / ROI stories (supports conversion)
-- Regulatory / compliance updates (supports trust)
+Source: [`wordpress/content/glossary/terms.ts`](../wordpress/content/glossary/terms.ts).
+Slugs: bridge-loan, hard-money-loan, fix-and-flip, loan-to-value, lis-pendens,
+mechanics-lien, registered-agent, good-standing, sos-filing,
+beneficial-ownership, bankruptcy, foreclosure, notice-of-default,
+deed-of-trust, judgment-lien, construction-holdback, draw-schedule,
+general-contractor-license, workers-compensation, experience-tier.
 
----
+Each term renders with **FAQPage schema** (the highest-CTR
+structured-data shape for AI citations) and the named-expert byline
+("Methodology authored by Zach Wade, Wade Intel — validated against
+production runs at Insignia Capital Corp").
 
-## Technical SEO Checklist
+### State guides (15 drafts under `/guides/sos-lookup/`)
 
-### On the landing page (do now)
-- [ ] Add proper `<title>` and `<meta name="description">` to layout.tsx
-- [ ] Add Open Graph and Twitter Card meta tags
-- [ ] Add structured data (Organization, SoftwareApplication)
-- [ ] Ensure all pages have unique `<title>` and meta descriptions
-- [ ] Create and submit sitemap.xml
-- [ ] Create robots.txt allowing all crawling
-- [ ] Verify in Google Search Console
-- [ ] Verify in Bing Webmaster Tools
+Source: [`wordpress/content/guides/sos-states.ts`](../wordpress/content/guides/sos-states.ts).
+States: California, Florida, Texas, New York, Arizona, Nevada,
+Colorado, Georgia, North Carolina, Tennessee, Ohio, Illinois,
+Pennsylvania, New Jersey, Maryland.
 
-### Site structure
-- [ ] Add a `/blog` section with proper routing
-- [ ] Add a `/guides` section for programmatic SEO pages
-- [ ] Add a `/glossary` section
-- [ ] Add breadcrumb navigation on all content pages
-- [ ] Internal link from every programmatic page to related product features
-- [ ] Internal link from every blog post to 2-3 related posts/pages
-
-### Performance
-- [ ] Ensure Core Web Vitals pass (LCP < 2.5s, CLS < 0.1, INP < 200ms)
-- [ ] Optimize images with next/image
-- [ ] Confirm proper caching headers on Vercel
-
-### Indexing
-- [ ] Submit sitemap to Google Search Console after each batch of new pages
-- [ ] Use IndexNow API (Vercel supports this) for faster indexing of new content
-- [ ] Monitor crawl budget — with 300+ pages, ensure no duplicate content issues
+Each state guide renders with FAQPage schema using the canonical
+bridge-lender query shapes:
+- "How do I look up an LLC or corporation in [state]?"
+- "What entity statuses should bridge lenders watch for in [state]?"
+- "What data is available from the [state] [portal]?"
+- "What are the common [state] SOS gotchas for lenders?"
 
 ---
 
-## Link Building Strategy
+## Publish workflow
 
-### Quick Wins (Month 1-2)
-- Submit to SaaS directories: G2, Capterra, GetApp, Product Hunt
-- Submit to lending-specific directories: Scotsman Guide vendor directory
-- Create profiles on fintech review sites
-- GitHub open-source contributions (e.g., open-source the SOS state data as a public repo)
+```
+# Draft (default)
+npx tsx wordpress/scripts/publish-blog.ts
+npx tsx wordpress/scripts/publish-glossary.ts
+npx tsx wordpress/scripts/publish-guides.ts
 
-### Ongoing (Month 2+)
-- Guest posts on lending industry publications:
-  - Scotsman Guide
-  - Originate Report
-  - Private Lender magazine
-  - National Private Lenders Association blog
-- Contribute data/insights to industry reports
-- Sponsor or speak at bridge lending conferences (AAPL annual conference, IMN conferences)
-- Create linkable assets: free tools, calculators, data visualizations
+# Promote to publish (after review on WP admin)
+npx tsx wordpress/scripts/publish-blog.ts --publish
+npx tsx wordpress/scripts/publish-glossary.ts --publish
+npx tsx wordpress/scripts/publish-guides.ts --publish
 
-### Content Partnerships
-- Co-create content with Insignia Capital Corp (design partner endorsement)
-- Partner with title companies, closing attorneys, or appraisers who serve bridge lenders
-- Contribute to CRE tech roundups and listicles
+# Single item by slug
+npx tsx wordpress/scripts/publish-glossary.ts lis-pendens
+
+# Audit current state
+npx tsx wordpress/scripts/audit.ts
+# → snapshots in wordpress/audit/
+```
+
+Idempotent — re-running upserts by slug. Safe to run repeatedly to
+push edits.
 
 ---
 
-## Implementation Priority
+## GEO/AEO retrofit checklist
 
-### Phase 1: Foundation (Weeks 1-4)
-1. Add meta tags, sitemap.xml, robots.txt, structured data to existing site
-2. Set up `/blog`, `/guides`, `/glossary` routes
-3. Publish pillar guide: "Complete Guide to Bridge Loan Borrower Due Diligence"
-4. Launch 15 state SOS lookup pages (top bridge lending states)
-5. Launch 20 glossary terms (highest volume)
-6. Submit to Google Search Console + Bing Webmaster Tools
+Apply to every existing piece of content + every new piece going
+forward. The publish scripts already bake most of this in; this
+checklist is the manual review pass.
 
-### Phase 2: Scale (Weeks 5-12)
-1. Expand to all 50 state SOS pages
-2. Launch all 50 state contractor license pages
-3. Publish 2 blog posts per week
-4. Launch 30 more glossary terms
-5. Submit to SaaS directories
-6. Build internal linking structure
+- [ ] **FAQPage schema** as `<script type="application/ld+json">` — Q-A pairs explicit, not just embedded in prose. Done by default in [`publish-glossary.ts`](../wordpress/scripts/publish-glossary.ts) + [`publish-guides.ts`](../wordpress/scripts/publish-guides.ts).
+- [ ] **40-word direct answer** as the first paragraph after each H3 question. Manual pass needed for the existing pillar blog post.
+- [ ] **Named-expert byline** on every page: "Methodology authored by Zach Wade, Wade Intel". Done by default.
+- [ ] **`Last reviewed YYYY-MM-DD`** date on every page. Done by default; sweep monthly to refresh.
+- [ ] **Cross-links** glossary → state guide → product page. Manual pass on each new term.
+- [ ] **Internal Author byline link** to a Zach Wade author page (TODO — not yet built on WP).
+- [ ] **Schema.org Person markup** for the author byline (TODO).
+- [ ] **Open Graph + Twitter Card meta** on every page (managed by WordPress theme; verify monthly).
+- [ ] **Submit URL to Bing IndexNow** after publish (TODO — not yet wired).
+- [ ] **llms.txt at `pulseclose.com/llms.txt`** listing canonical methodology pages (TODO — 30-min job; ship as insurance, no measured upside).
 
-### Phase 3: Depth (Weeks 13-24)
-1. Launch top 50 county lien search pages
-2. Publish comparison pages (LendingWise alternative, etc.)
-3. Create downloadable assets for lead capture
-4. Guest posting campaign begins
-5. First case study with Insignia
+---
 
-### Phase 4: Domination (Month 7+)
-1. Expand county pages to 100+
-2. Launch market/city pages
-3. Scale content to 3x/week
-4. Double down on what's ranking
+## Target keywords (what we're trying to win citations for)
+
+The shape of 2026 query intent. Note: we're optimizing to be **cited
+inside the AI Overview / ChatGPT answer / Perplexity panel**, not to
+rank below it. So "ranking #1" is a weaker leading indicator than
+"appears in AI-generated answer".
+
+### Commercial intent (highest LLM-citation value)
+
+| Query | Page | Status |
+|---|---|---|
+| "borrower verification software" | features | published |
+| "bridge loan underwriting software" | features | published |
+| "automated borrower due diligence" | future pillar #2 | not written |
+| "borrower track record verification" | future pillar #3 | not written |
+| "contractor license verification for lenders" | future pillar #4 | not written |
+| "litigation screening for loan underwriting" | future pillar #5 | not written |
+
+### Problem-aware (mid-funnel)
+
+| Query | Page | Status |
+|---|---|---|
+| "bridge lender due diligence checklist" | bridge-loan-borrower-due-diligence | draft |
+| "bad borrower red flags hard money" | future pillar #6 | not written |
+| "the problem with self-reported track records" | covered in pillar #1 | partial |
+
+### Informational (top-funnel — glossary + state guides win these)
+
+Already in the deployed set:
+- "what is lis pendens" → `/glossary/lis-pendens/`
+- "what is good standing" → `/glossary/good-standing/`
+- "experience tier classification" → `/glossary/experience-tier/`
+- "[state] secretary of state entity search" → `/guides/sos-lookup/[state]/`
+
+### Competitor capture (low priority pre-NPLA)
+
+`LendingWise alternative`, `Juniper Square alternative for bridge
+lenders` — defer until we have ≥3 paying customers willing to be
+referenced.
+
+---
+
+## 6 deep pillar posts to write (May-Oct 2026)
+
+One per month. Each: 2,000-3,500 words, named expert byline, 8-12 H3
+question blocks with 40-word direct answers, FAQPage schema, primary
+data quote where possible.
+
+| Month | Title (working) | Target query |
+|---|---|---|
+| May | "How to validate a bridge loan borrower in 2026: the 4-pillar method" | published as draft; needs GEO retrofit before promoting |
+| June | "Why most borrower track records are wrong (and how to verify them)" | "borrower track record verification" |
+| July | "The bridge lender's contractor risk audit: a state-by-state framework" | "contractor license verification for lenders" |
+| Aug | "Federal vs state litigation screening for private lenders" | "litigation screening for loan underwriting" |
+| Sep | "Anti-money-laundering for bridge lenders: the OFAC checklist" | "OFAC screening private lender" |
+| Oct | "Borrower fraud detection: 9 patterns we found in 100+ validations" | proprietary data drop — citation bait |
+
+The October post is the **proprietary data drop** — uses anonymized
+PulseClose validation data to cite specific patterns. This is the kind
+of unique-data post Perplexity disproportionately cites and that turns
+into Build Buy Borrow flywheel content.
+
+---
+
+## Technical SEO checklist
+
+### Already done
+
+- [x] WordPress + Yoast on `pulseclose.com` (managed by GoDaddy)
+- [x] Top-level pages with hand-authored title + meta
+- [x] FAQPage schema in publish-glossary.ts + publish-guides.ts (auto-rendered)
+- [x] Named-expert byline auto-added by publish scripts
+- [x] Last-reviewed timestamp on every page (publish scripts)
+- [x] WordPress sitemap auto-generated by Yoast
+- [x] `app.pulseclose.com/robots.ts` correctly disallows all (auth product, not for indexing)
+
+### To do
+
+- [ ] Submit pulseclose.com sitemap to Google Search Console + Bing Webmaster
+- [ ] IndexNow API integration on publish (Bing prefers; Vercel supports)
+- [ ] Monthly refresh sweep — re-run publish scripts so `Last reviewed` updates (manual cron or GitHub Action)
+- [ ] Author bio page at `/about/zach-wade/` with Schema.org Person markup
+- [ ] llms.txt at `pulseclose.com/llms.txt`
+- [ ] WordPress theme audit — Core Web Vitals (LCP < 2.5s, CLS < 0.1, INP < 200ms)
+
+---
+
+## What we're NOT doing (and why)
+
+Reference for future-Zach when tempted to scope-creep:
+
+- **No paid ads** — CAC math isn't legible at this stage. Revisit when 5+ paying customers land.
+- **No SaaS-directory pushes** (G2, Capterra, GetApp) until we have ≥3 quote-able customers.
+- **No competitor-comparison pages** until those competitors are ranking for queries we're losing.
+- **No mass guest-posting outreach** — capital-provider endorsement is the only organic distribution path that works in this niche; trade-pub citations come *because* of methodology authority, not from cold pitches.
+- **No mid-2024 pSEO tactics** (programmatic city pages, mass-generated state pages with thin content, internal-linking farms). HCS-decayed.
+- **No keyword cannibalization auditing** — we have 36 pieces of content total, not 1,000. Not worth the tooling cost yet.
 
 ---
 
 ## Measurement
 
-### KPIs
-- Organic traffic (Google Analytics / PostHog)
-- Keyword rankings for top 20 commercial-intent terms (use Ahrefs or SEMrush)
-- Indexed pages in Google Search Console
-- Domain authority / domain rating
-- Organic signups (track UTM or referrer on signup)
-- Content-assisted conversions (did they read content before signing up?)
+### Leading indicators (review monthly)
 
-### Monthly Review
-- Which pages are getting impressions but low CTR? (Improve titles/descriptions)
-- Which pages are ranking #4-10? (Optimize for promotion to top 3)
-- Which blog posts drive the most signups? (Write more like those)
-- Which programmatic pages get the most traffic? (Expand that category first)
+- Pages crawled by Google + Bing
+- Indexed pages (target: 36 → 41 by month 6)
+- Mentions in AI Overviews / ChatGPT / Perplexity answers — manual sample queries weekly
+- Backlinks (target: 5 from trade pubs by Oct 2026)
+
+### Lagging indicators (review quarterly)
+
+- Organic sessions to pulseclose.com (hygiene metric only — see DISTRIBUTION-STRATEGY)
+- Trial signups attributed to organic (UTM-tracked)
+- Newsletter signups attributed to glossary / state guide pages
+
+### NOT a metric
+
+- Keyword rank position (decoupled from revenue post-AIO)
+- Total page count (we're optimizing for citation density, not page count)
 
 ---
 
-## Cost Estimate
+## Cost estimate
 
-| Item | Monthly Cost |
-|------|-------------|
-| SEO tool (Ahrefs Lite or SEMrush) | $99-129 |
-| Content writing (if outsourced, 8 posts/mo) | $800-1,600 |
-| Google Search Console / Analytics | Free |
-| IndexNow via Vercel | Free |
-| SaaS directory listings | Free-$200 |
-| Total (DIY content) | ~$100/mo |
-| Total (outsourced content) | ~$1,000-1,800/mo |
+| Item | Monthly |
+|---|---|
+| WordPress hosting (GoDaddy Managed WP) | $20-30 |
+| Schema.org + JSON-LD (in-house, free) | $0 |
+| Google Search Console + Bing Webmaster (free) | $0 |
+| Yoast SEO Premium (optional) | $99/yr |
+| **Total** | **~$30/mo** |
 
-The programmatic pages are essentially free to produce — they're generated from data. The blog content is the main ongoing cost, and it can be written in-house initially.
+Content is in-house (Zach + Claude). Programmatic page generation is
+already automated via the publish scripts.
+
+---
+
+## See also
+
+- [DISTRIBUTION-STRATEGY.md](DISTRIBUTION-STRATEGY.md) — the lead doc; what role pSEO + on-page content plays in the broader 2026 distribution strategy
+- [../wordpress/README.md](../wordpress/README.md) — operational reference for the publish workflow
