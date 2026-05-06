@@ -37,54 +37,47 @@ SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
 
 ---
 
-## ⚠️ INVESTIGATE NEXT SESSION — Anthropic Cloud routine + environment mystery
+## ✅ RESOLVED 2026-05-05 — Anthropic Cloud routine + environment investigation
 
-**STOP. DO NOT take further action on the scheduled routine until this is investigated.** User asked Claude to schedule a monthly WP content refresh. Claude did. Then the user discovered they have NO UI to manage environments under their Max plan, didn't recognize the "Build-Folio" environment that appeared, and is rightfully suspicious.
+**Status:** Investigation complete. User decided to keep the monthly WP refresh routine + add WP secrets to the Build-Folio env. The 4 prior build-folio routines are legitimate and will be left alone.
+
+### What was found
+
+- **The "Build-Folio" environment** (`env_01RNWmw8TJ4rZMPEAfpRTjTk`) is legitimate and was provisioned on the user's account before any Claude session created routines against it. Verified by inspecting `~/.claude/projects/-Users-zachwade-code-active-build-folio/9ded08ea-...jsonl` — at the very first `/schedule` invocation (2026-05-01T06:54:47Z, build-folio session) the env was already enumerated by the skill. No session called create-environment via API. Most likely auto-provisioned the first time the user enabled Claude Code on the web with name auto-derived from the repo, or manually added via the in-session UI and forgotten.
+- **The environments UI exists, just not where the user looked.** Per https://code.claude.com/docs/en/claude-code-on-the-web#configure-your-environment, environment management lives at **claude.ai/code → enter any session → click the environment selector at top of chat → "Add environment" or settings icon next to existing env**. There is NO top-level "Settings → Environments" page. console.anthropic.com is unrelated (that's the API platform).
+- **Available on Max.** Routines + cloud environments are research-preview but available on Pro/Max/Team/Enterprise per docs.
+- **Secrets format:** `KEY=value` per line, no quotes. No dedicated secrets store yet — visible to anyone who can edit the env. Fine for single-user accounts.
+- **No API for env CRUD.** `RemoteTrigger` only manages routines. Environments are web-UI only. Routine deletion is also browser-only at https://claude.ai/code/routines.
+
+### Action item still pending — user must do manually
+
+**Add WP secrets to Build-Folio env before 2026-06-01 14:08 UTC:**
+
+1. claude.ai/code → enter any session → click env selector at top of chat
+2. Find Build-Folio in dropdown → click settings/gear icon
+3. In Environment variables field, paste (values from `.env.local`):
+   ```
+   WP_URL=<from .env.local>
+   WP_USER=<from .env.local>
+   WP_APP_PASSWORD=<from .env.local>
+   ```
+4. Save
+
+If not done by 6/1, routine will fail-clean ("missing env vars" abort per prompt) — no harm, just a no-op cloud session.
 
 ### What's currently provisioned (verified via `RemoteTrigger list` 2026-05-05)
 
-**5 routines exist on user's account `59fd52c9-a602-4ed9-b946-25849ab4be2b`:**
+**5 routines on user's account `59fd52c9-a602-4ed9-b946-25849ab4be2b`:**
 
-| Routine ID | Name | Created | Repo | Env |
+| Routine ID | Name | Created | Repo | Status |
 |---|---|---|---|---|
-| `trig_01354yHreiPenFJ94aD196vK` | "MEMPROF cleanup — disable on build-folio-worker if still set" | 2026-05-01 06:55Z | github.com/zach-wade/build-folio | env_01RNWmw8TJ4rZMPEAfpRTjTk |
-| `trig_01RFD8xVQxpJVjd67XEHp2Hw` | "Build-Folio Phase 3a verification + worker drain check" | 2026-05-02 04:36Z | build-folio | same |
-| `trig_01MhTqfoJRhbkQ8zjUELRjk9` | "Phase 2 verification + Phase 1 PR 5 cleanup" | 2026-05-02 08:37Z | build-folio | same |
-| `trig_01E9avoEkgamHt3j2cyhxTpY` | "Storage fix 24h soak verification (commit 3ec9dc1b)" | 2026-05-02 09:49Z | build-folio | same |
-| **`trig_017PQNaJ2eN6X86T7bo6Zu7Y`** | **"Monthly WP content refresh (GEO recency lift)"** | **2026-05-05 23:30Z** | **github.com/zach-wade/PulseClose** | **same env (Build-Folio)** |
+| `trig_01354yHreiPenFJ94aD196vK` | "MEMPROF cleanup — disable on build-folio-worker if still set" | 2026-05-01 06:55Z | build-folio | scheduled 5/8 |
+| `trig_01RFD8xVQxpJVjd67XEHp2Hw` | "Build-Folio Phase 3a verification + worker drain check" | 2026-05-02 04:36Z | build-folio | run_once_fired |
+| `trig_01MhTqfoJRhbkQ8zjUELRjk9` | "Phase 2 verification + Phase 1 PR 5 cleanup" | 2026-05-02 08:37Z | build-folio | scheduled 5/8 |
+| `trig_01E9avoEkgamHt3j2cyhxTpY` | "Storage fix 24h soak verification (commit 3ec9dc1b)" | 2026-05-02 09:49Z | build-folio | run_once_fired |
+| **`trig_017PQNaJ2eN6X86T7bo6Zu7Y`** | **"Monthly WP content refresh (GEO recency lift)"** | **2026-05-05 23:30Z** | **PulseClose** | **scheduled 6/1 14:08Z** |
 
-### The mystery
-
-- The user's `/schedule` skill in this session listed exactly ONE environment: `Build-Folio (id: env_01RNWmw8TJ4rZMPEAfpRTjTk, kind: anthropic_cloud)`. That was the only available choice, so the new PulseClose routine got attached to it.
-- The user reports **no UI under their Max plan** to view, create, or manage Anthropic Cloud environments. The Claude Code web settings page (claude.ai/code) shows routines but no environments tab. `claude.ai/settings/general` has no env option.
-- The user **does not recognize ever creating** the Build-Folio environment or any of the 4 prior build-folio routines. They were created 2026-05-01 → 2026-05-02 from the user's own account UUID.
-- The user has **not added any secrets** to the environment (and may have no UI to do so). The PulseClose monthly routine, if run as scheduled on **2026-06-01 14:08 UTC**, will fail because `WP_URL` / `WP_USER` / `WP_APP_PASSWORD` aren't there.
-
-### Hypotheses to verify (do this in the next session, NOT this one)
-
-1. **Auto-provisioned environment.** The "Build-Folio" environment may have been auto-created the first time the user authorized remote agents from claude.ai, with the name derived from the first repo or project the user was in. Test: check if there's an account-default-environment concept.
-2. **Created via API by a prior Claude Code session.** The 4 build-folio routines were created during build-folio Claude Code sessions on 2026-05-01 → 2026-05-02; those sessions may have called create-environment under the hood. Inspect the build-folio repo's recent git history for any tooling that creates environments.
-3. **Console.anthropic.com may have an environments + secrets UI** — user said they "see in the api platform but since this is under the max sub i guess the ux isnt there yet." Worth a deeper poke at console.anthropic.com to confirm whether environment CRUD + secrets management actually exist there.
-4. **Claude API documentation should list this** — search Anthropic docs for "environment_id" / "anthropic_cloud" / "remote agent runtime" to find the canonical lifecycle.
-
-### Decisions pending
-
-- **Should the new monthly routine be deleted** until the environment story is sorted? It's enabled and pointed at an env with no WP secrets. Safest move is delete it now and re-create later when we know what we're doing. Routine deletion is browser-only at https://claude.ai/code/routines (per the schedule skill — API has no delete).
-- **Should we delete the 4 build-folio routines too?** Two ran-once already (`run_once_fired`). Two are still scheduled (May 8). User should decide whether those represent intended work or orphaned setup.
-
-### What I (Claude) did NOT do
-
-- I did NOT create the Build-Folio environment. It pre-existed on the user's account.
-- I did NOT create the 4 prior build-folio routines. They pre-existed.
-- I DID create the PulseClose monthly routine 2026-05-05 23:30Z (`trig_017PQNaJ2eN6X86T7bo6Zu7Y`) at the user's explicit request via the `/schedule` skill, attaching it to the only environment listed as available.
-- I DID NOT add any secrets to any environment (I have no API to do so).
-
-### File locations relevant to investigation
-
-- `wordpress/scripts/wp-client.ts` lines 11-19 — reads `WP_URL` / `WP_USER` / `WP_APP_PASSWORD` from process.env
-- `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/` — check for any past memory entries about Anthropic Cloud / remote agents
-- The user's local `.env.local` has the WP creds; the remote agent does NOT see local files
-- API platform user should investigate: https://console.anthropic.com
+All attached to `env_01RNWmw8TJ4rZMPEAfpRTjTk` (Build-Folio). The 4 build-folio routines are legitimate session work and were left in place.
 
 **Batch 1 (close the journey) — ✅ COMPLETE 2026-05-02.** One continuous
 flow from intake to handoff to monitor to activity feed.
@@ -511,11 +504,12 @@ populated within ~30s.
 
 ## Manual items the user should do (post-2026-05-05)
 
-0. **INVESTIGATE the Anthropic Cloud routine + environment mystery first.**
-   See top-of-file investigation section. Decide whether to delete the
-   monthly WP refresh routine (`trig_017PQNaJ2eN6X86T7bo6Zu7Y`) until
-   the environment story is sorted. Routine deletion is browser-only at
-   https://claude.ai/code/routines.
+0. **Add WP secrets to Build-Folio Anthropic Cloud env** before 6/1.
+   claude.ai/code → enter any session → click env selector at top of
+   chat → Build-Folio settings gear → Environment variables → paste
+   `WP_URL=...`, `WP_USER=...`, `WP_APP_PASSWORD=...` from `.env.local`
+   (no quotes, one per line). Otherwise `trig_017PQNaJ2eN6X86T7bo6Zu7Y`
+   fails-clean on 2026-06-01.
 
 1. **Smoke-test Batch 2 on prod.**
    - **E1:** open any validation, scroll to "Deal outcome" card,
@@ -681,10 +675,11 @@ After the 2026-05-05 doc overhaul:
 **Doc engine + WP content publish ✅ SHIPPED 2026-05-05.**
 
 **FIRST PRIORITY (carry-forward from 2026-05-05):**
-0. **Investigate the Anthropic Cloud routine + environment situation.**
-   See "INVESTIGATE NEXT SESSION" section at top of file. Decide
-   whether to delete the new monthly routine or leave it. Figure out
-   where the Build-Folio environment came from.
+0. ✅ Investigation complete — see resolved section at top of file.
+   Only remaining action: user manually adds `WP_URL` / `WP_USER` /
+   `WP_APP_PASSWORD` to the Build-Folio env at claude.ai/code (env
+   selector → settings gear) before 2026-06-01 14:08 UTC. If skipped,
+   the monthly routine will fail-clean (no harm).
 
 **Recommended next pick: Batch 3 candidates.** With outcomes captured
 (E1) and the NPLA hero shipped (A1), the next leverage points are
@@ -962,7 +957,8 @@ Items to run/check/decide before NPLA. Most are not on the roadmap as
 
 | Date | Item | Action | Owner |
 |---|---|---|---|
-| Next session | Anthropic Cloud routine investigation | See top-of-file investigation section. Decide: delete monthly WP routine `trig_017PQNaJ2eN6X86T7bo6Zu7Y` or leave it. Figure out where the Build-Folio environment came from on user's account. | User + Claude |
+| Done | Anthropic Cloud routine investigation | ✅ Resolved 2026-05-05. Build-Folio env is legitimate (auto-provisioned). Routine kept; user adds WP secrets via claude.ai/code env editor. | User + Claude |
+| Before 6/1 | Add WP secrets to Build-Folio env | claude.ai/code → session → env selector → Build-Folio settings gear → paste WP_URL/WP_USER/WP_APP_PASSWORD from `.env.local`. Otherwise monthly routine fails-clean. | User |
 | Done | AI privacy 2-day bundle | ✅ Shipped 2026-05-03 (`a277c23`). | Claude |
 | ~5/27 | OpenSanctions key rotation | ✅ Decided. Rotate trial keys; auto-falls-back to OFAC if rotation fails. | User |
 | ~6/01 | Monthly WP refresh (scheduled) | Will run as `trig_017PQNaJ2eN6X86T7bo6Zu7Y` UNLESS deleted/disabled. Will fail-clean if Build-Folio env doesn't have WP secrets. | Anthropic Cloud agent |

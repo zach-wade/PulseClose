@@ -9,6 +9,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "lucide-react";
 
+type CounterOffer =
+  | {
+      kind: "loan_amount";
+      new_loan_amount: number;
+      delta_amount: number;
+      reason: string;
+      predicted_result: "pass" | "conditional";
+      predicted_rate_pct: number | null;
+      predicted_points: number | null;
+    }
+  | {
+      kind: "borrower_change";
+      field: "borrower_fico" | "borrower_experience";
+      target: number;
+      delta: number;
+      reason: string;
+    }
+  | {
+      kind: "structural";
+      field: string;
+      reason: string;
+    };
+
 interface ComputedTerms {
   max_ltv: number | null;
   max_ltc: number | null;
@@ -19,6 +42,7 @@ interface ComputedTerms {
   matched_tier_index: number | null;
   boundary_warnings: { field: string; message: string }[];
   failure_reasons: { field: string; rule: string; expected: unknown; actual: unknown }[];
+  counter_offers?: CounterOffer[];
 }
 
 interface EvaluationResultRow {
@@ -214,6 +238,48 @@ export default function EvaluationDetailPage() {
                         )}
                       </li>
                     ))}
+                  </ul>
+                </div>
+              )}
+              {r.computed_terms?.counter_offers && r.computed_terms.counter_offers.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Counter-offer suggestions</p>
+                  <ul className="text-xs space-y-1">
+                    {r.computed_terms.counter_offers.map((offer, i) => {
+                      if (offer.kind === "loan_amount") {
+                        return (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span>
+                              <span className="font-medium">Drop loan to {fmtCurrency(offer.new_loan_amount)}</span>
+                              {" "}({fmtCurrency(offer.delta_amount)} reduction) →{" "}
+                              {offer.predicted_result === "pass" ? "passes" : "conditional"}
+                              {offer.predicted_rate_pct != null && ` at ${fmtRate(offer.predicted_rate_pct)}`}
+                              {offer.predicted_points != null && `, ${offer.predicted_points.toFixed(2)} pts`}
+                              <span className="text-muted-foreground"> — {offer.reason}</span>
+                            </span>
+                          </li>
+                        );
+                      }
+                      if (offer.kind === "borrower_change") {
+                        return (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                            <span>
+                              <span className="font-medium">Borrower-side:</span> {offer.reason}
+                            </span>
+                          </li>
+                        );
+                      }
+                      return (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground">
+                            <span className="font-medium text-foreground">Structural:</span> {offer.reason}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

@@ -507,6 +507,246 @@ export function evaluateDealForInvestor(
   };
 }
 
+// ── Counter-offer suggestions ────────────────────────────────────────────
+// For each fail/conditional, compute the smallest single-knob change that
+// would flip the result to pass. Three categories:
+//   - "loan_amount" — drop the loan to clear an LTV/LTC/LTARV/max_loan cap
+//   - "borrower_change" — borrower-side targets (FICO, experience) the LO
+//     can't reprice their way around
+//   - "structural" — hard exclusions (loan_type, state, etc.) that no
+//     amount of repricing fixes
+//
+// Pure function. The API embeds the result in computed_terms.counter_offers.
+
+export type CounterOffer =
+  | {
+      kind: "loan_amount";
+      new_loan_amount: number;
+      delta_amount: number;       // positive = reduction
+      reason: string;
+      predicted_result: "pass" | "conditional";
+      predicted_rate_pct: number | null;
+      predicted_points: number | null;
+    }
+  | {
+      kind: "borrower_change";
+      field: "borrower_fico" | "borrower_experience";
+      target: number;
+      delta: number;              // positive = needs increase
+      reason: string;
+    }
+  | {
+      kind: "structural";
+      field: string;
+      reason: string;
+    };
+
+// Round loan amount DOWN to the nearest $1k so suggestions are clean.
+function floorTo1k(n: number): number {
+  return Math.floor(n / 1000) * 1000;
+}
+
+export function suggestCounterOffers(
+  deal: DealParams,
+  investor: { id: string; display_name: string; rules: InvestorRules },
+  current: EligibilityResult,
+): CounterOffer[] {
+  if (current.result === "pass") return [];
+
+  const offers: CounterOffer[] = [];
+
+  // ── Loan-amount knobs ──────────────────────────────────────────────
+  // For each capped ratio that's currently exceeded, compute the largest
+  // loan_amount that clears it. Take the MIN across all binding caps
+  // (the deal must clear every cap simultaneously).
+  const candidateLoanAmounts: { amount: number; reason: string }[] = [];
+
+  for (const f of current.failure_reasons) {
+    if (f.field === "ltv" && deal.purchase_price && deal.purchase_price > 0) {
+      const cap = investor.rules.max_ltv;
+      if (cap != null) {
+        candidateLoanAmounts.push({
+          amount: floorTo1k(cap * deal.purchase_price),
+          reason: `clears ${ratioToPct(cap)}% LTV cap`,
+        });
+      }
+    }
+    if (f.field === "ltc") {
+      const cap = investor.rules.max_ltc;
+      const totalCost =
+        (deal.purchase_price ?? 0) +
+        (deal.rehab_budget ?? 0) +
+        (deal.construction_budget ?? 0);
+      if (cap != null && totalCost > 0) {
+        candidateLoanAmounts.push({
+          amount: floorTo1k(cap * totalCost),
+          reason: `clears ${ratioToPct(cap)}% LTC cap`,
+        });
+      }
+    }
+    if (f.field === "ltarv" && deal.arv && deal.arv > 0) {
+      const cap = investor.rules.max_ltarv;
+      if (cap != null) {
+        candidateLoanAmounts.push({
+          amount: floorTo1k(cap * deal.arv),
+          reason: `clears ${ratioToPct(cap)}% LTARV cap`,
+        });
+      }
+    }
+    if (f.field === "loan_amount" && f.rule === "Loan amount above maximum") {
+      const cap = investor.rules.max_loan_amount;
+      if (cap != null) {
+        candidateLoanAmounts.push({
+          amount: floorTo1k(cap),
+          reason: `clears $${cap.toLocaleString()} max loan amount`,
+        });
+      }
+    }
+  }
+
+  if (candidateLoanAmounts.length > 0) {
+    // Take the minimum (most binding) cap. If multiple caps tie, pick
+    // arbitrary first; reason text concatenates.
+    const minAmount = Math.min(...candidateLoanAmounts.map((c) => c.amount));
+    const reasons = candidateLoanAmounts
+      .filter((c) => c.amount === minAmount)
+      .map((c) => c.reason);
+
+    if (minAmount > 0 && minAmount < deal.loan_amount) {
+      // Re-evaluate with the new loan amount.
+      const trialDeal: DealParams = { ...deal, loan_amount: minAmount };
+      const trialResult = evaluateDealForInvestor(trialDeal, investor);
+      // Only suggest if the change actually flips to pass / conditional.
+      if (trialResult.result !== "fail") {
+        offers.push({
+          kind: "loan_amount",
+          new_loan_amount: minAmount,
+          delta_amount: deal.loan_amount - minAmount,
+          reason: reasons.join(" + "),
+          predicted_result: trialResult.result,
+          predicted_rate_pct: trialResult.estimated_rate_pct,
+          predicted_points: trialResult.estimated_points,
+        });
+      }
+    }
+  }
+
+  // ── Borrower-side knobs ────────────────────────────────────────────
+  // Cannot be repriced; surface as targets so the LO knows what to ask
+  // the borrower for (or to skip this investor).
+  for (const f of current.failure_reasons) {
+    if (f.field === "borrower_fico" && investor.rules.min_fico != null) {
+      const target = investor.rules.min_fico;
+      const actual = deal.borrower_fico ?? 0;
+      offers.push({
+        kind: "borrower_change",
+        field: "borrower_fico",
+        target,
+        delta: target - actual,
+        reason: `Borrower FICO ${actual} below ${target} minimum`,
+      });
+    }
+    if (f.field === "borrower_experience" && investor.rules.min_experience != null) {
+      const target = investor.rules.min_experience;
+      const actual = deal.borrower_experience;
+      offers.push({
+        kind: "borrower_change",
+        field: "borrower_experience",
+        target,
+        delta: target - actual,
+        reason: `Borrower has ${actual} completed deals; investor requires ${target}`,
+      });
+    }
+    if (f.field === "loan_amount" && f.rule === "Loan amount below minimum" && investor.rules.min_loan_amount != null) {
+      offers.push({
+        kind: "structural",
+        field: "loan_amount",
+        reason: `Investor minimum loan size is $${investor.rules.min_loan_amount.toLocaleString()}`,
+      });
+    }
+  }
+
+  // ── Structural (no repricing fix) ──────────────────────────────────
+  for (const f of current.failure_reasons) {
+    if (
+      f.field === "loan_type" ||
+      f.field === "property_type" ||
+      f.field === "property_state" ||
+      f.field === "occupancy" ||
+      f.field === "is_rural"
+    ) {
+      offers.push({
+        kind: "structural",
+        field: f.field,
+        reason: f.rule,
+      });
+    }
+  }
+
+  // ── Conditional: no tier matched ───────────────────────────────────
+  // Find the smallest FICO bump or experience bump that would land in a
+  // tier. Only meaningful when result is "conditional" with no tier.
+  if (
+    current.result === "conditional" &&
+    current.matched_tier_index == null &&
+    investor.rules.leverage_matrix &&
+    investor.rules.leverage_matrix.length > 0
+  ) {
+    const matrix = investor.rules.leverage_matrix;
+    let bestFicoTarget: number | null = null;
+    let bestExpTarget: number | null = null;
+
+    for (const t of matrix) {
+      // Tier loan_type/property_type must match (these are structural
+      // already covered above).
+      if (t.loan_type !== null && t.loan_type !== deal.loan_type) continue;
+      if (t.property_type !== null && t.property_type !== deal.property_type) continue;
+
+      const fico = deal.borrower_fico ?? 0;
+      const exp = deal.borrower_experience;
+
+      if (t.min_fico != null && fico < t.min_fico) {
+        if (bestFicoTarget == null || t.min_fico < bestFicoTarget) {
+          bestFicoTarget = t.min_fico;
+        }
+      }
+      if (exp < t.min_experience) {
+        if (bestExpTarget == null || t.min_experience < bestExpTarget) {
+          bestExpTarget = t.min_experience;
+        }
+      }
+    }
+
+    if (bestFicoTarget != null && deal.borrower_fico != null) {
+      offers.push({
+        kind: "borrower_change",
+        field: "borrower_fico",
+        target: bestFicoTarget,
+        delta: bestFicoTarget - deal.borrower_fico,
+        reason: `Lowest tier requires FICO ≥ ${bestFicoTarget} (currently ${deal.borrower_fico})`,
+      });
+    }
+    if (bestExpTarget != null) {
+      offers.push({
+        kind: "borrower_change",
+        field: "borrower_experience",
+        target: bestExpTarget,
+        delta: bestExpTarget - deal.borrower_experience,
+        reason: `Lowest tier requires ${bestExpTarget} completed deals (currently ${deal.borrower_experience})`,
+      });
+    }
+  }
+
+  // Suppress duplicate reasons (e.g. min_loan_amount can fire twice).
+  const seen = new Set<string>();
+  return offers.filter((o) => {
+    const key = `${o.kind}:${"field" in o ? o.field : ""}:${"reason" in o ? o.reason : ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ── Criteria assembly from JSONB rows ────────────────────────────────────
 // Reads an investor's investor_criteria rows (ARRAY of {criteria_key,
 // criteria_value}) and builds a single InvestorRules object. Unknown

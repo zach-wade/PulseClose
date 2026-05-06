@@ -10,6 +10,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import {
   assembleRulesFromCriteria,
   evaluateDealForInvestor,
+  suggestCounterOffers,
   type DealParams,
 } from "@/lib/evaluate/engine";
 import { emitActivity } from "@/lib/events/emit";
@@ -150,11 +151,10 @@ export async function POST(request: Request) {
 
   const results = investorList.map((inv) => {
     const rules = assembleRulesFromCriteria(byInvestor[inv.id] ?? []);
-    return evaluateDealForInvestor(deal, {
-      id: inv.id,
-      display_name: inv.display_name,
-      rules,
-    });
+    const investorWithRules = { id: inv.id, display_name: inv.display_name, rules };
+    const result = evaluateDealForInvestor(deal, investorWithRules);
+    const counter_offers = suggestCounterOffers(deal, investorWithRules, result);
+    return { ...result, counter_offers };
   });
 
   // Persist per-investor results
@@ -174,6 +174,7 @@ export async function POST(request: Request) {
           matched_tier_index: r.matched_tier_index,
           boundary_warnings: r.boundary_warnings,
           failure_reasons: r.failure_reasons,
+          counter_offers: r.counter_offers,
         },
         reasoning: r.reasoning,
       })),
