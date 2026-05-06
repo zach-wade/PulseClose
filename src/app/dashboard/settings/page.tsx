@@ -36,6 +36,7 @@ import {
   Bell,
 } from "lucide-react";
 import { NotificationsTab } from "./notifications-tab";
+import { ApiKeysTab } from "./api-keys-tab";
 import { toast } from "sonner";
 
 interface SettingsData {
@@ -90,7 +91,6 @@ export default function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [copied, setCopied] = useState(false);
   const [aiToggleSaving, setAiToggleSaving] = useState(false);
   const [monitorDefaultSaving, setMonitorDefaultSaving] = useState(false);
   const [pauseSaving, setPauseSaving] = useState(false);
@@ -191,15 +191,6 @@ export default function SettingsPage() {
     }
     load();
   }, []);
-
-  const mockApiKey = "pc_live_" + "x".repeat(24) + "a8f3";
-
-  function handleCopyKey() {
-    navigator.clipboard.writeText(mockApiKey);
-    setCopied(true);
-    toast.success("API key copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -632,67 +623,7 @@ export default function SettingsPage() {
 
         {/* API Keys tab */}
         <TabsContent value="api" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">API Key</CardTitle>
-              <CardDescription>
-                Use this key to access the PulseClose API programmatically.
-                Keep it secret.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-md border bg-muted px-3 py-2 font-mono text-sm">
-                  {mockApiKey.slice(0, 12)}{"•".repeat(20)}{mockApiKey.slice(-4)}
-                </code>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyKey}
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    toast.info(
-                      "API key regenerated. All existing integrations will need to be updated.",
-                    )
-                  }
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Regenerate Key
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">API Documentation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border bg-muted/50 p-4 space-y-3">
-                <p className="text-sm">Base URL</p>
-                <code className="block rounded bg-muted px-3 py-2 font-mono text-sm">
-                  https://api.pulseclose.com/v1
-                </code>
-                <p className="text-sm mt-3">Example: Create Validation</p>
-                <code className="block rounded bg-muted px-3 py-2 font-mono text-xs whitespace-pre">
-{`curl -X POST https://api.pulseclose.com/v1/validations \\
-  -H "Authorization: Bearer pc_live_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{"borrower_name": "John Smith", ...}'`}
-                </code>
-              </div>
-            </CardContent>
-          </Card>
+          <ApiKeysTab />
         </TabsContent>
       </Tabs>
     </div>
