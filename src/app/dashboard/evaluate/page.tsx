@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StateSelect } from "@/components/ui/state-select";
 import { Calculator, ChevronRight, Settings } from "lucide-react";
+import { EvaluateScenarios } from "@/components/dashboard/evaluate-scenarios";
 
 interface FailureReason {
   field: string;
@@ -439,6 +440,31 @@ function EvaluatePageInner() {
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {/* F1 + F2 — scenario comparison + rate stress test, only after
+          a base evaluation has landed. Both reuse the deal as captured
+          on the form. */}
+      {sortedResults && sortedResults.length > 0 && (
+        <EvaluateScenarios
+          baseResults={sortedResults}
+          deal={{
+            loan_type: loanType,
+            property_type: propertyType,
+            property_state: propertyState,
+            purchase_price: purchasePrice ? Number(purchasePrice) : null,
+            loan_amount: Number(loanAmount),
+            arv: arv ? Number(arv) : null,
+            rehab_budget: rehabBudget ? Number(rehabBudget) : null,
+            borrower_fico: borrowerFico ? Number(borrowerFico) : null,
+            borrower_experience: borrowerExperience ? Number(borrowerExperience) : 0,
+            occupancy,
+            loan_purpose: loanPurpose,
+            is_rural: isRural,
+            borrower_name: borrowerName || null,
+            property_address: propertyAddress || null,
+          }}
+        />
       )}
 
       {/*
