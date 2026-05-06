@@ -29,7 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
-import { TrackRecordTable } from "@/components/dashboard/track-record-table";
+import { UnifiedPropertyTable } from "@/components/dashboard/unified-property-table";
 import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import { AddGCCard } from "@/components/dashboard/add-gc-card";
@@ -525,11 +525,13 @@ export default function ValidationDetailPage() {
         />
       ))}
 
-      {/* Track Record — auto-discovered + manual additions. Inline edit
-          + add available now (lender domain knowledge as first-class
-          input). */}
-      <TrackRecordTable
-        data={data.track_record}
+      {/* Unified Property Track Record (Phase 1) — merges auto-discovered
+          (Realie/Regrid/Attom), borrower-claimed (verified_flips), and
+          manual rows into one card with provenance badges. Replaces the
+          old paired TrackRecordTable + VerifiedTrackRecord-rows display. */}
+      <UnifiedPropertyTable
+        trackRecord={data.track_record}
+        verifiedFlips={data.verified_flips ?? []}
         validationId={data.id}
         onUpdated={refetch}
       />
@@ -538,7 +540,10 @@ export default function ValidationDetailPage() {
           hides when neither table has rows for this validation. */}
       <BorrowerUploadsCard validationId={data.id} />
 
-      {/* Verified Track Record — deed-verified flips (intake or top-up) */}
+      {/* Borrower address verification — workflow surface only (share
+          link, send-to-borrower, paste form). Property rows that this
+          flow surfaces now appear in the unified table above with a
+          "Verified" or "Claimed only" badge. */}
       <VerifiedTrackRecord
         validationId={data.id}
         initial={data.verified_flips ?? []}

@@ -79,6 +79,44 @@ lender that adopts will surface most of these.
 
 ---
 
+## Property model consolidation
+
+- **Phase 2: collapse `verified_flips` table into `track_record_entries`.**
+  Phase 1 (shipped in `<commit>`) merged the two tables into one
+  `UnifiedPropertyTable` UI component, but `verified_flips` and
+  `track_record_entries` still exist as separate DB tables. Each
+  unified row dispatches to whichever underlying table backs it.
+  Phase 2 unifies the data layer:
+  1. Add new source values to `track_record_entries.source`:
+     `borrower_claimed_verified` (deed-matched) and
+     `borrower_claimed_unmatched` (no deed match — yellow-flag rows).
+  2. Migration: insert one `track_record_entries` row per existing
+     `verified_flips` row (de-duping by `property_id` against
+     existing entries — for matches, merge fields and drop the flip
+     row; for non-matches, create a new track-record row with the
+     `_unmatched` source).
+  3. Refactor share-link verify endpoint
+     ([src/app/api/share/[token]/verify/route.ts](../src/app/api/share/[token]/verify/route.ts))
+     to write into `track_record_entries` instead of `verified_flips`.
+  4. Drop `verified_flips` table.
+  5. Remove the `mergeRows` function from
+     [src/components/dashboard/unified-property-table.tsx](../src/components/dashboard/unified-property-table.tsx)
+     and just read from one source.
+  6. Once collapsed, `claimed_only` rows become editable through the
+     existing `/api/track-record/[id]` PATCH path (Phase 1 disables
+     edit on those because they have no underlying track-record id).
+  *Unblocks when:* the unified Phase 1 UI proves the model works in
+  practice (~1-2 weeks of usage). If users push back on the
+  consolidation, Phase 2 stays deferred and Phase 1 can be reverted
+  by swapping the page back to TrackRecordTable + VerifiedTrackRecord.
+  *Migration risk:* moderate. The borrower-side share-link write path
+  flows into `verified_flips` today; switching it to
+  `track_record_entries` requires careful field mapping (especially
+  match_status → source). The factor engine ([src/lib/risk/factors.ts](../src/lib/risk/factors.ts))
+  reads from track_record_entries, so post-migration the engine sees
+  borrower-claimed properties too — desired side-effect but should
+  be validated against expected tier outcomes for known borrowers.
+
 ## Lender customization
 
 Tunables that today are hard-coded.

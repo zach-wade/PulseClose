@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,19 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   ShieldCheck,
-  CheckCircle2,
-  Home,
-  XCircle,
-  HelpCircle,
   Loader2,
   AlertTriangle,
   Link2,
@@ -31,45 +18,8 @@ import {
   Send,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatCurrency, formatDate } from "./shared-types";
+import { formatCurrency } from "./shared-types";
 import type { VerifiedFlip } from "./shared-types";
-
-const STATUS_LABEL: Record<VerifiedFlip["match_status"], string> = {
-  owned_and_sold: "Verified flip",
-  owned_and_held: "Verified — still owns",
-  never_owned: "Not in deed chain",
-  not_found: "Address not found",
-  pending: "Pending",
-};
-
-function StatusBadge({ status }: { status: VerifiedFlip["match_status"] }) {
-  if (status === "owned_and_sold") {
-    return (
-      <Badge variant="default" className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-        <CheckCircle2 className="h-3 w-3" /> {STATUS_LABEL[status]}
-      </Badge>
-    );
-  }
-  if (status === "owned_and_held") {
-    return (
-      <Badge variant="secondary" className="gap-1">
-        <Home className="h-3 w-3" /> {STATUS_LABEL[status]}
-      </Badge>
-    );
-  }
-  if (status === "never_owned") {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <XCircle className="h-3 w-3" /> {STATUS_LABEL[status]}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="gap-1">
-      <HelpCircle className="h-3 w-3" /> {STATUS_LABEL[status]}
-    </Badge>
-  );
-}
 
 interface Props {
   validationId: string;
@@ -225,7 +175,7 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldCheck className="h-4 w-4" />
-          Verified Track Record
+          Borrower address verification
           {flips.length > 0 && (
             <span className="text-xs font-normal text-muted-foreground ml-2">
               {summary.submitted} submitted · {summary.sold} sold · {summary.held} still owned · {summary.notInChain} not in deed chain
@@ -374,76 +324,24 @@ export function VerifiedTrackRecord({ validationId, initial, onUpdate }: Props) 
           </div>
         </div>
 
-        {flips.length > 0 && (
-          <div className="border rounded-md overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Acquired</TableHead>
-                  <TableHead className="text-right">Buy</TableHead>
-                  <TableHead className="text-right">Sold</TableHead>
-                  <TableHead className="text-right">Sell</TableHead>
-                  <TableHead className="text-right">Profit</TableHead>
-                  <TableHead className="text-right">Hold</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {flips.map((f) => (
-                  <TableRow key={f.id}>
-                    <TableCell className="font-medium max-w-[260px] truncate">
-                      <div>{f.submitted_address}</div>
-                      {f.resolved_address && f.resolved_address !== f.submitted_address && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          → {f.resolved_address}
-                        </div>
-                      )}
-                      {f.match_status === "owned_and_held" && f.current_owner && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          Current: {f.current_owner}
-                        </div>
-                      )}
-                      {(f.raw_response as { _error?: boolean } | undefined)?._error && (
-                        <div className="flex items-start gap-1 text-xs text-amber-600 mt-0.5">
-                          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span>{((f.raw_response as { _message?: string })?._message ?? "Lookup failed")}</span>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={f.match_status} />
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-mono">
-                      {formatDate(f.acquisition_date)}
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-mono">
-                      {formatCurrency(f.acquisition_price)}
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-mono">
-                      {formatDate(f.disposition_date)}
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-mono">
-                      {formatCurrency(f.disposition_price)}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right text-sm font-mono ${
-                        f.profit != null && f.profit > 0
-                          ? "text-emerald-700 font-medium"
-                          : f.profit != null && f.profit < 0
-                            ? "text-red-600"
-                            : ""
-                      }`}
-                    >
-                      {f.profit != null ? formatCurrency(f.profit) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-mono">
-                      {f.hold_months != null ? `${f.hold_months}mo` : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+        {/* Per-row property display moved into the unified Property
+            Track Record card above. This card retains only the
+            workflow surface (share link, send-to-borrower, paste form).
+            Lookup errors still surface inline below the form. */}
+        {flips.some((f) => (f.raw_response as { _error?: boolean } | undefined)?._error) && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+            <p className="font-medium uppercase tracking-wide">Lookup errors</p>
+            {flips
+              .filter((f) => (f.raw_response as { _error?: boolean } | undefined)?._error)
+              .map((f) => (
+                <p key={f.id} className="flex items-start gap-1">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <span>
+                    <span className="font-mono">{f.submitted_address}</span> —{" "}
+                    {((f.raw_response as { _message?: string })?._message ?? "Lookup failed")}
+                  </span>
+                </p>
+              ))}
           </div>
         )}
       </CardContent>

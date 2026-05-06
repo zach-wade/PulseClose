@@ -135,10 +135,10 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 **Surfaces:** [/dashboard/validations/[id]](../src/app/dashboard/validations/%5Bid%5D/page.tsx) (the detail page) + the borrower share link [/share/[token]](../src/app/share/%5Btoken%5D/page.tsx).
 
 ### What exists
-- 4 pillar cards: EntityResultCard, TrackRecordTable, LitigationCases (S3 — case-card UI with category/status filter chips), GCResultCard, SanctionsCard. ✅
+- 4 pillar cards: EntityResultCard, **UnifiedPropertyTable** (replaces the old paired TrackRecordTable + VerifiedTrackRecord rows-list — Phase 1 of the property-model consolidation; one card per property with provenance badges: verified / public-record / claimed-only / manual), LitigationCases (S3 — case-card UI with category/status filter chips), GCResultCard, SanctionsCard. ✅
 - AI memo (Story Mode v2): summary → strengths → risks (severity badges + "Why this rating? →" jump links) → recommendations. Compact toggle. Sky-blue informational severity for `market_outlier`-class informational risks. ✅
 - WhyThisRating panel: factor rows with `id="risk-factor-<key>"` anchors. Inline override actions per factor (e.g. "Mark as primary residence" on `extended_hold`). ✅
-- VerifiedTrackRecord card: lender pastes addresses → Realie deed-chain. Writes `verified_flips`. ✅
+- VerifiedTrackRecord card (now titled "Borrower address verification"): workflow surface only — share link, send-to-borrower, paste form. Property rows surfaced via this flow appear in the unified table above. ✅
 - HandoffCard: preparer fields + narrative + Excel/PDF buttons (label changes when dirty). ✅
 - MonitorCard: opt-in continuous monitoring (cadence + recipients + adapter coverage). ✅
 - Borrower share link: borrower pastes addresses (or uploads xlsx/pdf, 422 on extraction failure) → same verify pipeline. ✅
@@ -156,6 +156,7 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 - **G3.3 — borrower-side activity surfaced.** New "Borrower activity" strip on the detail page that reads `activity_events` for this validation (uploaded_doc, verified_addresses, uploaded_photo, etc.). ~0.5 day on top of B5.
 - **G3.4 — "Add GC to this borrower" action.** Detail page: GC pillar card shows "Add GC" when no `gc_validations` row exists. Click → inline form → patches the validation. ~0.5 day.
 - **G3.5 — kill or hide standalone tool pages** (decide and execute).
+- **G3.6 — Property-model Phase 2: collapse `verified_flips` into `track_record_entries`.** Phase 1 (UI consolidation) shipped; the data layer still has two tables and the unified component does runtime merging. Phase 2 is the schema migration: extend `track_record_entries.source` enum with `borrower_claimed_verified` / `borrower_claimed_unmatched`, migrate flip rows in, point the share-link verify endpoint at the unified table, drop `verified_flips`. Side effect: factor engine starts seeing borrower-claimed properties (today only sees deed-discovered). Validate against known-borrower tier outcomes before shipping. Full plan in [docs/IDEAS.md](IDEAS.md#property-model-consolidation). *Unblocks when:* Phase 1 proves out in real usage (~1-2 weeks). ~1 day.
 - **C1 — Geo-tagged photo verification.** Borrower share-link gets per-property photo upload. EXIF GPS + Claude vision → property-level signal `photo_verified`. ~3 days. Major fraud-detection lever.
 - **C5 — Bank statement parser** (borrower upload). Claude extracts ending balance, NSF count, monthly inflows. New liquidity factor. ~2 days. Privacy: 90-day expiry on `documents`.
 - **C4 — Address consistency cross-check.** Home vs registered agent vs property addresses; flag CMRA mail-drops, cluster anomalies. New informational factor. ~1 day.

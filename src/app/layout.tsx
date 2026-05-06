@@ -22,6 +22,15 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  // Explicit icon refs override the (now-deleted) legacy favicon.ico
+  // and force browsers off any cached version they had. Bump the ?v=
+  // suffix when the SVG changes to bust caches again.
+  icons: {
+    icon: [
+      { url: "/icon.svg?v=2", type: "image/svg+xml" },
+    ],
+    apple: "/apple-icon.svg?v=2",
+  },
 };
 
 export default function RootLayout({
