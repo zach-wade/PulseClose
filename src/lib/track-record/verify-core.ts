@@ -42,19 +42,54 @@ interface ResolvedAddress {
   state: string;
 }
 
+// G2.4 — Common street-suffix words used to anchor unit-number stripping.
+// "71 WEBBER WAY 77" should become "71 WEBBER WAY"; the trailing 77 is a
+// unit/apt indicator the street database doesn't index. List is intentionally
+// short — only well-known, unambiguous suffixes go here.
+const STREET_SUFFIX_WORDS = [
+  "way", "ave", "avenue", "st", "street", "rd", "road", "blvd", "boulevard",
+  "ct", "court", "dr", "drive", "ln", "lane", "pl", "place",
+  "cir", "circle", "pkwy", "parkway", "hwy", "highway", "pike",
+  "ter", "terrace", "sq", "square", "aly", "alley",
+  "trl", "trail", "loop", "row", "run", "walk", "path",
+];
+const STREET_SUFFIX_RE = `(?:${STREET_SUFFIX_WORDS.join("|")})`;
+
+// Explicit unit designators ("Apt 5" / "Unit 5" / "#5" / "Suite 12B").
+const EXPLICIT_UNIT_RE = /\s+(?:apt|apartment|unit|suite|ste|#)\s*[a-z0-9-]+\s*$/i;
+
 function parseAddressForState(input: string, fallbackState?: string): ResolvedAddress {
   const trimmed = input.trim();
-  const stateMatch = trimmed.match(/[,\s]\s*([A-Z]{2})\s*\d{5}?/);
+
+  // State extraction: a 2-letter uppercase code following a comma or whitespace,
+  // optionally followed by a 5-digit zip (or zip+4). Pulls "CA" out of
+  // "1259 ALMADEN AVE, SAN JOSE, CA 95110" or just trailing "CA".
+  const stateMatch = trimmed.match(/[,\s]\s*([A-Z]{2})\s*(?:\d{5}(?:-\d{4})?)?\s*$/);
   const state = stateMatch?.[1] ?? fallbackState ?? "";
-  // Strip the trailing ", City, ST ZIP" envelope. Single regex handles all
-  // four variants: with/without city, with/without zip (incl. zip+4).
-  // Realie's /public/property/address/ endpoint expects street-only; an
-  // earlier two-pass version left the city attached when both city AND
-  // state+zip were present (e.g. "1259 ALMADEN AVE, SAN JOSE, CA 95110"
-  // → "1259 ALMADEN AVE, SAN JOSE") which Realie 404'd on.
-  const street = trimmed
-    .replace(/,\s*([^,]+,\s*)?[A-Z]{2}(\s+\d{5}(-\d{4})?)?\s*$/, "")
-    .trim();
+
+  // Street is everything before the first comma. If there's no comma, fall
+  // back to the legacy "strip trailing ST [zip]" envelope so single-line
+  // inputs like "1310 Rosalia Ave CA 95128" still get cleaned.
+  const firstCommaIdx = trimmed.indexOf(",");
+  let street: string;
+  if (firstCommaIdx >= 0) {
+    street = trimmed.slice(0, firstCommaIdx).trim();
+  } else {
+    street = trimmed
+      .replace(/\s+[A-Z]{2}(\s+\d{5}(?:-\d{4})?)?\s*$/, "")
+      .trim();
+  }
+
+  // Strip explicit unit designators ("Apt 5" / "#5" / "Unit B").
+  street = street.replace(EXPLICIT_UNIT_RE, "").trim();
+
+  // Strip trailing alphanumeric token (≤4 chars) that follows a street
+  // suffix word. Example: "71 WEBBER WAY 77" → "71 WEBBER WAY". Realie
+  // indexes properties at the street level; the trailing token is almost
+  // always a unit / apt / building number that breaks address lookup.
+  const trailingUnitRe = new RegExp(`(\\s${STREET_SUFFIX_RE})\\s+[a-z0-9]{1,4}\\s*$`, "i");
+  street = street.replace(trailingUnitRe, "$1").trim();
+
   return { street, state };
 }
 
