@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -258,6 +258,19 @@ function BookmarkletCard() {
   const SCRIPT = `(function(){var s=window.getSelection&&String(window.getSelection())||'';var a=encodeURIComponent(s.trim().slice(0,200));var t=encodeURIComponent((document.title||'').slice(0,80));var u='${APP_BASE}/dashboard/new?source=bookmarklet'+(a?'&address='+a:'')+(t?'&borrower='+t:'');window.open(u,'_blank');})();`;
   const HREF = `javascript:${encodeURIComponent(SCRIPT)}`;
 
+  // React 19 (and React 18, with a warning) actively rewrites href
+  // values that start with `javascript:` to a throw-stub as an XSS
+  // defense. That breaks the bookmarklet shipping pattern entirely.
+  // Workaround: render the <a> with no href prop, then set it via the
+  // raw DOM API after mount — React doesn't re-process attributes it
+  // doesn't manage, so the javascript: URL survives drag-to-bookmarks.
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (linkRef.current) {
+      linkRef.current.setAttribute("href", HREF);
+    }
+  }, [HREF]);
+
   return (
     <Card>
       <CardHeader>
@@ -271,9 +284,9 @@ function BookmarkletCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="rounded-md border bg-muted/20 p-4 flex items-center justify-center">
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages, jsx-a11y/anchor-is-valid */}
           <a
-            href={HREF}
+            ref={linkRef}
             onClick={(e) => {
               e.preventDefault();
               toast.info("Drag this link to your bookmarks bar.");
