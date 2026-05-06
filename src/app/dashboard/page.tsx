@@ -25,6 +25,9 @@ import {
   Clock,
   Sparkles,
   GitCompare,
+  Search,
+  Download,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { GCStatusChip, type GCSummaryView } from "@/components/dashboard/gc-status-chip";
@@ -65,6 +68,49 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type StatusFilter = "all" | "verified" | "partial" | "pending" | "flagged";
+type TierFilter = "all" | "1" | "2" | "3" | "4";
+
+function csvEscape(v: unknown): string {
+  if (v == null) return "";
+  const s = String(v);
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function buildValidationsCsv(rows: Validation[]): string {
+  const header = [
+    "id",
+    "borrower_name",
+    "borrower_entity_name",
+    "overall_status",
+    "confidence_score",
+    "experience_tier",
+    "property_count",
+    "flag_count",
+    "validation_date",
+    "created_at",
+  ];
+  const lines = [header.join(",")];
+  for (const v of rows) {
+    lines.push([
+      csvEscape(v.id),
+      csvEscape(v.borrower_name),
+      csvEscape(v.borrower_entity_name),
+      csvEscape(v.overall_status),
+      csvEscape(v.confidence_score),
+      csvEscape(v.experience_tier),
+      csvEscape(v.property_count),
+      csvEscape(v.flag_count),
+      csvEscape(v.validation_date),
+      csvEscape(v.created_at),
+    ].join(","));
+  }
+  return lines.join("\n");
+}
+
 export default function DashboardPage() {
   const [validations, setValidations] = useState<Validation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +121,9 @@ export default function DashboardPage() {
   // Selection state for the Compare action. Only 2 IDs allowed at a time
   // because /api/validations/compare returns a side-by-side diff.
   const [selected, setSelected] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const router = useRouter();
 
   function toggleSelect(id: string) {
@@ -108,6 +157,47 @@ export default function DashboardPage() {
   const flagged = validations.filter((v) => v.overall_status === "flagged").length;
   const pending = validations.filter((v) => v.overall_status === "pending").length;
 
+  // Apply client-side search + filter. Validation set is small enough
+  // that a server round-trip per keystroke isn't worth it. Property
+  // address search would need an API call (joining properties); deferred.
+  const searchLower = search.trim().toLowerCase();
+  const filteredValidations = validations.filter((v) => {
+    if (statusFilter !== "all" && v.overall_status !== statusFilter) return false;
+    if (tierFilter !== "all" && String(v.experience_tier ?? "") !== tierFilter) return false;
+    if (searchLower) {
+      const haystack = [
+        v.borrower_name,
+        v.borrower_entity_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(searchLower)) return false;
+    }
+    return true;
+  });
+
+  const filtersActive = search.trim() !== "" || statusFilter !== "all" || tierFilter !== "all";
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setTierFilter("all");
+  }
+
+  function exportCsv() {
+    const csv = buildValidationsCsv(filteredValidations);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `validations-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const stats = [
     { label: "Total", value: validations.length, icon: Shield, color: "text-primary" },
     { label: "Verified", value: verified, icon: CheckCircle2, color: "text-green-600" },
@@ -125,10 +215,18 @@ export default function DashboardPage() {
             Borrower entity, track record, and credential checks
           </p>
         </div>
-        <Button render={<Link href="/dashboard/new" />}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Validation
-        </Button>
+        <div className="flex items-center gap-2">
+          {validations.length > 0 && (
+            <Button variant="outline" onClick={exportCsv}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          )}
+          <Button render={<Link href="/dashboard/new" />}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Validation
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -223,6 +321,71 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
+          {/* Search + filter toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search borrower or entity…"
+                className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                aria-label="Search validations"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {(["all", "verified", "partial", "pending", "flagged"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-2.5 py-1 text-xs rounded-md border capitalize transition-colors ${
+                    statusFilter === s
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted border-input text-foreground/70"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              {(["all", "1", "2", "3", "4"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTierFilter(t)}
+                  className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                    tierFilter === t
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted border-input text-foreground/70"
+                  }`}
+                >
+                  {t === "all" ? "All tiers" : `T${t}`}
+                </button>
+              ))}
+            </div>
+            {filtersActive && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground ml-auto">
+              {filteredValidations.length} of {validations.length}
+            </p>
+          </div>
+
           {selected.length > 0 && (
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-4 py-2 shadow-sm">
               <p className="text-sm">
@@ -271,7 +434,18 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {validations.map((v) => (
+                {filteredValidations.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center text-sm text-muted-foreground py-8">
+                      No validations match your filters.{" "}
+                      <button type="button" onClick={clearFilters} className="text-primary hover:underline">
+                        Clear them
+                      </button>{" "}
+                      to see all {validations.length}.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {filteredValidations.map((v) => (
                   <TableRow key={v.id} className={selected.includes(v.id) ? "bg-muted/50" : ""}>
                     <TableCell>
                       <input
