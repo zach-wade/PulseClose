@@ -237,10 +237,14 @@ async function loadData(id: string, orgId: string) {
 
 export default async function RiskMethodologyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ print?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const autoprint = sp.print === "1";
   const profile = await getUserProfile();
   if (!profile) notFound();
 
@@ -264,6 +268,26 @@ export default async function RiskMethodologyPage({
         <style>{styles}</style>
       </head>
       <body>
+        <div className="rm-toolbar">
+          <button
+            type="button"
+            className="rm-btn"
+            // Server-rendered HTML — inline handler so we don't pull in
+            // a client component just for the print button.
+            {...({ onclick: "window.print()" } as Record<string, string>)}
+          >
+            Print / Save as PDF
+          </button>
+        </div>
+        {autoprint && (
+          // Auto-fire print dialog on load when invoked with ?print=1.
+          // Small delay lets layout settle before the dialog renders.
+          <script
+            dangerouslySetInnerHTML={{
+              __html: "window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 300); });",
+            }}
+          />
+        )}
         <header className="rm-header">
           <div>
             <p className="rm-org">PulseClose Risk Methodology</p>
@@ -449,6 +473,20 @@ const styles = `
     border-bottom: 1px solid #e2e8f0;
     padding-bottom: 4px;
     margin-bottom: 10px;
+  }
+  .rm-toolbar { margin-bottom: 12px; }
+  .rm-btn {
+    font: inherit;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #0f172a;
+    background: #0f172a;
+    color: #fff;
+    cursor: pointer;
+  }
+  .rm-btn:hover { background: #1e293b; }
+  @media print {
+    .rm-toolbar { display: none !important; }
   }
   .rm-empty { color: #64748b; font-style: italic; }
   .rm-factors { display: flex; flex-direction: column; gap: 10px; }

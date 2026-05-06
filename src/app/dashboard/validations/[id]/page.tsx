@@ -299,11 +299,11 @@ export default function ValidationDetailPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => window.open(`/validations/${data.id}/risk-methodology`, "_blank")}
-            title="One-page printable showing the deterministic factor decomposition, severity, and signal-override audit trail."
+            onClick={() => window.open(`/validations/${data.id}/risk-methodology?print=1`, "_blank")}
+            title="One-page printable showing the deterministic factor decomposition, severity, and signal-override audit trail. Opens the system print dialog directly — choose 'Save as PDF' as the destination."
           >
             <FileDown className="mr-2 h-4 w-4" />
-            Print risk methodology
+            Download risk methodology
           </Button>
         </div>
       </div>
