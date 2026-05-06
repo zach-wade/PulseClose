@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Save, Trash2, BarChart3 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, BarChart3 } from "lucide-react";
 import { InvestorPerformanceCard } from "@/components/dashboard/investor-performance-card";
+import { InvestorCriteriaEditor } from "@/components/dashboard/investor-criteria-editor";
 
 interface CriterionRow {
   criteria_key: string;
@@ -42,8 +43,8 @@ export default function InvestorsAdminPage() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  const [editJson, setEditJson] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   async function refresh() {
     const res = await fetch("/api/investors");
@@ -87,36 +88,27 @@ export default function InvestorsAdminPage() {
 
   function startEdit(inv: Investor) {
     setEditing(inv.id);
-    setEditJson(JSON.stringify(inv.criteria, null, 2));
     setEditError(null);
   }
 
-  async function saveEdit(id: string) {
-    let parsed: CriterionRow[];
+  async function saveEdit(id: string, rows: CriterionRow[]) {
+    setEditSaving(true);
     try {
-      parsed = JSON.parse(editJson);
-      if (!Array.isArray(parsed)) throw new Error("Top-level must be a JSON array");
-      for (const row of parsed) {
-        if (typeof row.criteria_key !== "string") {
-          throw new Error("Every row needs a string criteria_key");
-        }
+      const res = await fetch(`/api/investors/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ criteria: rows }),
+      });
+      if (!res.ok) {
+        setEditError(`Save failed (${res.status})`);
+        return;
       }
-    } catch (err) {
-      setEditError(err instanceof Error ? err.message : String(err));
-      return;
+      setEditing(null);
+      setEditError(null);
+      await refresh();
+    } finally {
+      setEditSaving(false);
     }
-    const res = await fetch(`/api/investors/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ criteria: parsed }),
-    });
-    if (!res.ok) {
-      setEditError(`Save failed (${res.status})`);
-      return;
-    }
-    setEditing(null);
-    setEditError(null);
-    await refresh();
   }
 
   return (
@@ -187,17 +179,7 @@ export default function InvestorsAdminPage() {
                   {inv.notes && <p className="text-xs text-muted-foreground mt-1">{inv.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  {editing === inv.id ? (
-                    <>
-                      <Button size="sm" onClick={() => saveEdit(inv.id)}>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
+                  {editing === inv.id ? null : (
                     <>
                       <Button
                         size="sm"
@@ -231,19 +213,15 @@ export default function InvestorsAdminPage() {
             <CardContent>
               {editing === inv.id ? (
                 <div className="space-y-2">
-                  <Label htmlFor={`json-${inv.id}`}>Criteria JSON</Label>
-                  <textarea
-                    id={`json-${inv.id}`}
-                    className="font-mono text-xs w-full h-72 border border-input rounded-md p-2 bg-transparent"
-                    value={editJson}
-                    onChange={(e) => setEditJson(e.target.value)}
+                  <InvestorCriteriaEditor
+                    initial={inv.criteria}
+                    saving={editSaving}
+                    onSave={(rows) => saveEdit(inv.id, rows)}
+                    onCancel={() => setEditing(null)}
                   />
                   {editError && (
                     <p className="text-sm text-destructive">{editError}</p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Each row needs a <code className="text-xs">criteria_key</code> + <code className="text-xs">criteria_value</code>. Recognized keys: <code className="text-xs">loan_types</code>, <code className="text-xs">property_types</code>, <code className="text-xs">excluded_property_types</code>, <code className="text-xs">allowed_states</code>, <code className="text-xs">excluded_states</code>, <code className="text-xs">min_loan_amount</code>, <code className="text-xs">max_loan_amount</code>, <code className="text-xs">min_fico</code>, <code className="text-xs">min_experience</code>, <code className="text-xs">max_ltv</code>, <code className="text-xs">max_ltc</code>, <code className="text-xs">max_ltarv</code>, <code className="text-xs">rural_allowed</code>, <code className="text-xs">allowed_occupancy</code>, <code className="text-xs">leverage_matrix</code>, <code className="text-xs">rate_adjusters</code>.
-                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
