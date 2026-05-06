@@ -40,7 +40,24 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
   return (
     <>
       <header className="hf-header">
-        <div>
+        <div className="hf-header-left">
+          <div className="hf-brand">
+            <svg viewBox="0 0 64 64" width="40" height="40" aria-label="PulseClose">
+              <rect width="64" height="64" rx="14" fill="#0F172A"/>
+              <path
+                d="M 8 36 L 22 36 L 26 36 L 30 16 L 34 50 L 40 26 L 44 36 L 56 36"
+                fill="none"
+                stroke="#3B82F6"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="hf-brand-text">
+              <span style={{ color: "#0F172A" }}>Pulse</span>
+              <span style={{ color: "#3B82F6" }}>Close</span>
+            </span>
+          </div>
           <p className="hf-org">{doc.org_name}</p>
           <h1>Borrower Validation Handoff</h1>
           <p className="hf-borrower">
@@ -227,39 +244,55 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
                 </span>
               )}
             </p>
-            <ul className="hf-investor-terms">
-              {doc.intended_investor.rate != null && (
-                <li>
-                  Quoted rate: <strong>{doc.intended_investor.rate}%</strong>
-                </li>
-              )}
-              {doc.intended_investor.points != null && (
-                <li>
-                  Points: <strong>{doc.intended_investor.points}</strong>
-                </li>
-              )}
-              {doc.intended_investor.max_ltv_pct != null && (
-                <li>
-                  Max LTV: <strong>{doc.intended_investor.max_ltv_pct}%</strong>
-                </li>
-              )}
-              {doc.intended_investor.max_loan_amount != null && (
-                <li>
-                  Max loan amount:{" "}
-                  <strong>
-                    ${doc.intended_investor.max_loan_amount.toLocaleString()}
-                  </strong>
-                </li>
-              )}
-              {doc.intended_investor.computed_at && (
-                <li>
-                  Evaluated:{" "}
-                  {doc.intended_investor.computed_at.slice(0, 10)}
-                </li>
-              )}
-            </ul>
-            {doc.intended_investor.rationale && (
-              <p className="hf-narrative">{doc.intended_investor.rationale}</p>
+            {/* If the chosen investor wasn't included in the most-recent
+                evaluation, every term field is null and the block was
+                rendering as a dangling investor name. Show a clear
+                "no terms computed yet" state so the receiving investor
+                sees the gap rather than an unexplained empty section. */}
+            {doc.intended_investor.result == null ? (
+              <p className="hf-muted">
+                No eligibility terms have been computed for this investor
+                yet. Run an evaluation that includes this investor on the
+                validation page to populate the rate, points, LTV cap,
+                and max loan amount here.
+              </p>
+            ) : (
+              <>
+                <ul className="hf-investor-terms">
+                  {doc.intended_investor.rate != null && (
+                    <li>
+                      Quoted rate: <strong>{doc.intended_investor.rate}%</strong>
+                    </li>
+                  )}
+                  {doc.intended_investor.points != null && (
+                    <li>
+                      Points: <strong>{doc.intended_investor.points}</strong>
+                    </li>
+                  )}
+                  {doc.intended_investor.max_ltv_pct != null && (
+                    <li>
+                      Max LTV: <strong>{doc.intended_investor.max_ltv_pct}%</strong>
+                    </li>
+                  )}
+                  {doc.intended_investor.max_loan_amount != null && (
+                    <li>
+                      Max loan amount:{" "}
+                      <strong>
+                        ${doc.intended_investor.max_loan_amount.toLocaleString()}
+                      </strong>
+                    </li>
+                  )}
+                  {doc.intended_investor.computed_at && (
+                    <li>
+                      Evaluated:{" "}
+                      {doc.intended_investor.computed_at.slice(0, 10)}
+                    </li>
+                  )}
+                </ul>
+                {doc.intended_investor.rationale && (
+                  <p className="hf-narrative">{doc.intended_investor.rationale}</p>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -376,6 +409,9 @@ const HF_STYLES = `
     padding-bottom: 0.75rem;
     margin-bottom: 1rem;
   }
+  .hf-header-left { display: flex; flex-direction: column; gap: 0.25rem; }
+  .hf-brand { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+  .hf-brand-text { font-size: 14pt; font-weight: 800; letter-spacing: -0.01em; }
   .hf-org { color: #3b82f6; font-weight: 700; font-size: 9pt; letter-spacing: 0.05em; text-transform: uppercase; margin: 0; }
   h1 { font-size: 18pt; margin: 0.25rem 0 0.25rem; }
   h2 { font-size: 13pt; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.2rem; margin: 1.25rem 0 0.5rem; }

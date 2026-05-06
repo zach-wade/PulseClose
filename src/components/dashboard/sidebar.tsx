@@ -78,10 +78,29 @@ function NavContent({
   return (
     <>
       {/* Logo */}
-      <div className="flex h-16 items-center px-6 border-b border-sidebar-border">
-        <Link href="/dashboard" className="text-xl font-bold tracking-tight">
-          <span className="text-sidebar-foreground">Pulse</span>
-          <span className="text-sidebar-primary">Close</span>
+      <div className="flex h-16 items-center gap-2 px-6 border-b border-sidebar-border">
+        <Link href="/dashboard" className="flex items-center gap-2 text-xl font-bold tracking-tight">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 64 64"
+            className="h-7 w-7 shrink-0"
+            aria-hidden="true"
+          >
+            <rect width="64" height="64" rx="14" fill="currentColor" className="text-sidebar-primary/15" />
+            <path
+              d="M 8 36 L 22 36 L 26 36 L 30 16 L 34 50 L 40 26 L 44 36 L 56 36"
+              fill="none"
+              stroke="currentColor"
+              className="text-sidebar-primary"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>
+            <span className="text-sidebar-foreground">Pulse</span>
+            <span className="text-sidebar-primary">Close</span>
+          </span>
         </Link>
       </div>
 

@@ -147,17 +147,25 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
     ];
     if (inv.result) {
       invRows.push(["Eligibility", inv.result]);
+      if (inv.rate != null) invRows.push(["Quoted rate", `${inv.rate}%`]);
+      if (inv.points != null) invRows.push(["Points", String(inv.points)]);
+      if (inv.max_ltv_pct != null) invRows.push(["Max LTV", `${inv.max_ltv_pct}%`]);
+      if (inv.max_loan_amount != null)
+        invRows.push(["Max loan amount", `$${fmtMoney(inv.max_loan_amount).toLocaleString()}`]);
+      if (inv.computed_at)
+        invRows.push(["Evaluated", inv.computed_at.slice(0, 10)]);
+    } else {
+      // No eligibility computed for this investor — surface the gap
+      // explicitly instead of leaving a one-line dangling investor name.
+      invRows.push([
+        "Status",
+        "No eligibility terms computed for this investor yet — run an evaluation that includes them.",
+      ]);
     }
-    if (inv.rate != null) invRows.push(["Quoted rate", `${inv.rate}%`]);
-    if (inv.points != null) invRows.push(["Points", String(inv.points)]);
-    if (inv.max_ltv_pct != null) invRows.push(["Max LTV", `${inv.max_ltv_pct}%`]);
-    if (inv.max_loan_amount != null)
-      invRows.push(["Max loan amount", `$${fmtMoney(inv.max_loan_amount).toLocaleString()}`]);
-    if (inv.computed_at)
-      invRows.push(["Evaluated", inv.computed_at.slice(0, 10)]);
     for (const [label, value] of invRows) {
       const r = cover.addRow([label, value]);
       r.getCell(1).font = { bold: true };
+      r.getCell(2).alignment = { wrapText: true, vertical: "top" };
     }
     if (inv.rationale) {
       const ratRow = cover.addRow([inv.rationale, ""]);

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="PulseClose">
+  <title>PulseClose</title>
+  <rect width="180" height="180" rx="40" fill="#0F172A"/>
+  <path
+    d="M 24 100 L 64 100 L 74 100 L 86 46 L 96 140 L 110 74 L 122 100 L 156 100"
+    fill="none"
+    stroke="#3B82F6"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

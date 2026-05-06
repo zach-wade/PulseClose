@@ -231,9 +231,34 @@ Geist is loaded via `next/font/google` in `layout.tsx`. No other fonts.
 
 ## 5. Logo
 
-### Construction
+> **Updated 2026-05-06 (Z3).** Earlier guidance was "wordmark only —
+> no icon." That changed when we needed a favicon for the bookmarklet
+> drag-target. The mark below is now the canonical mark; the wordmark
+> still holds for in-product surfaces and headers, but they always
+> appear together in the lockup.
 
-The logo is text-only. No icon, no symbol, no mark.
+### The Mark
+
+A pulse waveform on a Navy 950 rounded square. The waveform reads as
+ECG/heartbeat — direct visual tie to "Pulse" in the name. Single
+asymmetric QRS-style spike makes it ownable rather than generic.
+
+```
+┌──────────────┐
+│   ╱╲         │
+│──┘  ╲    ╱─  │     pulse line, Blue 500
+│      ╲  ╱    │     on Navy 950 rounded square
+│       ╲╱     │
+└──────────────┘
+```
+
+**Files:**
+- [`src/app/icon.svg`](../src/app/icon.svg) — 64×64 favicon (Next.js auto-serves)
+- [`src/app/apple-icon.svg`](../src/app/apple-icon.svg) — 180×180 apple-touch-icon
+- [`public/logo-mark.svg`](../public/logo-mark.svg) — standalone mark for embedding
+- [`public/logo-wordmark.svg`](../public/logo-wordmark.svg) — horizontal lockup (mark + text)
+
+### The Wordmark
 
 ```
 PulseClose
@@ -241,35 +266,57 @@ PulseClose
 
 - "Pulse" in `--foreground` (Navy 950)
 - "Close" in `--primary` (Blue 500)
-- Font: Geist Sans, `text-xl font-bold tracking-tight`
+- Font: Geist Sans (system stack on PDF surfaces), `text-xl font-bold tracking-tight`
 
 ### Implementation
 
+In React, use the mark + wordmark lockup wherever the logo appears
+(sidebar, page headers, login). Inline SVG keeps the mark rendering
+correctly on dark backgrounds via `currentColor`:
+
 ```tsx
-<span className="text-foreground">Pulse</span>
-<span className="text-primary">Close</span>
+<Link href="/dashboard" className="flex items-center gap-2">
+  <svg viewBox="0 0 64 64" className="h-7 w-7">
+    <rect width="64" height="64" rx="14" className="fill-sidebar-primary/15" />
+    <path
+      d="M 8 36 L 22 36 L 26 36 L 30 16 L 34 50 L 40 26 L 44 36 L 56 36"
+      fill="none"
+      className="stroke-sidebar-primary"
+      strokeWidth="3.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+  <span className="text-xl font-bold tracking-tight">
+    <span className="text-sidebar-foreground">Pulse</span>
+    <span className="text-sidebar-primary">Close</span>
+  </span>
+</Link>
 ```
 
-On dark backgrounds (sidebar, CTA sections):
-```tsx
-<span className="text-sidebar-foreground">Pulse</span>
-<span className="text-sidebar-primary">Close</span>
-```
+For static surfaces (PDF handoff, OG images) reference the SVG file
+directly via `<img src="/logo-mark.svg" />`.
 
 ### Logo Rules
 
-1. **No icon.** The wordmark is the logo. Don't add a pulse/heartbeat graphic, a shield, or any symbol.
-2. **No tagline lockup.** The logo stands alone. Taglines go below as separate text.
-3. **Minimum size:** `text-xl` (20px). Never smaller.
+1. **Lockup is mark + wordmark.** They appear together by default.
+   Mark-only is reserved for tight surfaces (favicon, app icon, OG
+   thumbnail) where the wordmark wouldn't fit.
+2. **No tagline lockup.** Taglines go below as separate text.
+3. **Minimum size:** mark 24×24px, wordmark `text-xl` (20px).
 4. **Clear space:** At least 16px margin on all sides.
-5. **No background shape.** No rounded rectangle, circle, or pill behind the text.
+5. **Pulse path is fixed.** Don't redraw the waveform — use the SVG
+   files. Different number of peaks or different shape breaks
+   recognition.
+6. **Never invert the mark colors.** Navy bg + Blue line is canonical.
+   On dark surfaces, switch to Blue bg / White line via
+   `currentColor`.
 
 ### Favicon / App Icon
 
-For favicon and OG images, use a simple "PC" monogram:
-- "P" in Navy, "C" in Blue
-- Geist Sans Bold
-- On white background (light) or Navy background (dark)
+The pulse mark IS the favicon. `src/app/icon.svg` is auto-served by
+Next.js; no `<link rel="icon">` needed. The bookmarklet inherits the
+favicon of whatever page the user drags it from.
 
 ---
 
