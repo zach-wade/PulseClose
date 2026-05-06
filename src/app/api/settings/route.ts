@@ -35,9 +35,10 @@ export async function GET() {
   });
 }
 
-// Owner/admin-only patch for the org's AI extraction toggle. Kept on the
-// existing /api/settings route so the UI's GET + PATCH share a path; if
-// more org-level toggles land later, split into a dedicated endpoint.
+// Owner/admin-only patch for org-level toggles. Each field is optional so
+// the UI can flip one without resending the rest. Currently supports:
+//   - ai_extraction_enabled (00022) — gate all Claude API calls
+//   - monitor_new_validations_by_default (00026) — auto-monitor new validations
 export async function PATCH(request: Request) {
   const profile = await getUserProfile();
   if (!profile) {
@@ -47,30 +48,48 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
 
-  let body: { ai_extraction_enabled?: unknown };
+  let body: {
+    ai_extraction_enabled?: unknown;
+    monitor_new_validations_by_default?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (typeof body.ai_extraction_enabled !== "boolean") {
-    return NextResponse.json(
-      { error: "ai_extraction_enabled must be boolean" },
-      { status: 400 },
-    );
+  const update: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if ("ai_extraction_enabled" in body) {
+    if (typeof body.ai_extraction_enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "ai_extraction_enabled must be boolean" },
+        { status: 400 },
+      );
+    }
+    update.ai_extraction_enabled = body.ai_extraction_enabled;
+  }
+  if ("monitor_new_validations_by_default" in body) {
+    if (typeof body.monitor_new_validations_by_default !== "boolean") {
+      return NextResponse.json(
+        { error: "monitor_new_validations_by_default must be boolean" },
+        { status: 400 },
+      );
+    }
+    update.monitor_new_validations_by_default = body.monitor_new_validations_by_default;
+  }
+  if (Object.keys(update).length === 1) {
+    return NextResponse.json({ error: "No supported fields in body" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("organizations")
-    .update({
-      ai_extraction_enabled: body.ai_extraction_enabled,
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq("id", profile.org_id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, ai_extraction_enabled: body.ai_extraction_enabled });
+  return NextResponse.json({ ok: true, ...update });
 }

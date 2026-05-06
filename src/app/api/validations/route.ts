@@ -165,10 +165,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // B1 — borrower watchlist inheritance. If the lender has a
-  // borrower-level monitor subscription on this borrower, materialize a
-  // matching validation-level sub so this new validation is monitored
-  // automatically without the lender remembering to flip the toggle.
+  // Auto-monitor inheritance. Two layers:
+  //   1. B1 — borrower-level template. If the lender flagged this
+  //      borrower for monitoring, materialize a matching validation-level
+  //      sub.
+  //   2. G7.1 — org-level default. If no borrower template AND the org
+  //      has monitor_new_validations_by_default=true, create a default
+  //      sub with neutral cadence.
   // Best-effort: a failure here doesn't block validation creation.
   try {
     const { data: borrowerSub } = await supabase
@@ -178,16 +181,38 @@ export async function POST(request: Request) {
       .eq("borrower_id", primaryBorrowerId)
       .eq("enabled", true)
       .maybeSingle();
+
+    let inheritanceSource: "borrower" | "org_default" | null = null;
+    let cadence: string = "weekly";
+    let notifyEmails: string[] = [];
+    let criticalOnly = false;
+
     if (borrowerSub) {
+      inheritanceSource = "borrower";
+      cadence = borrowerSub.cadence ?? "weekly";
+      notifyEmails = borrowerSub.notify_emails ?? [];
+      criticalOnly = borrowerSub.critical_only ?? false;
+    } else {
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("monitor_new_validations_by_default")
+        .eq("id", profile.org_id)
+        .single();
+      if (org?.monitor_new_validations_by_default) {
+        inheritanceSource = "org_default";
+      }
+    }
+
+    if (inheritanceSource) {
       const { data: newSub } = await supabase
         .from("monitor_subscriptions")
         .insert({
           validation_id: validation.id,
           org_id: profile.org_id,
           enabled: true,
-          cadence: borrowerSub.cadence,
-          notify_emails: borrowerSub.notify_emails ?? [],
-          critical_only: borrowerSub.critical_only ?? false,
+          cadence,
+          notify_emails: notifyEmails,
+          critical_only: criticalOnly,
           next_run_at: new Date().toISOString(),
         })
         .select("id")
@@ -201,7 +226,8 @@ export async function POST(request: Request) {
           subjectId: validation.id,
           metadata: {
             subscription_id: newSub.id,
-            inherited_from_borrower: true,
+            inherited_from_borrower: inheritanceSource === "borrower",
+            inherited_from_org_default: inheritanceSource === "org_default",
             borrower_id: primaryBorrowerId,
           },
         });
@@ -209,7 +235,7 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     console.warn(
-      `[validations] borrower-monitor inheritance failed (validation=${validation.id}):`,
+      `[validations] monitor inheritance failed (validation=${validation.id}):`,
       err instanceof Error ? err.message : String(err),
     );
   }

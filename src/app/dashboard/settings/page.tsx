@@ -51,6 +51,7 @@ interface SettingsData {
     created_at: string;
     stripe_subscription_id: string | null;
     ai_extraction_enabled: boolean;
+    monitor_new_validations_by_default: boolean;
   } | null;
   team: {
     id: string;
@@ -88,6 +89,33 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [copied, setCopied] = useState(false);
   const [aiToggleSaving, setAiToggleSaving] = useState(false);
+  const [monitorDefaultSaving, setMonitorDefaultSaving] = useState(false);
+
+  async function handleMonitorDefaultToggle(next: boolean) {
+    if (!data?.org) return;
+    setMonitorDefaultSaving(true);
+    const prev = data.org.monitor_new_validations_by_default;
+    setData({ ...data, org: { ...data.org, monitor_new_validations_by_default: next } });
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monitor_new_validations_by_default: next }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Update failed" }));
+        toast.error(error || "Update failed");
+        setData({ ...data, org: { ...data.org, monitor_new_validations_by_default: prev } });
+      } else {
+        toast.success(next ? "Auto-monitoring enabled" : "Auto-monitoring disabled");
+      }
+    } catch {
+      toast.error("Update failed");
+      setData({ ...data, org: { ...data.org, monitor_new_validations_by_default: prev } });
+    } finally {
+      setMonitorDefaultSaving(false);
+    }
+  }
 
   async function handleAiToggle(next: boolean) {
     if (!data?.org) return;
@@ -258,6 +286,43 @@ export default function SettingsPage() {
                   }
                 >
                   {data.org?.ai_extraction_enabled ? "Disable" : "Enable"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Monitoring defaults</CardTitle>
+              <CardDescription>
+                Continuous monitoring re-runs entity, sanctions, and
+                litigation checks on a cadence and emails you on change.
+                When enabled below, every new validation gets a default
+                weekly subscription auto-created. You can still toggle
+                per-validation or per-borrower from the validation
+                detail page. Borrower-level subscriptions take precedence
+                over this org default.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Auto-monitor every new validation</p>
+                  <p className="text-xs text-muted-foreground">
+                    {data.org?.monitor_new_validations_by_default
+                      ? "Enabled — new validations get a weekly monitor subscription on creation."
+                      : "Disabled — monitoring opts in per-validation or per-borrower."}
+                  </p>
+                </div>
+                <Button
+                  variant={data.org?.monitor_new_validations_by_default ? "outline" : "default"}
+                  size="sm"
+                  disabled={monitorDefaultSaving}
+                  onClick={() =>
+                    handleMonitorDefaultToggle(!data.org?.monitor_new_validations_by_default)
+                  }
+                >
+                  {data.org?.monitor_new_validations_by_default ? "Disable" : "Enable"}
                 </Button>
               </div>
             </CardContent>
