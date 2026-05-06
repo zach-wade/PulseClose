@@ -31,11 +31,8 @@ export interface LogEditInput {
   editedByUserId: string;
 }
 
-export async function logEdit(
-  supabase: SupabaseClient,
-  input: LogEditInput,
-): Promise<void> {
-  const { error } = await supabase.from("data_edits").insert({
+function rowFromInput(input: LogEditInput) {
+  return {
     org_id: input.orgId,
     validation_id: input.validationId,
     table_name: input.tableName,
@@ -46,13 +43,39 @@ export async function logEdit(
     edit_kind: input.editKind ?? "update",
     reason: input.reason ?? null,
     edited_by_user_id: input.editedByUserId,
-  });
+  };
+}
+
+export async function logEdit(
+  supabase: SupabaseClient,
+  input: LogEditInput,
+): Promise<void> {
+  const { error } = await supabase.from("data_edits").insert(rowFromInput(input));
   if (error) {
     // The handoff renders aggregated counts from data_edits — silent loss
     // means the receiving investor sees under-reported edits. Throw so the
     // route returns 500 and Sentry captures via @sentry/nextjs auto-
     // instrumentation. Callers must `await logEdit(...)` (no `void`).
     throw new Error(`data_edits insert failed: ${error.message}`);
+  }
+}
+
+/**
+ * Batch variant — single INSERT for N audit rows so a partial failure
+ * mid-loop can't leave the audit log half-written. Use this when a route
+ * generates one audit row per changed field; each PATCH then writes
+ * either all-or-none of the audit rows for that edit.
+ *
+ * No-op on empty input.
+ */
+export async function logEdits(
+  supabase: SupabaseClient,
+  inputs: LogEditInput[],
+): Promise<void> {
+  if (inputs.length === 0) return;
+  const { error } = await supabase.from("data_edits").insert(inputs.map(rowFromInput));
+  if (error) {
+    throw new Error(`data_edits bulk insert failed: ${error.message}`);
   }
 }
 

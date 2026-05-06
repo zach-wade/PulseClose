@@ -16,7 +16,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
-import { logEdit } from "@/lib/admin/data-edits";
+import { logEdit, logEdits } from "@/lib/admin/data-edits";
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
@@ -97,8 +97,10 @@ export async function PATCH(
     .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  for (const field of Object.keys(updates) as EditableField[]) {
-    await logEdit(supabase, {
+  // Bulk insert audit rows — see track-record route for the rationale.
+  await logEdits(
+    supabase,
+    (Object.keys(updates) as EditableField[]).map((field) => ({
       orgId: profile.org_id,
       validationId: row.validation_id,
       tableName: "litigation_cases",
@@ -109,8 +111,8 @@ export async function PATCH(
       editKind: "update",
       reason: body.reason ?? null,
       editedByUserId: profile.id,
-    });
-  }
+    })),
+  );
 
   // Memo regen so the AI memo narrative reflects the corrected case
   // data even though the factor doesn't directly recompute (engine
@@ -142,6 +144,14 @@ export async function DELETE(
     .maybeSingle();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Delete first, then log — see track-record route for the rationale.
+  // Captured `row` above already has the before-content for audit.
+  const { error } = await supabase
+    .from("litigation_cases")
+    .delete()
+    .eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
   await logEdit(supabase, {
     orgId: profile.org_id,
     validationId: row.validation_id,
@@ -154,12 +164,6 @@ export async function DELETE(
     reason,
     editedByUserId: profile.id,
   });
-
-  const { error } = await supabase
-    .from("litigation_cases")
-    .delete()
-    .eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Recompute + memo regen so the UI / handoff / methodology reflect the
   // lender's deletion. The factors engine reads from litigation_checks,

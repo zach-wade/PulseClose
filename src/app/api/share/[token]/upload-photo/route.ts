@@ -71,7 +71,7 @@ export async function POST(
 
   const form = await request.formData();
   const file = form.get("file");
-  const propertyId = (form.get("property_id") as string | null) || null;
+  const propertyIdRaw = (form.get("property_id") as string | null) || null;
   const propertyLatRaw = form.get("property_lat") as string | null;
   const propertyLngRaw = form.get("property_lng") as string | null;
   const propertyLat = propertyLatRaw ? Number(propertyLatRaw) : null;
@@ -85,6 +85,26 @@ export async function POST(
       { error: `File too large (max ${MAX_BYTES / 1024 / 1024}MB)` },
       { status: 413 },
     );
+  }
+
+  // IDOR defense: the share token authenticates the borrower, but the
+  // form-supplied property_id is attacker-controlled. Verify it belongs
+  // to the same org as the validation; without this an attacker who
+  // guessed a share token could attach photos to a property in another
+  // org via the admin client (which bypasses RLS). validation.id stays
+  // as the safe default if the supplied property_id doesn't validate.
+  let propertyId: string | null = null;
+  if (propertyIdRaw) {
+    const { data: prop } = await supabase
+      .from("properties")
+      .select("id")
+      .eq("id", propertyIdRaw)
+      .eq("org_id", validation.org_id)
+      .maybeSingle();
+    if (!prop) {
+      return NextResponse.json({ error: "Property not in this org" }, { status: 400 });
+    }
+    propertyId = prop.id;
   }
   const buffer = Buffer.from(await file.arrayBuffer());
 

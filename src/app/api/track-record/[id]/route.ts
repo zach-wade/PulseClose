@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
-import { logEdit } from "@/lib/admin/data-edits";
+import { logEdit, logEdits } from "@/lib/admin/data-edits";
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
@@ -75,11 +75,13 @@ export async function PATCH(
     .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Audit log — one row per field changed. Fields that weren't actually
-  // different we still log (the value_before equals value_after) so the
-  // edit timestamp is recorded; cleaner than dropping silent no-ops.
-  for (const field of Object.keys(updates) as EditableField[]) {
-    await logEdit(supabase, {
+  // Audit log — one row per field changed, written as a single bulk
+  // INSERT so a partial mid-loop failure can't leave the audit half-
+  // written (the row update was already committed; we want audit to be
+  // all-or-none for this edit).
+  await logEdits(
+    supabase,
+    (Object.keys(updates) as EditableField[]).map((field) => ({
       orgId: profile.org_id,
       validationId: row.validation_id,
       tableName: "track_record_entries",
@@ -90,8 +92,8 @@ export async function PATCH(
       editKind: "update",
       reason: body.reason ?? null,
       editedByUserId: profile.id,
-    });
-  }
+    })),
+  );
 
   // Recompute + regenerate. Both are awaited only enough to start them;
   // memo regen is fire-and-forget per the existing override pattern.
@@ -123,7 +125,16 @@ export async function DELETE(
     .maybeSingle();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Log the delete BEFORE removing — preserve the row context.
+  // Delete first, then log. If the audit insert fails the row is already
+  // gone — better than the inverse (phantom audit pointing at a still-
+  // present row). The selected `row` snapshot is captured above so we
+  // still have the before-content for the audit even after the delete.
+  const { error } = await supabase
+    .from("track_record_entries")
+    .delete()
+    .eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
   await logEdit(supabase, {
     orgId: profile.org_id,
     validationId: row.validation_id,
@@ -136,12 +147,6 @@ export async function DELETE(
     reason,
     editedByUserId: profile.id,
   });
-
-  const { error } = await supabase
-    .from("track_record_entries")
-    .delete()
-    .eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await recomputeRiskFactorsForValidation(supabase, row.validation_id);
   void regenerateAiMemoForValidation(supabase, row.validation_id).catch(() => {});
