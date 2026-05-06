@@ -10,6 +10,7 @@ import {
   Calculator,
   Briefcase,
   Activity,
+  PieChart,
   Settings,
   LogOut,
   Menu,
@@ -26,6 +27,12 @@ const navItems = [
     href: "/dashboard",
     icon: Shield,
     description: "Borrower validations — pipeline view",
+  },
+  {
+    label: "Portfolio",
+    href: "/dashboard/portfolio",
+    icon: PieChart,
+    description: "Tier mix, flag counts, outcomes, borrowers needing attention",
   },
   {
     label: "Activity",
