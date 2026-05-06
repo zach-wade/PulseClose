@@ -24,13 +24,55 @@ export function normalizeText(input: string | null | undefined): string | null {
   return input.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// USPS-style address canonicalization. Mirrors the Postgres
+// normalize_address() function exactly (00029) — drift creates
+// duplicate property rows the JS query never finds.
+//
+// Steps: lowercase → strip , . # → unit-separator family → street
+// suffix expansion → directional collapse → whitespace cleanup.
+const STREET_SUFFIX_MAP: Array<[RegExp, string]> = [
+  [/\b(?:st|str)\b/g, "street"],
+  [/\b(?:ave|av)\b/g, "avenue"],
+  [/\bblvd\b/g, "boulevard"],
+  [/\brd\b/g, "road"],
+  [/\bdr\b/g, "drive"],
+  [/\bln\b/g, "lane"],
+  [/\bct\b/g, "court"],
+  [/\bpl\b/g, "place"],
+  [/\b(?:pkwy|pky)\b/g, "parkway"],
+  [/\bhwy\b/g, "highway"],
+  [/\b(?:ter|terr)\b/g, "terrace"],
+  [/\bcir\b/g, "circle"],
+  [/\b(?:trl|tr)\b/g, "trail"],
+  [/\b(?:wy)\b/g, "way"], // 'way' is canonical so map only the abbreviation
+];
+
+const DIRECTIONAL_MAP: Array<[RegExp, string]> = [
+  // Compounds first to avoid "north" eating "northeast"'s leading word.
+  [/\bnortheast\b/g, "ne"],
+  [/\bnorthwest\b/g, "nw"],
+  [/\bsoutheast\b/g, "se"],
+  [/\bsouthwest\b/g, "sw"],
+  [/\bnorth\b/g, "n"],
+  [/\bsouth\b/g, "s"],
+  [/\beast\b/g, "e"],
+  [/\bwest\b/g, "w"],
+];
+
 export function normalizeAddress(input: string | null | undefined): string | null {
   if (!input) return null;
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[,.#]/g, "")
-    .replace(/\s+/g, " ");
+  let s = input.toLowerCase();
+  s = s.replace(/[.,#]/g, "");
+  // Unit-separator family.
+  s = s.replace(
+    /\s+(?:apartment|apt|aptmt|ste|suite|unit|rm|room|fl|floor|bldg|building|trlr|trailer)\s+/g,
+    " unit ",
+  );
+  s = s.replace(/\s+#\s*/g, " unit ");
+  for (const [re, repl] of STREET_SUFFIX_MAP) s = s.replace(re, repl);
+  for (const [re, repl] of DIRECTIONAL_MAP) s = s.replace(re, repl);
+  s = s.replace(/\s+/g, " ").trim();
+  return s.length > 0 ? s : null;
 }
 
 // Canonical name key — must mirror Postgres canonicalize_name() exactly.
