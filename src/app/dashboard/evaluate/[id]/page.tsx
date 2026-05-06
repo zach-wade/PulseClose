@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 
 type CounterOffer =
   | {
@@ -132,6 +132,10 @@ export default function EvaluationDetailPage() {
     return ra - rb;
   });
 
+  const eligibleCount = data.results.filter(
+    (r) => r.result === "pass" || r.result === "conditional",
+  ).length;
+
   const borrowerName = (data.additional_params?.borrower_name as string | undefined) ?? null;
   const propertyAddress = (data.additional_params?.property_address as string | undefined) ?? null;
   const occupancy = (data.additional_params?.occupancy as string | undefined) ?? null;
@@ -145,7 +149,7 @@ export default function EvaluationDetailPage() {
         <Button variant="ghost" size="icon" render={<Link href="/dashboard/evaluate" />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">
             {borrowerName ?? "Deal evaluation"}
           </h1>
@@ -154,6 +158,12 @@ export default function EvaluationDetailPage() {
             {propertyAddress && ` • ${propertyAddress}`}
           </p>
         </div>
+        {eligibleCount > 0 && (
+          <Button variant="outline" size="sm" render={<Link href={`/borrower-summary/${data.id}`} target="_blank" />}>
+            <FileText className="h-4 w-4 mr-2" />
+            Borrower summary
+          </Button>
+        )}
       </div>
 
       <Card>
