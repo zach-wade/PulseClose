@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import { DocIngest, type IngestExtraction } from "@/components/dashboard/doc-ingest";
+import { BorrowerMatchHint } from "@/components/dashboard/borrower-match-hint";
 
 export default function NewValidationPage() {
   const router = useRouter();
@@ -171,6 +172,7 @@ export default function NewValidationPage() {
                 <p className="text-xs text-muted-foreground">
                   Person&apos;s legal name. Avoid LLC/Corp suffixes here — they belong in Entity below.
                 </p>
+                <BorrowerMatchHint borrowerName={borrowerName} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="guarantorName">Guarantor name</Label>
