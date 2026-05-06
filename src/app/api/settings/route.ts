@@ -51,6 +51,7 @@ export async function PATCH(request: Request) {
   let body: {
     ai_extraction_enabled?: unknown;
     monitor_new_validations_by_default?: unknown;
+    monitor_paused_until?: unknown;
   };
   try {
     body = await request.json();
@@ -78,6 +79,18 @@ export async function PATCH(request: Request) {
       );
     }
     update.monitor_new_validations_by_default = body.monitor_new_validations_by_default;
+  }
+  if ("monitor_paused_until" in body) {
+    if (
+      body.monitor_paused_until !== null &&
+      typeof body.monitor_paused_until !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "monitor_paused_until must be ISO string or null" },
+        { status: 400 },
+      );
+    }
+    update.monitor_paused_until = body.monitor_paused_until;
   }
   if (Object.keys(update).length === 1) {
     return NextResponse.json({ error: "No supported fields in body" }, { status: 400 });

@@ -54,6 +54,7 @@ interface SettingsData {
     stripe_subscription_id: string | null;
     ai_extraction_enabled: boolean;
     monitor_new_validations_by_default: boolean;
+    monitor_paused_until: string | null;
   } | null;
   team: {
     id: string;
@@ -92,6 +93,39 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
   const [aiToggleSaving, setAiToggleSaving] = useState(false);
   const [monitorDefaultSaving, setMonitorDefaultSaving] = useState(false);
+  const [pauseSaving, setPauseSaving] = useState(false);
+
+  async function handleMonitorPause(hours: number | null) {
+    if (!data?.org) return;
+    setPauseSaving(true);
+    const prev = data.org.monitor_paused_until;
+    const next =
+      hours == null ? null : new Date(Date.now() + hours * 3600 * 1000).toISOString();
+    setData({ ...data, org: { ...data.org, monitor_paused_until: next } });
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monitor_paused_until: next }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Update failed" }));
+        toast.error(error || "Update failed");
+        setData({ ...data, org: { ...data.org, monitor_paused_until: prev } });
+        return;
+      }
+      toast.success(
+        hours == null
+          ? "Monitoring resumed."
+          : `Monitoring paused for ${hours} hour${hours === 1 ? "" : "s"}.`,
+      );
+    } catch {
+      toast.error("Update failed");
+      setData({ ...data, org: { ...data.org, monitor_paused_until: prev } });
+    } finally {
+      setPauseSaving(false);
+    }
+  }
 
   async function handleMonitorDefaultToggle(next: boolean) {
     if (!data?.org) return;
@@ -330,6 +364,62 @@ export default function SettingsPage() {
                 >
                   {data.org?.monitor_new_validations_by_default ? "Disable" : "Enable"}
                 </Button>
+              </div>
+
+              {/* G7.3 — pause-during-demo. Filters every monitor sub for
+                  this org out of the cron until the chosen window passes.
+                  Reach for this before a Damon demo so a sanctions-list
+                  diff doesn't email Insignia mid-pitch. */}
+              <div className="space-y-2 rounded-md border p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Pause monitoring (demo mode)</p>
+                    <p className="text-xs text-muted-foreground">
+                      {data.org?.monitor_paused_until &&
+                      new Date(data.org.monitor_paused_until) > new Date()
+                        ? `Paused until ${new Date(data.org.monitor_paused_until).toLocaleString()}. Cron skips every sub for this org until then.`
+                        : "Active. Pause to silence change emails before a live demo."}
+                    </p>
+                  </div>
+                  {data.org?.monitor_paused_until &&
+                  new Date(data.org.monitor_paused_until) > new Date() ? (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      disabled={pauseSaving}
+                      onClick={() => handleMonitorPause(null)}
+                    >
+                      Resume now
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={pauseSaving}
+                        onClick={() => handleMonitorPause(2)}
+                      >
+                        2h
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={pauseSaving}
+                        onClick={() => handleMonitorPause(24)}
+                      >
+                        1d
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={pauseSaving}
+                        onClick={() => handleMonitorPause(72)}
+                      >
+                        3d
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

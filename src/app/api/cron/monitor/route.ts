@@ -53,7 +53,32 @@ export async function GET(request: Request) {
     .order("next_run_at", { ascending: true })
     .limit(25);
 
-  const subs = dueSubs ?? [];
+  let subs = dueSubs ?? [];
+
+  // G7.3 filler — drop subs whose org has monitor_paused_until in the
+  // future. Single query keyed on the org_ids actually present in this
+  // tick so we don't pay for a full org scan.
+  if (subs.length > 0) {
+    const orgIds = [...new Set(subs.map((s) => s.org_id))];
+    const { data: pausedRows } = await supabase
+      .from("organizations")
+      .select("id, monitor_paused_until")
+      .in("id", orgIds);
+    const nowIso = new Date().toISOString();
+    const pausedOrgIds = new Set(
+      (pausedRows ?? [])
+        .filter((r) => r.monitor_paused_until && r.monitor_paused_until > nowIso)
+        .map((r) => r.id),
+    );
+    if (pausedOrgIds.size > 0) {
+      const before = subs.length;
+      subs = subs.filter((s) => !pausedOrgIds.has(s.org_id));
+      console.info(
+        `[monitor cron] paused ${before - subs.length} subs across ${pausedOrgIds.size} org(s); they'll re-fire when the pause window passes.`,
+      );
+    }
+  }
+
   let processed = 0;
   let changesFound = 0;
   let errors = 0;
