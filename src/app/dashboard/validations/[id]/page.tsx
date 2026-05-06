@@ -42,6 +42,7 @@ import { DealOutcomeCard, type DealOutcome } from "@/components/dashboard/deal-o
 import { AIMemo } from "@/components/dashboard/ai-memo";
 import { ActivityStrip } from "@/components/dashboard/activity-strip";
 import { BorrowerHistoryCard } from "@/components/dashboard/borrower-history-card";
+import { CompareToPriorButton } from "@/components/dashboard/compare-to-prior-button";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -313,6 +314,14 @@ export default function ValidationDetailPage() {
             <FileDown className="mr-2 h-4 w-4" />
             Download risk methodology
           </Button>
+          {/* B6 — Compare-to-prior CTA. Auto-hides if no prior validation exists. */}
+          {data.primary_borrower_id && (
+            <CompareToPriorButton
+              borrowerId={data.primary_borrower_id}
+              currentValidationId={data.id}
+              currentCreatedAt={data.created_at}
+            />
+          )}
         </div>
       </div>
 

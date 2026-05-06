@@ -197,6 +197,19 @@ function ComparePageInner() {
         <h1 className="text-xl font-semibold tracking-tight">Compare validations</h1>
       </div>
 
+      {/* B6 — when both validations are for the same borrower (matched on
+          the canonical borrower_name displayed on each card), call out
+          that this is a diff-over-time, not a cross-borrower compare. */}
+      {v0.borrower_name === v1.borrower_name && v0.id !== v1.id && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Same borrower — showing how <strong>{v0.borrower_name}</strong>{" "}
+          changed between{" "}
+          {new Date(v0.created_at).toLocaleDateString()} and{" "}
+          {new Date(v1.created_at).toLocaleDateString()}. Tier moves and
+          factor severity changes are surfaced inline below.
+        </div>
+      )}
+
       {/* Sticky headers */}
       <div className="grid grid-cols-2 gap-4">
         {[v0, v1].map((v) => (
