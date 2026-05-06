@@ -135,7 +135,7 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
             <Scale className="h-4 w-4" />
-            Litigation Screening
+            Public records
             <Badge variant="outline" className="text-[10px] uppercase">
               {cases.length} case{cases.length === 1 ? "" : "s"}
             </Badge>
@@ -148,6 +148,16 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* C6 — coverage disclosure. Federal-only today (CourtListener
+            PACER); state/county records require a paid provider. Show
+            scope so a reader doesn't assume a clean run means clean
+            history. */}
+        <p className="text-xs text-muted-foreground">
+          Source: CourtListener (federal courts — PACER + bankruptcy).
+          State court, county lien, tax warrant, and non-federal
+          foreclosure searches are not yet automated.
+        </p>
+
         {/* Filter chip row */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground mr-1">Filter:</span>
@@ -183,6 +193,36 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
           <p className="text-sm text-muted-foreground italic">
             No cases match the current filters.
           </p>
+        ) : category === "all" ? (
+          // C6 — when "All" is selected, group by category so the reader
+          // sees distinct evidence streams. When a single category is
+          // active the chip filter already handles segmentation.
+          <div className="space-y-4">
+            {(["bankruptcy", "foreclosure", "lien", "tax", "civil", "other"] as const).map((cat) => {
+              const inCat = filtered.filter((c) => c.category === cat);
+              if (inCat.length === 0) return null;
+              return (
+                <div key={cat} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] uppercase ${categoryColor(cat)}`}
+                    >
+                      {CATEGORY_LABELS[cat]}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {inCat.length} case{inCat.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {inCat.map((c) => (
+                      <CaseCard key={c.id} c={c} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="space-y-2">
             {filtered.map((c) => (
