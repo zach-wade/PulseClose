@@ -493,10 +493,14 @@ export default function ValidationDetailPage() {
         />
       ))}
 
-      {/* Track Record — auto-discovered current holdings */}
-      {data.track_record.length > 0 && (
-        <TrackRecordTable data={data.track_record} />
-      )}
+      {/* Track Record — auto-discovered + manual additions. Inline edit
+          + add available now (lender domain knowledge as first-class
+          input). */}
+      <TrackRecordTable
+        data={data.track_record}
+        validationId={data.id}
+        onUpdated={refetch}
+      />
 
       {/* Verified Track Record — deed-verified flips (intake or top-up) */}
       <VerifiedTrackRecord
@@ -505,13 +509,14 @@ export default function ValidationDetailPage() {
         onUpdate={(flips) => setData({ ...data, verified_flips: flips })}
       />
 
-      {/* Litigation */}
-      {(data.litigation_cases?.length ?? 0) > 0 || data.litigation_checks.length > 0 ? (
-        <LitigationCases
-          cases={data.litigation_cases ?? []}
-          legacyChecks={data.litigation_checks}
-        />
-      ) : null}
+      {/* Litigation — render even when empty so the lender can add a
+          case the vendor missed (state court, county lien, etc.) */}
+      <LitigationCases
+        cases={data.litigation_cases ?? []}
+        legacyChecks={data.litigation_checks}
+        validationId={data.id}
+        onUpdated={refetch}
+      />
 
       {/* Sanctions / PEP */}
       {data.sanctions_checks?.[0] && (

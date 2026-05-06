@@ -25,6 +25,8 @@ export interface TrackRecordEntry {
   hold_months: number | null;
   profit: number | null;
   raw_response?: Record<string, unknown>;
+  source?: string | null;
+  lender_notes?: string | null;
 }
 
 export interface LitigationCheck {

@@ -23,6 +23,10 @@ import {
 } from "lucide-react";
 import { LitigationGrid } from "./litigation-grid";
 import type { LitigationCheck } from "./shared-types";
+import { LitigationEditDialog } from "./litigation-edit-dialog";
+import { LitigationAddDialog } from "./litigation-add-dialog";
+import { Button } from "@/components/ui/button";
+import { Plus, Pencil } from "lucide-react";
 
 export interface LitigationCaseRow {
   id: string;
@@ -38,6 +42,8 @@ export interface LitigationCaseRow {
   status: "pending" | "closed" | "discharged" | "dismissed" | "judgment" | "unknown";
   dollar_amount_estimated: number | null;
   source_doc_url: string | null;
+  source?: string | null;
+  lender_notes?: string | null;
   raw: Record<string, unknown>;
 }
 
@@ -50,6 +56,9 @@ interface Props {
   // Legacy fallback — passed when litigation_cases is empty so the page
   // still shows something. Old validations show the original grid.
   legacyChecks: LitigationCheck[];
+  // Optional — when present, edit + delete + add affordances render.
+  validationId?: string;
+  onUpdated?: () => void;
 }
 
 const CATEGORY_LABELS: Record<LitigationCaseRow["category"], string> = {
@@ -96,7 +105,10 @@ function statusColor(status: LitigationCaseRow["status"]): string {
   return "";
 }
 
-export function LitigationCases({ cases, legacyChecks }: Props) {
+export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }: Props) {
+  const [editing, setEditing] = useState<LitigationCaseRow | null>(null);
+  const [adding, setAdding] = useState(false);
+
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [age, setAge] = useState<AgeFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -123,10 +135,13 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
     [cases],
   );
 
-  // No materialized rows → fall back to the legacy grid. This handles old
-  // validations that predate migration 00018 and weren't backfilled.
-  if (cases.length === 0) {
-    return <LitigationGrid data={legacyChecks} />;
+  // No materialized cases:
+  //   - validationId set → render the empty card with Add button
+  //   - legacy checks present → fall back to legacy grid
+  //   - neither → render nothing
+  if (cases.length === 0 && !validationId) {
+    if (legacyChecks.length > 0) return <LitigationGrid data={legacyChecks} />;
+    return null;
   }
 
   return (
@@ -145,6 +160,12 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
               </Badge>
             )}
           </span>
+          {validationId && (
+            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              Add case
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -216,7 +237,12 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
                   </div>
                   <div className="space-y-2">
                     {inCat.map((c) => (
-                      <CaseCard key={c.id} c={c} />
+                      <CaseCard
+                        key={c.id}
+                        c={c}
+                        editable={Boolean(validationId)}
+                        onEdit={() => setEditing(c)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -226,11 +252,33 @@ export function LitigationCases({ cases, legacyChecks }: Props) {
         ) : (
           <div className="space-y-2">
             {filtered.map((c) => (
-              <CaseCard key={c.id} c={c} />
+              <CaseCard
+                        key={c.id}
+                        c={c}
+                        editable={Boolean(validationId)}
+                        onEdit={() => setEditing(c)}
+                      />
             ))}
           </div>
         )}
       </CardContent>
+
+      {validationId && (
+        <>
+          <LitigationEditDialog
+            open={editing !== null}
+            onOpenChange={(o) => !o && setEditing(null)}
+            caseRow={editing}
+            onSaved={() => onUpdated?.()}
+          />
+          <LitigationAddDialog
+            open={adding}
+            onOpenChange={setAdding}
+            validationId={validationId}
+            onAdded={() => onUpdated?.()}
+          />
+        </>
+      )}
     </Card>
   );
 }
@@ -259,38 +307,74 @@ function FilterChip({
   );
 }
 
-function CaseCard({ c }: { c: LitigationCaseRow }) {
+function CaseCard({
+  c,
+  editable,
+  onEdit,
+}: {
+  c: LitigationCaseRow;
+  editable?: boolean;
+  onEdit?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const filedYear = c.filed_at ? new Date(c.filed_at).getFullYear() : null;
   const Icon = expanded ? ChevronDown : ChevronRight;
+  const isManual = c.source === "manual";
 
   return (
     <div className="rounded-md border p-3">
-      <button
-        type="button"
-        onClick={() => setExpanded((p) => !p)}
-        className="w-full flex items-start justify-between gap-3 text-left"
-      >
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium truncate">{c.case_name}</span>
-            <Badge variant="outline" className={`text-[10px] uppercase ${categoryColor(c.category)}`}>
-              {CATEGORY_LABELS[c.category]}
-            </Badge>
-            <Badge variant="outline" className={`text-[10px] uppercase ${statusColor(c.status)}`}>
-              {c.status === "pending" ? "Pending" : STATUS_LABELS[c.status]}
-              {c.status === "pending" ? null : <CheckCircle2 className="ml-1 h-2.5 w-2.5" />}
-            </Badge>
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((p) => !p)}
+          className="flex-1 flex items-start justify-between gap-3 text-left"
+        >
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium truncate">{c.case_name}</span>
+              <Badge variant="outline" className={`text-[10px] uppercase ${categoryColor(c.category)}`}>
+                {CATEGORY_LABELS[c.category]}
+              </Badge>
+              <Badge variant="outline" className={`text-[10px] uppercase ${statusColor(c.status)}`}>
+                {c.status === "pending" ? "Pending" : STATUS_LABELS[c.status]}
+                {c.status === "pending" ? null : <CheckCircle2 className="ml-1 h-2.5 w-2.5" />}
+              </Badge>
+              {isManual && (
+                <span className="text-[9px] uppercase tracking-wide text-amber-700 bg-amber-50 rounded px-1 py-0.5 border border-amber-200">
+                  manual
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              {c.court && <span>{c.court}</span>}
+              {filedYear && <span>Filed {filedYear}</span>}
+              {c.nature_of_suit && <span>{c.nature_of_suit}</span>}
+              {c.case_number && <span className="font-mono">#{c.case_number}</span>}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            {c.court && <span>{c.court}</span>}
-            {filedYear && <span>Filed {filedYear}</span>}
-            {c.nature_of_suit && <span>{c.nature_of_suit}</span>}
-            {c.case_number && <span className="font-mono">#{c.case_number}</span>}
-          </div>
-        </div>
-        <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-      </button>
+          <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        </button>
+        {editable && onEdit && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="text-muted-foreground hover:text-foreground p-1"
+            title="Edit case"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      {c.lender_notes && (
+        <p className="mt-2 text-xs italic bg-blue-50 border border-blue-100 rounded px-2 py-1.5 text-blue-900">
+          <span className="font-medium not-italic">Lender note: </span>
+          {c.lender_notes}
+        </p>
+      )}
 
       {expanded && (
         <div className="mt-3 pt-3 border-t text-xs space-y-2">

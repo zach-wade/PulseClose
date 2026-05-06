@@ -15,11 +15,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Building2, ChevronDown, ChevronRight } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge as _Badge } from "@/components/ui/badge";
+void _Badge;
 import { formatCurrency, formatDate } from "./shared-types";
 import type { TrackRecordEntry } from "./shared-types";
 import { extractRealieDetails } from "@/lib/adapters/extract";
+import { TrackRecordEditDialog } from "./track-record-edit-dialog";
+import { TrackRecordAddDialog } from "./track-record-add-dialog";
 
 export { type TrackRecordEntry };
 
@@ -35,7 +40,18 @@ function formatCompact(n: number | null | undefined): string {
   return `$${n}`;
 }
 
-export function TrackRecordTable({ data }: { data: TrackRecordEntry[] }) {
+export function TrackRecordTable({
+  data,
+  validationId,
+  onUpdated,
+}: {
+  data: TrackRecordEntry[];
+  validationId?: string;
+  onUpdated?: () => void;
+}) {
+  const [editing, setEditing] = useState<TrackRecordEntry | null>(null);
+  const [adding, setAdding] = useState(false);
+
   const completedProjects = data.filter((t) => t.outcome === "completed");
   const currentHoldings = data.filter((t) => t.outcome !== "completed");
 
@@ -55,10 +71,18 @@ export function TrackRecordTable({ data }: { data: TrackRecordEntry[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Building2 className="h-4 w-4" />
-          Portfolio & Track Record
-        </CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Building2 className="h-4 w-4" />
+            Portfolio & Track Record
+          </CardTitle>
+          {validationId && (
+            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              Add property
+            </Button>
+          )}
+        </div>
         {/* Portfolio summary stats */}
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground mt-1">
           <span>{data.length} properties</span>
@@ -104,11 +128,38 @@ export function TrackRecordTable({ data }: { data: TrackRecordEntry[] }) {
           </TableHeader>
           <TableBody>
             {data.map((tr, i) => (
-              <PropertyRow key={tr.id} entry={tr} details={details[i]} hasRealieData={hasRealieData} />
+              <PropertyRow
+                key={tr.id}
+                entry={tr}
+                details={details[i]}
+                hasRealieData={hasRealieData}
+                editable={Boolean(validationId)}
+                onEdit={() => setEditing(tr)}
+              />
             ))}
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Edit + Add dialogs — only render the controllers when
+          validationId was passed (read-only consumers like the
+          handoff PDF preview don't need them). */}
+      {validationId && (
+        <>
+          <TrackRecordEditDialog
+            open={editing !== null}
+            onOpenChange={(o) => !o && setEditing(null)}
+            entry={editing}
+            onSaved={() => onUpdated?.()}
+          />
+          <TrackRecordAddDialog
+            open={adding}
+            onOpenChange={setAdding}
+            validationId={validationId}
+            onAdded={() => onUpdated?.()}
+          />
+        </>
+      )}
     </Card>
   );
 }
@@ -117,10 +168,14 @@ function PropertyRow({
   entry: tr,
   details: d,
   hasRealieData,
+  editable,
+  onEdit,
 }: {
   entry: TrackRecordEntry;
   details: ReturnType<typeof extractRealieDetails>;
   hasRealieData: boolean;
+  editable: boolean;
+  onEdit: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -198,7 +253,27 @@ function PropertyRow({
           {tr.hold_months != null ? `${tr.hold_months}mo` : "—"}
         </TableCell>
         <TableCell>
-          <Badge variant={statusVariant}>{statusLabel}</Badge>
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
+            {editable && (
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground p-1"
+                title={`Edit ${tr.property_address}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
+            {tr.source === "manual" && (
+              <span className="text-[9px] uppercase tracking-wide text-amber-700 bg-amber-50 rounded px-1 py-0.5 border border-amber-200">
+                manual
+              </span>
+            )}
+          </div>
         </TableCell>
       </TableRow>
 
