@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-05-05 end-of-session)
+# PulseClose — Session Pickup (2026-05-05 EOS — Batch 3 + filler set complete)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
@@ -121,6 +121,38 @@ Batch 2 ships in order (all 2026-05-04):
 E1 unlocks E2/E3/A4/A5 (everything reputation/performance). A1 is the
 NPLA hero feature — Damon can demo a real fund's PDF live. B1 closes
 G7.1 (lock-in evaporation when lender forgets to enable monitoring).
+
+**Batch 3 + filler set — ✅ COMPLETE 2026-05-05 EOS.** Ten features
+in sequence, end of day after the doc-engine push and routine
+investigation:
+
+```
+Batch 3 + filler ships in order (all 2026-05-05):
+  A2   Counter-offer / repricing calculator                       7b344bc
+  A3   Borrower capital-availability PDF                          c48049e
+  B2   Portfolio health dashboard (/dashboard/portfolio)          aa2ee49
+  B3   Validation search + filter + CSV export                    907f550
+  G2.4 Address parser (WEBBER WAY 77 + missing state)             34fe15e
+  G4.1 Methodology PDF one-click download (?print=1 autoprint)    c1b9c56
+  G4.2 Confidence → "Completeness" + audit tooltip                76e4b91
+  G3.4 Add GC after the fact on validation detail                 3605592
+  G7.1 Org-level monitor-by-default (00026)                       e709a23
+  G7.2 "Next run in N hours" indicator on MonitorCard             70b29e8
+```
+
+A2 + A3 round out the evaluate → handoff arc (counter-offer
+suggestions inline + borrower-facing one-pager). B2 is the
+"first thing the lender opens in the morning" view at
+`/dashboard/portfolio` — KPI strip + tier mix + outcome mix + 12-row
+attention list. B3 puts top-of-dashboard search + status/tier chips
++ CSV export on the validations list. G2.4 fixes the Truong-test
+address parser (`71 WEBBER WAY 77, BUENA PARK` now resolves). G4.1
+turns the methodology download into one click. G4.2 fixes the
+misleading "Confidence" label (it's signal completeness, not a
+model score). G3.4 lets a lender add a GC to an existing validation
+without re-running. G7.1 + G7.2 tighten the monitoring loop:
+org-level "auto-monitor every new validation" toggle + relative
+"in 3d" countdown.
 
 **The matcher/dedup story** (the headline data-quality work):
 ```
@@ -408,9 +440,9 @@ materially depends on these without an answer.
 
 ---
 
-## Database state (as of 2026-05-04 end-of-session)
+## Database state (as of 2026-05-05 EOS)
 
-**Migrations applied (25 total):**
+**Migrations applied (26 total):**
 ```
 00001 foundation                        Core tables
 00002 handle_new_user                   Auto-create user/org on signup
@@ -440,6 +472,8 @@ materially depends on these without an answer.
 00024 investor_extractions              A1 — investor PDF extraction audit trail
 00025 borrower_monitor                  B1 — monitor_subscriptions.borrower_id +
                                         critical_only + scope_check
+00026 org_monitor_default               G7.1 — organizations.monitor_new_validations_by_default
+                                        (org-level auto-monitor toggle)
 ```
 
 **Row counts (live as of 2026-05-02):**
@@ -624,6 +658,16 @@ After the 2026-05-05 doc overhaul:
 | **Deal outcomes capture (E1, 00023)** | Working | DealOutcomeCard between Monitor and Activity; UPSERT on validation_id; dual-log to audit_log + activity_events |
 | **Investor PDF parser (A1, 00024)** | Working | "Upload PDF" on investor card → Claude → preview modal → accept-and-supersede; audit trail in `investor_criteria_extractions` with token counts |
 | **Borrower watchlist (B1, 00025)** | Working | "Watch this borrower" toggle on MonitorCard; new validations auto-inherit; critical-only filter on both scopes |
+| **Counter-offer / repricing (A2)** | Working | Inline suggestions on fail/conditional investor cards: loan-amount drops with predicted rate/points + borrower-side targets + structural flags |
+| **Borrower capital-availability PDF (A3)** | Working | `/borrower-summary/[id]` printable; "Borrower summary" button on evaluate detail when ≥1 eligible |
+| **Portfolio health dashboard (B2)** | Working | `/dashboard/portfolio` — KPI strip + tier mix + outcome mix (E1) + 12-row attention list. Sidebar PieChart icon. |
+| **Validation search + filter + CSV (B3)** | Working | Top-of-dashboard search (borrower + entity), status chips, tier chips, "Export CSV" button (filtered) |
+| **Address parser (G2.4)** | Working | Splits on first comma + strips explicit unit designators + strips trailing alphanumerics after street suffix |
+| **Methodology PDF one-click (G4.1)** | Working | `?print=1` autofires print dialog on load; toolbar Print button on direct visits |
+| **Completeness label + tooltip (G4.2)** | Working | "Confidence" → "Completeness" everywhere; detail page tooltip explains the +/- formula |
+| **Add GC after the fact (G3.4)** | Working | AddGCCard renders when no `gc_validations`; POST `/api/validations/[id]/gc` runs CSLB + recompute + emits `added_gc` |
+| **Org-level monitor default (G7.1, 00026)** | Working | Settings → Org tab toggle; new validations get a weekly sub when no borrower template AND org default is on |
+| **"Next run in N hours" indicator (G7.2)** | Working | MonitorCard shows relative time (in 3d / in 5h / in 12m) above absolute timestamp |
 | Stripe billing | Working | $299 / $499 / $799 + `internal` (unlimited, SQL-only) |
 | Test Co `internal` plan | Live | Unlimited validations for the founder org |
 | Sanctions card "Names Screened" | Working | Now includes officers/agent derived from matches |
@@ -673,45 +717,52 @@ After the 2026-05-05 doc overhaul:
 **AI privacy bundle ✅ SHIPPED 2026-05-03.**
 **Batch 2 ✅ COMPLETE 2026-05-04 (E1 + A1 + B1).**
 **Doc engine + WP content publish ✅ SHIPPED 2026-05-05.**
+**Anthropic Cloud routine investigation ✅ RESOLVED 2026-05-05.**
+**Batch 3 + filler set ✅ COMPLETE 2026-05-05 EOS (A2 + A3 + B2 + B3 + G2.4 + G4.1 + G4.2 + G3.4 + G7.1 + G7.2).**
 
-**FIRST PRIORITY (carry-forward from 2026-05-05):**
-0. ✅ Investigation complete — see resolved section at top of file.
-   Only remaining action: user manually adds `WP_URL` / `WP_USER` /
-   `WP_APP_PASSWORD` to the Build-Folio env at claude.ai/code (env
-   selector → settings gear) before 2026-06-01 14:08 UTC. If skipped,
-   the monthly routine will fail-clean (no harm).
+**Carry-forward action items (manual, not code):**
+1. Add `WP_URL` / `WP_USER` / `WP_APP_PASSWORD` to the Build-Folio
+   Anthropic Cloud env at claude.ai/code → enter any session → env
+   selector → settings gear — before 2026-06-01 14:08 UTC. If skipped,
+   the monthly WP refresh routine fails-clean (no harm).
+2. Smoke-test Batch 3 surfaces in prod when convenient:
+   - A2 — make an evaluation against a deliberately-tight investor
+     (e.g. low max LTV) and confirm counter-offer text appears.
+   - A3 — open `/borrower-summary/[id]` for an evaluation with ≥1
+     pass; verify print preview is one page, named lenders rendered.
+   - B2 — `/dashboard/portfolio` should show non-zero tier mix +
+     attention list for the Truong test data.
+   - B3 — search "Truong", filter "verified", click "Export CSV";
+     confirm csv has only the verified rows.
+   - G2.4 — re-run validation that historically failed
+     `71 WEBBER WAY 77, BUENA PARK`; should resolve now.
+   - G3.4 — open a validation that was created without a GC; the
+     AddGCCard should render in place of the old empty section.
+   - G7.1 — flip the toggle in Settings → Org; create a new
+     validation; confirm a default monitor sub gets created.
 
-**Recommended next pick: Batch 3 candidates.** With outcomes captured
-(E1) and the NPLA hero shipped (A1), the next leverage points are
-either reputation (uses E1 row volume) or workspace polish (B2 + B3 +
-the G filler set). Pick by what Damon's seeing in real testing:
+**Recommended next pick — pre-NPLA polish + reputation:**
 
-- **A2 — Counter-offer / repricing calculator (2d).** Failed deals get
-  "drop loan $25K → passes at 7.75%" suggestions. Pairs naturally with
-  A1 since both live on the evaluate page.
-- **A3 — Borrower capital-availability PDF (1.5d).** Once eligible at
-  ≥1 investor, generate a borrower-facing single-pager. Stored in
-  `documents` (purpose=`borrower_capital_summary`).
-- **B2 — Portfolio health dashboard (2d).** Tier × flag count grid for
-  the org's borrower book; "first thing the lender opens in the
-  morning." With outcome data flowing in, this can include funded /
-  defaulted counts.
-- **B3 — Validation search + filter + CSV export (2d).** Top-of-
-  dashboard search with autocomplete on borrower / entity / property.
+- **E2 — borrower lender-relationship history** (~2d). Surface E1
+  outcome rows on the borrower's record; "Truong has funded 3, repaid
+  2, defaulted 0 with this org." Builds on the deal_outcomes substrate.
+- **E3 — public testimonial from Damon/Noah** (collateral). Asked
+  via working sessions per memory; not a code task.
+- **A4 — investor performance over time** (~1.5d). Track which
+  investor terms close vs reprice vs lose. A1 + E1 substrate is
+  there; this is the analytics layer on top.
+- **A5 — pricing-history per investor** (~1.5d). Show how an
+  investor's quoted rates have moved; highlight outliers.
+- **G1.2 — co-borrower / multi-guarantor schema** (~1d schema +
+  UI). Damon-decision (Action items #2). Defer until Insignia confirms
+  template shape.
 
-**Smaller fillers (any time, ~half day each):**
-- **G2.4 — address parser edge cases.** Handle `71 WEBBER WAY 77` and
-  similar. Single small case left from the Truong test.
-- **G4.1 — methodology PDF download.** Today opens new tab needing
-  Cmd+P; should be one-click download via server-render.
-- **G4.2 — confidence-score audit + tooltip.** Bare percentage today;
-  needs hover with contributing signals OR rename to "Validation
-  completeness".
-- **G3.4 — "Add GC after the fact"** action on the detail page.
-- **G7.1 — org-level "monitor every new validation by default"** in
-  Settings (now that B1 has the borrower-level template, an org-level
-  default is the natural extension).
-- **G7.2 — "next run in N hours"** indicator on MonitorCard (~15 min).
+**Smaller fillers (none currently in pickup; new ones welcome):**
+- **G7.3 (suggested)** — "Pause monitoring during demo" toggle +
+  resume-after-N-days. Avoid surprise emails to Damon mid-demo.
+- **B4 (suggested)** — borrower-detail roll-up page (`/dashboard/
+  borrowers/[id]`) showing all validations + outcomes + monitor
+  state. Currently the borrower record is implicit.
 
 **Distribution / content track (per `docs/DISTRIBUTION-STRATEGY.md`):**
 - Promote the 36 WP drafts to publish after a review pass
@@ -721,10 +772,12 @@ the G filler set). Pick by what Damon's seeing in real testing:
 - Author bio page at `/about/zach-wade/` with Schema.org Person markup
 - llms.txt at `pulseclose.com/llms.txt`
 
-**If asked "what's next?" without direction:** investigate the routine
-mystery first. Then ship A2 + A3 to round out the evaluate → handoff
-arc; demo-day surface area is now the limiting factor, not feature
-count.
+**If asked "what's next?" without direction:** smoke-test the
+Batch 3 surfaces above first — they're shipped but not yet
+demo-validated. Then E2 + A4 to start the reputation/analytics
+layer that compounds with E1's data accumulation. NPLA is in
+~7 weeks; demo polish + a referenceable outcome from Insignia
+matter more than feature count from here.
 
 ---
 
@@ -936,11 +989,12 @@ scripts/peek-truong-xlsx.ts             One-off — inspect the Truong intake xl
   different formats creates duplicate property rows. Tracked in ROADMAP.md
   Foundations. ~1-2d when worked. Mitigation: prefer Realie's `addressFull`
   as canonical when available.
-- **Address parser edge cases (G2.4)** — `71 WEBBER WAY 77, BUENA PARK`
+- ~~**Address parser edge cases (G2.4)** — `71 WEBBER WAY 77, BUENA PARK`
   returned "Address not found" because the `77` between street and city
-  tripped the parser. Fix: tokenize → identify state-code anchor → strip
-  everything between, OR fall through to Realie with raw input on parse
-  failure. ~0.5d.
+  tripped the parser.~~ ✅ Fixed 2026-05-05 (`34fe15e`). Parser now
+  splits on first comma, strips explicit unit designators (Apt/Unit/#),
+  and strips trailing alphanumerics after a street-suffix word. Re-test
+  on the original Truong address before declaring closed.
 - **6 retained borrower_validations rows from 2026-05-02 testing.** Not a
   regression — these are real test runs from the matcher/dedup work and
   should NOT be deleted before re-running validation tests. They are
