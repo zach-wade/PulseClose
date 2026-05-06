@@ -41,7 +41,8 @@ export type ActivityVerb =
   | "overrode_factor"
   | "compared"
   | "regenerated_memo"
-  | "added_gc";
+  | "added_gc"
+  | "routed_to_investor";
 
 export type ActivitySubjectType =
   | "validation"
