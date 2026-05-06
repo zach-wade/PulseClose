@@ -6,6 +6,8 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ShareSubmitForm } from "./share-submit-form";
+import { BankStatementUpload } from "./bank-statement-upload";
+import { PropertyPhotoUpload } from "./property-photo-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +67,9 @@ export default async function SharePage({
           entityName={validation.borrower_entity_name}
           initialFlips={existingFlips ?? []}
         />
+
+        <PropertyPhotoUpload token={token} />
+        <BankStatementUpload token={token} />
 
         <p className="text-xs text-muted-foreground text-center pt-6 border-t">
           Powered by PulseClose · This page is private to you and your lender.

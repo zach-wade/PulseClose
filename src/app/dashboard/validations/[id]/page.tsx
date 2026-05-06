@@ -43,6 +43,8 @@ import { AIMemo } from "@/components/dashboard/ai-memo";
 import { ActivityStrip } from "@/components/dashboard/activity-strip";
 import { BorrowerHistoryCard } from "@/components/dashboard/borrower-history-card";
 import { CompareToPriorButton } from "@/components/dashboard/compare-to-prior-button";
+import { RouteToInvestorButton } from "@/components/dashboard/route-to-investor-button";
+import { BorrowerUploadsCard } from "@/components/dashboard/borrower-uploads-card";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -324,6 +326,8 @@ export default function ValidationDetailPage() {
               currentCreatedAt={data.created_at}
             />
           )}
+          {/* F3 — route this validation to an investor's queue. */}
+          <RouteToInvestorButton validationId={data.id} />
         </div>
       </div>
 
@@ -502,6 +506,10 @@ export default function ValidationDetailPage() {
         validationId={data.id}
         onUpdated={refetch}
       />
+
+      {/* Borrower-uploaded artifacts (photos + bank statements) — auto-
+          hides when neither table has rows for this validation. */}
+      <BorrowerUploadsCard validationId={data.id} />
 
       {/* Verified Track Record — deed-verified flips (intake or top-up) */}
       <VerifiedTrackRecord
