@@ -113,6 +113,29 @@ export interface HandoffDocument {
     rationale: string | null;
     computed_at: string | null;
   } | null;
+
+  // Lender edit + override audit trail. Aggregated counts at the top
+  // for the headline; full event list for the methodology PDF.
+  lender_edits: {
+    total: number;
+    track_record_edits: number;
+    track_record_adds: number;
+    track_record_deletes: number;
+    litigation_edits: number;
+    litigation_adds: number;
+    litigation_deletes: number;
+    factor_overrides: number;
+    events: Array<{
+      table_name: string;
+      field_name: string;
+      edit_kind: "update" | "add" | "delete";
+      reason: string | null;
+      edited_at: string;
+      // Light context: row_id for traceability, value summary
+      row_id: string;
+      value_summary: string | null;
+    }>;
+  };
 }
 
 export async function buildHandoffDocument(
@@ -403,5 +426,126 @@ export async function buildHandoffDocument(
     },
     overall_narrative: handoffData.overall_narrative ?? null,
     intended_investor: intendedInvestor,
+    lender_edits: await buildLenderEditTrail(supabase, validationId),
   };
+}
+
+// Pull the data_edits + factor_overrides for this validation and
+// shape into the renderer-friendly structure with aggregate counts.
+async function buildLenderEditTrail(
+  supabase: SupabaseClient,
+  validationId: string,
+): Promise<HandoffDocument["lender_edits"]> {
+  const [editsRes, overridesRes] = await Promise.all([
+    supabase
+      .from("data_edits")
+      .select("table_name, field_name, edit_kind, reason, edited_at, row_id, value_before, value_after")
+      .eq("validation_id", validationId)
+      .order("edited_at", { ascending: true }),
+    supabase
+      .from("factor_overrides")
+      .select("factor_key, exclusion_reason, updated_at")
+      .eq("validation_id", validationId),
+  ]);
+
+  type EditRow = {
+    table_name: string;
+    field_name: string;
+    edit_kind: "update" | "add" | "delete";
+    reason: string | null;
+    edited_at: string;
+    row_id: string;
+    value_before: unknown;
+    value_after: unknown;
+  };
+  const edits = (editsRes.data ?? []) as EditRow[];
+
+  type OverrideRow = { factor_key: string; exclusion_reason: string; updated_at: string };
+  const overrides = (overridesRes.data ?? []) as OverrideRow[];
+
+  // Counts.
+  let track_record_edits = 0;
+  let track_record_adds = 0;
+  let track_record_deletes = 0;
+  let litigation_edits = 0;
+  let litigation_adds = 0;
+  let litigation_deletes = 0;
+  for (const e of edits) {
+    if (e.table_name === "track_record_entries") {
+      if (e.edit_kind === "add") track_record_adds++;
+      else if (e.edit_kind === "delete") track_record_deletes++;
+      else track_record_edits++;
+    } else if (e.table_name === "litigation_cases") {
+      if (e.edit_kind === "add") litigation_adds++;
+      else if (e.edit_kind === "delete") litigation_deletes++;
+      else litigation_edits++;
+    }
+  }
+
+  // Render-friendly events. Combines data_edits + factor_overrides into
+  // one chronological list. Edit value_summary collapses before/after
+  // into a one-line readable string.
+  const events: HandoffDocument["lender_edits"]["events"] = [];
+  for (const e of edits) {
+    let summary: string | null = null;
+    if (e.edit_kind === "update") {
+      const before = formatValue(e.value_before);
+      const after = formatValue(e.value_after);
+      summary = `${before} → ${after}`;
+    } else if (e.edit_kind === "add") {
+      summary = "manually added";
+    } else if (e.edit_kind === "delete") {
+      summary = "removed by lender";
+    }
+    events.push({
+      table_name: e.table_name,
+      field_name: e.field_name,
+      edit_kind: e.edit_kind,
+      reason: e.reason,
+      edited_at: e.edited_at,
+      row_id: e.row_id,
+      value_summary: summary,
+    });
+  }
+  for (const o of overrides) {
+    events.push({
+      table_name: "factor_overrides",
+      field_name: o.factor_key,
+      edit_kind: "update",
+      reason: o.exclusion_reason,
+      edited_at: o.updated_at,
+      row_id: o.factor_key,
+      value_summary: "factor excluded by lender",
+    });
+  }
+  events.sort((a, b) => a.edited_at.localeCompare(b.edited_at));
+
+  const total =
+    track_record_edits +
+    track_record_adds +
+    track_record_deletes +
+    litigation_edits +
+    litigation_adds +
+    litigation_deletes +
+    overrides.length;
+
+  return {
+    total,
+    track_record_edits,
+    track_record_adds,
+    track_record_deletes,
+    litigation_edits,
+    litigation_adds,
+    litigation_deletes,
+    factor_overrides: overrides.length,
+    events,
+  };
+}
+
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "string") return v.length > 40 ? v.slice(0, 37) + "…" : v;
+  if (typeof v === "number") return v.toLocaleString();
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return JSON.stringify(v).slice(0, 60);
 }

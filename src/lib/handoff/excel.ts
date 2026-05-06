@@ -184,6 +184,75 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
     cover.addRow(["Prepared by", `${doc.preparer_name ?? ""}${doc.preparer_email ? ` <${doc.preparer_email}>` : ""}`]);
   }
 
+  // Lender edits — provenance for the receiving investor. Only renders
+  // when there's at least one edit/override on this validation.
+  if (doc.lender_edits.total > 0) {
+    cover.addRow([]);
+    const editsHeader = cover.addRow(["Lender Edits Applied"]);
+    editsHeader.font = { size: 12, bold: true, color: { argb: ACCENT } };
+    cover.mergeCells(`A${editsHeader.number}:B${editsHeader.number}`);
+
+    const summary: Array<[string, string]> = [];
+    if (doc.lender_edits.track_record_edits) {
+      summary.push(["Track-record edits", String(doc.lender_edits.track_record_edits)]);
+    }
+    if (doc.lender_edits.track_record_adds) {
+      summary.push(["Track-record additions", String(doc.lender_edits.track_record_adds)]);
+    }
+    if (doc.lender_edits.track_record_deletes) {
+      summary.push(["Track-record removals", String(doc.lender_edits.track_record_deletes)]);
+    }
+    if (doc.lender_edits.litigation_edits) {
+      summary.push(["Litigation edits", String(doc.lender_edits.litigation_edits)]);
+    }
+    if (doc.lender_edits.litigation_adds) {
+      summary.push(["Litigation additions", String(doc.lender_edits.litigation_adds)]);
+    }
+    if (doc.lender_edits.litigation_deletes) {
+      summary.push(["Litigation removals", String(doc.lender_edits.litigation_deletes)]);
+    }
+    if (doc.lender_edits.factor_overrides) {
+      summary.push(["Factor overrides", String(doc.lender_edits.factor_overrides)]);
+    }
+    for (const [label, value] of summary) {
+      const r = cover.addRow([label, value]);
+      r.getCell(1).font = { bold: true };
+    }
+    const noteRow = cover.addRow([
+      "Note",
+      "The Properties / Public records / Risk factors sheets reflect the lender-corrected view. Full audit trail with timestamps and reasons is on the Audit Log sheet.",
+    ]);
+    noteRow.getCell(2).alignment = { wrapText: true };
+    noteRow.height = 36;
+  }
+
+  // ── Audit Log sheet — only when there are edits to log ───────────────────
+  if (doc.lender_edits.events.length > 0) {
+    const audit = wb.addWorksheet("Audit Log", {
+      pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true },
+      headerFooter: { oddFooter: "&CPage &P of &N" },
+    });
+    audit.columns = [
+      { header: "When", key: "edited_at", width: 20 },
+      { header: "Table", key: "table_name", width: 22 },
+      { header: "Field", key: "field_name", width: 24 },
+      { header: "Action", key: "edit_kind", width: 10 },
+      { header: "Change", key: "value_summary", width: 36 },
+      { header: "Reason", key: "reason", width: 50 },
+    ];
+    audit.getRow(1).font = { bold: true };
+    for (const ev of doc.lender_edits.events) {
+      audit.addRow({
+        edited_at: ev.edited_at.slice(0, 19).replace("T", " "),
+        table_name: ev.table_name,
+        field_name: ev.field_name,
+        edit_kind: ev.edit_kind,
+        value_summary: ev.value_summary ?? "",
+        reason: ev.reason ?? "",
+      });
+    }
+  }
+
   // ── Properties sheet ────────────────────────────────────────────────────
   const props = wb.addWorksheet("Properties", {
     pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },

@@ -180,8 +180,9 @@ async function loadData(id: string, orgId: string) {
   const factors = (factorsRes.data ?? []) as RiskFactor[];
 
   // Pull signals across all four scopes for the audit trail. Each scope
-  // gets its own table so we issue four reads in parallel.
-  const [borrowerSig, propertySig, bpSig, entitySig, propertiesRes] = await Promise.all([
+  // gets its own table so we issue four reads in parallel. Plus the
+  // data_edits + factor_overrides for the new lender-edit trail.
+  const [borrowerSig, propertySig, bpSig, entitySig, propertiesRes, editsRes, overridesRes] = await Promise.all([
     validation.primary_borrower_id
       ? supabase
           .from("borrower_signals")
@@ -209,6 +210,18 @@ async function loadData(id: string, orgId: string) {
       .from("track_record_entries")
       .select("property_id, properties:property_id ( id, address_display )")
       .eq("validation_id", id),
+    // Lender data edits for this validation
+    supabase
+      .from("data_edits")
+      .select("table_name, field_name, edit_kind, reason, edited_at, value_before, value_after")
+      .eq("validation_id", id)
+      .order("edited_at", { ascending: false }),
+    // Manual factor overrides
+    supabase
+      .from("factor_overrides")
+      .select("factor_key, exclusion_reason, updated_at")
+      .eq("validation_id", id)
+      .order("updated_at", { ascending: false }),
   ]);
 
   const propertyMap = new Map<string, string>();
@@ -233,7 +246,25 @@ async function loadData(id: string, orgId: string) {
     ...((entitySig.data as SignalRow[] | undefined) ?? []).map((s) => ({ ...s, scope: "entity" })),
   ].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
-  return { validation, factors, signals: allSignals, propertyMap };
+  type EditRow = {
+    table_name: string;
+    field_name: string;
+    edit_kind: "update" | "add" | "delete";
+    reason: string | null;
+    edited_at: string;
+    value_before: unknown;
+    value_after: unknown;
+  };
+  type OverrideRow = { factor_key: string; exclusion_reason: string; updated_at: string };
+
+  return {
+    validation,
+    factors,
+    signals: allSignals,
+    propertyMap,
+    edits: ((editsRes?.data as EditRow[] | undefined) ?? []),
+    overrides: ((overridesRes?.data as OverrideRow[] | undefined) ?? []),
+  };
 }
 
 export default async function RiskMethodologyPage({
@@ -252,7 +283,7 @@ export default async function RiskMethodologyPage({
   const data = await loadData(id, profile.org_id);
   if (!data) notFound();
 
-  const { validation, factors, signals, propertyMap } = data;
+  const { validation, factors, signals, propertyMap, edits, overrides } = data;
   const tier = deriveTier(factors);
 
   // Reorder factors for canonical printable layout
@@ -369,6 +400,64 @@ export default async function RiskMethodologyPage({
                     <td>{s.reason ?? "—"}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section className="rm-section">
+          <h2>Lender data edits ({edits.length + overrides.length})</h2>
+          {edits.length === 0 && overrides.length === 0 ? (
+            <p className="rm-empty">
+              No lender edits applied. The data above is pure vendor output.
+            </p>
+          ) : (
+            <table className="rm-signals">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Where</th>
+                  <th>Action</th>
+                  <th>Change</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overrides.map((o, i) => (
+                  <tr key={`o-${i}`}>
+                    <td>{fmtDate(o.updated_at)}</td>
+                    <td>
+                      <code>factor:{o.factor_key}</code>
+                    </td>
+                    <td>override</td>
+                    <td>excluded from tier</td>
+                    <td>{o.exclusion_reason}</td>
+                  </tr>
+                ))}
+                {edits.map((e, i) => {
+                  const fmt = (v: unknown) => {
+                    if (v === null || v === undefined) return "—";
+                    if (typeof v === "string") return v.slice(0, 40);
+                    return JSON.stringify(v).slice(0, 40);
+                  };
+                  return (
+                    <tr key={`e-${i}`}>
+                      <td>{fmtDate(e.edited_at)}</td>
+                      <td>
+                        <code>{e.table_name}.{e.field_name}</code>
+                      </td>
+                      <td>{e.edit_kind}</td>
+                      <td>
+                        {e.edit_kind === "update"
+                          ? `${fmt(e.value_before)} → ${fmt(e.value_after)}`
+                          : e.edit_kind === "add"
+                            ? "manually added"
+                            : "removed by lender"}
+                      </td>
+                      <td>{e.reason ?? "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
