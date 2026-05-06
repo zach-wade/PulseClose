@@ -41,6 +41,7 @@ import { MonitorCard } from "@/components/dashboard/monitor-card";
 import { DealOutcomeCard, type DealOutcome } from "@/components/dashboard/deal-outcome-card";
 import { AIMemo } from "@/components/dashboard/ai-memo";
 import { ActivityStrip } from "@/components/dashboard/activity-strip";
+import { BorrowerHistoryCard } from "@/components/dashboard/borrower-history-card";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
 import type { LitigationCheck } from "@/components/dashboard/shared-types";
@@ -414,6 +415,16 @@ export default function ValidationDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* History with this borrower (E2) — surfaces only when there's
+          prior history with this org; first-time validations skip the card
+          to avoid "0 funded · 0 repaid" noise. */}
+      {data.primary_borrower_id && (
+        <BorrowerHistoryCard
+          borrowerId={data.primary_borrower_id}
+          currentValidationId={data.id}
+        />
+      )}
 
       {/* AI Analysis — pending state while async generation runs */}
       {!data.ai_analysis && (
