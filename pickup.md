@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-05-04 end-of-session)
+# PulseClose — Session Pickup (2026-05-05 end-of-session)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
@@ -7,12 +7,22 @@
 > - This file (you're here)
 > - `docs/ROADMAP.md` — **journey-organized** (Stage 1 Intake → Stage 8
 >   Outcome) with all old tier features (S/A/B/C/D/E/F) re-slotted into
->   stages, 11 explicit UX gaps (G1.1-G8.1), and 11 cross-cutting design
->   principles. Last meaningful edit: 2026-05-02 (Batch 1 complete + open
->   items sweep).
+>   stages, **12** cross-cutting design principles (#12 added 2026-05-05
+>   covering AI-privacy-bundle as required gate on every Claude consumer).
+>   Status snapshot last updated 2026-05-04.
 > - `docs/DATA-MODEL.md` — full schema incl. universal infra tables +
 >   canonical-name dedup notes
-> - `STRATEGY.md` — vision, market, long-shot bets
+> - `STRATEGY.md` — **fully rewritten 2026-05-05.** Wade Intel parent
+>   brand context, current product state through Batch 2, Path B + JSONB
+>   architecture, distribution thesis, IP/partnership posture, pricing
+>   hypotheses, forward roadmap.
+> - `docs/DISTRIBUTION-STRATEGY.md` — **NEW 2026-05-05.** The 2026
+>   distribution playbook (replaces lead role of seo-strategy.md).
+>   Wade Intel + Build Buy Borrow + 5-Concept Framework + PulseClose stack.
+> - `docs/E2E-TEST-PLAN.md` — **NEW 2026-05-05.** 17-phase customer
+>   walkthrough of every surface for pre-NPLA smoke testing.
+> - `docs/PRIVACY-POSTURE.md` — **NEW 2026-05-05.** Insignia-answerable
+>   Q&A + AI privacy bundle + SOC 2 gap inventory.
 > - `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`
 
 ---
@@ -24,6 +34,57 @@ SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
 22-23, 2026; ~7 weeks out).
 
 **Production health:** ✅ All commits since 2026-04-30 live and verified.
+
+---
+
+## ⚠️ INVESTIGATE NEXT SESSION — Anthropic Cloud routine + environment mystery
+
+**STOP. DO NOT take further action on the scheduled routine until this is investigated.** User asked Claude to schedule a monthly WP content refresh. Claude did. Then the user discovered they have NO UI to manage environments under their Max plan, didn't recognize the "Build-Folio" environment that appeared, and is rightfully suspicious.
+
+### What's currently provisioned (verified via `RemoteTrigger list` 2026-05-05)
+
+**5 routines exist on user's account `59fd52c9-a602-4ed9-b946-25849ab4be2b`:**
+
+| Routine ID | Name | Created | Repo | Env |
+|---|---|---|---|---|
+| `trig_01354yHreiPenFJ94aD196vK` | "MEMPROF cleanup — disable on build-folio-worker if still set" | 2026-05-01 06:55Z | github.com/zach-wade/build-folio | env_01RNWmw8TJ4rZMPEAfpRTjTk |
+| `trig_01RFD8xVQxpJVjd67XEHp2Hw` | "Build-Folio Phase 3a verification + worker drain check" | 2026-05-02 04:36Z | build-folio | same |
+| `trig_01MhTqfoJRhbkQ8zjUELRjk9` | "Phase 2 verification + Phase 1 PR 5 cleanup" | 2026-05-02 08:37Z | build-folio | same |
+| `trig_01E9avoEkgamHt3j2cyhxTpY` | "Storage fix 24h soak verification (commit 3ec9dc1b)" | 2026-05-02 09:49Z | build-folio | same |
+| **`trig_017PQNaJ2eN6X86T7bo6Zu7Y`** | **"Monthly WP content refresh (GEO recency lift)"** | **2026-05-05 23:30Z** | **github.com/zach-wade/PulseClose** | **same env (Build-Folio)** |
+
+### The mystery
+
+- The user's `/schedule` skill in this session listed exactly ONE environment: `Build-Folio (id: env_01RNWmw8TJ4rZMPEAfpRTjTk, kind: anthropic_cloud)`. That was the only available choice, so the new PulseClose routine got attached to it.
+- The user reports **no UI under their Max plan** to view, create, or manage Anthropic Cloud environments. The Claude Code web settings page (claude.ai/code) shows routines but no environments tab. `claude.ai/settings/general` has no env option.
+- The user **does not recognize ever creating** the Build-Folio environment or any of the 4 prior build-folio routines. They were created 2026-05-01 → 2026-05-02 from the user's own account UUID.
+- The user has **not added any secrets** to the environment (and may have no UI to do so). The PulseClose monthly routine, if run as scheduled on **2026-06-01 14:08 UTC**, will fail because `WP_URL` / `WP_USER` / `WP_APP_PASSWORD` aren't there.
+
+### Hypotheses to verify (do this in the next session, NOT this one)
+
+1. **Auto-provisioned environment.** The "Build-Folio" environment may have been auto-created the first time the user authorized remote agents from claude.ai, with the name derived from the first repo or project the user was in. Test: check if there's an account-default-environment concept.
+2. **Created via API by a prior Claude Code session.** The 4 build-folio routines were created during build-folio Claude Code sessions on 2026-05-01 → 2026-05-02; those sessions may have called create-environment under the hood. Inspect the build-folio repo's recent git history for any tooling that creates environments.
+3. **Console.anthropic.com may have an environments + secrets UI** — user said they "see in the api platform but since this is under the max sub i guess the ux isnt there yet." Worth a deeper poke at console.anthropic.com to confirm whether environment CRUD + secrets management actually exist there.
+4. **Claude API documentation should list this** — search Anthropic docs for "environment_id" / "anthropic_cloud" / "remote agent runtime" to find the canonical lifecycle.
+
+### Decisions pending
+
+- **Should the new monthly routine be deleted** until the environment story is sorted? It's enabled and pointed at an env with no WP secrets. Safest move is delete it now and re-create later when we know what we're doing. Routine deletion is browser-only at https://claude.ai/code/routines (per the schedule skill — API has no delete).
+- **Should we delete the 4 build-folio routines too?** Two ran-once already (`run_once_fired`). Two are still scheduled (May 8). User should decide whether those represent intended work or orphaned setup.
+
+### What I (Claude) did NOT do
+
+- I did NOT create the Build-Folio environment. It pre-existed on the user's account.
+- I did NOT create the 4 prior build-folio routines. They pre-existed.
+- I DID create the PulseClose monthly routine 2026-05-05 23:30Z (`trig_017PQNaJ2eN6X86T7bo6Zu7Y`) at the user's explicit request via the `/schedule` skill, attaching it to the only environment listed as available.
+- I DID NOT add any secrets to any environment (I have no API to do so).
+
+### File locations relevant to investigation
+
+- `wordpress/scripts/wp-client.ts` lines 11-19 — reads `WP_URL` / `WP_USER` / `WP_APP_PASSWORD` from process.env
+- `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/` — check for any past memory entries about Anthropic Cloud / remote agents
+- The user's local `.env.local` has the WP creds; the remote agent does NOT see local files
+- API platform user should investigate: https://console.anthropic.com
 
 **Batch 1 (close the journey) — ✅ COMPLETE 2026-05-02.** One continuous
 flow from intake to handoff to monitor to activity feed.
@@ -212,6 +273,98 @@ violates them is on a clear path to silent failure.
   "Watch this borrower" toggle below the per-validation controls;
   both scopes get a critical-only checkbox.
 
+### 2026-05-05 — Doc engine + WP content publish + scheduled routine
+
+**Three parallel tracks landed.**
+
+**(a) E2E test plan (commit `972cf6e`).** `docs/E2E-TEST-PLAN.md` — 17-phase
+customer walkthrough of every surface, top-to-bottom. Pre-NPLA smoke
+checklist with ✅/⚠️/❌ buckets per row. Captures all features through
+Batch 2 + AI privacy bundle audit-fix details.
+
+**(b) WordPress content engine + 36 drafts pushed (commit `14fa771`).**
+
+Discovery: I missed that the WordPress marketing site code lives in
+[wordpress/](wordpress/) until the user pushed back. Once I `ls`-ed
+root and found it, the picture clarified — `pulseclose.com` is GoDaddy
+Managed WordPress, content is version-controlled here, published via
+TS scripts that hit the WP REST API.
+
+3 new publish scripts wired to existing `wp-client.ts`:
+- `wordpress/scripts/publish-blog.ts` — reads `content/posts/*.md`, lightweight md→HTML, upserts via wp-client. Default draft.
+- `wordpress/scripts/publish-glossary.ts` — reads `content/glossary/terms.ts`, renders each term with **FAQPage schema** + named-expert byline + last-reviewed date. Auto-creates parent /glossary/ page.
+- `wordpress/scripts/publish-guides.ts` — reads `content/guides/sos-states.ts`, renders each state with 4-question FAQPage schema. Auto-creates parent /guides/ + /guides/sos-lookup/ pages.
+
+All idempotent. `--publish` flag promotes; single-slug arg refreshes
+one item. GEO/AEO-ready output (per the 2026 research — see
+DISTRIBUTION-STRATEGY): FAQPage schema + named-expert byline +
+last-reviewed timestamps + cross-links + product CTA blocks baked in.
+
+Pushed to pulseclose.com as drafts:
+- 1 pillar post: `/posts/bridge-loan-borrower-due-diligence`
+- 20 glossary terms: `/glossary/{bridge-loan, hard-money-loan, fix-and-flip, loan-to-value, lis-pendens, mechanics-lien, registered-agent, good-standing, sos-filing, beneficial-ownership, bankruptcy, foreclosure, notice-of-default, deed-of-trust, judgment-lien, construction-holdback, draw-schedule, general-contractor-license, workers-compensation, experience-tier}`
+- 15 state SOS guides: `/guides/sos-lookup/{california, florida, texas, new-york, arizona, nevada, colorado, georgia, north-carolina, tennessee, ohio, illinois, pennsylvania, new-jersey, maryland}`
+
+**Audit snapshots refreshed** in `wordpress/audit/{pages,posts}-snapshot.json`.
+
+**(c) Strategy + operational doc overhaul (commit `14fa771`).**
+
+User explicitly said original SEO strategy was "a dying SEO strategy. we
+need to do better." Did web research on 2026 SEO/GEO landscape via
+general-purpose agent — research summary in
+docs/DISTRIBUTION-STRATEGY.md "Sources" section (Seer / ALM /
+HockeyStack / Edelman / etc., 25+ citations).
+
+**6 NEW docs:**
+| File | Lines | Purpose |
+|---|---|---|
+| `docs/DISTRIBUTION-STRATEGY.md` | ~330 | New lead doc; replaces seo-strategy.md as head reference. Wade Intel parent + Lenny model + 30/20/15/15/10/10 effort split (capital-provider authority / LinkedIn / newsletter / GEO retrofit / open framework / NPLA). KEEP/KILL/RESCOPE table. |
+| `docs/NPLA-RUNBOOK.md` | ~416 | 7-week pre-NPLA sprint, 3/8/15-min demo runbooks, 3 persona talk tracks, leave-behind one-pager outline, 48h follow-up flow, Scottsdale Oct speaking pitch, booth-decision matrix, op-risk register, success metrics. |
+| `docs/DEMO-DATA-HYGIENE.md` | ~467 | Truong canonical, fresh-tenant 10-min spin-up, full script catalog (16 scripts categorized), 60-min and 5-min pre-demo checklists, mid-demo failure modes + recovery. |
+| `docs/PRICING-STRATEGY.md` | ~332 | Tier rationale verified vs `src/lib/stripe/server.ts`, four pricing gaps, three post-NPLA hypotheses (fund tier $1,499-2,499 / per-validation overage / annual prepay), Damon-question items. |
+| `docs/VENDOR-LEDGER.md` | ~541 | 17-vendor table with env vars / pricing / fallbacks / incident playbooks. 2026 rotation calendar (OpenSanctions 5/28, Cobalt ~6/10, NPLA 6/22-23). Cost-ledger estimate flagging TODOs. |
+| `docs/PRIVACY-POSTURE.md` | ~401 | Table-by-table PII / retention / RLS inventory. 3-component AI privacy bundle (toggle + scrub + tokenization). 8 pre-canned Insignia/Damon Q&A. SOC 2 gap inventory tagged ACCEPTED RISK / PRE-NPLA / POST-NPLA. 3-tier Anthropic escalation path. |
+
+**4 doc rewrites:**
+- **`STRATEGY.md`** — full rewrite. The April 2026 doc had multiple
+  wrong claims ("no JSONB blobs", "no sanctions"). New version covers
+  Wade Intel parent context, current pillar surface through Batch 2,
+  Path B + JSONB architecture reality, distribution thesis,
+  IP/partnership posture, pricing hypotheses, forward roadmap, long-shot
+  bets, "what changed since April 2026" reconciliation table.
+- **`docs/seo-strategy.md`** — rescoped from 300+ programmatic pages to
+  a tactical sub-doc under DISTRIBUTION-STRATEGY. KEEP/KILL/RESCOPE
+  table reflects what's deployed (15 guides + 20 glossary + 1 post).
+  6-pillar blog calendar through October.
+- **`docs/ROADMAP.md`** — status snapshot updated through 2026-05-04.
+  **Cross-cutting principle #12 added**: AI privacy bundle is a required
+  gate on every Claude consumer (`requireAiEnabled` + `scrubPii` +
+  token-based depersonalization where applicable). 3 new decisions-log
+  entries (2026-05-03 AI privacy, 2026-05-04 Batch 2, 2026-05-05
+  distribution rewrite).
+- **`docs/design-system.md`** — scope-note header clarifying which
+  sections apply to auth product vs WordPress marketing site. §9 page
+  specs (glossary, programmatic guide) updated for FAQ schema +
+  named-expert byline + GEO/AEO framing.
+
+**Archived (to `docs/archive/`):**
+- `CONTINUOUS_MONITORING_PLAN.md` (pre-shipment plan; feature shipped via 00014 + B1 evolved past it)
+- `TRACK_RECORD_VERIFY_PLAN.md` (pre-shipment plan; feature shipped via verify-core.ts + canonical-name dedup evolved past it)
+- + `docs/archive/README.md` explaining why
+
+**Refreshed:**
+- `CLAUDE.md` — killed stale "no JSONB blobs" claim, added Wade Intel
+  parent context, updated tech-stack notes (base-ui not shadcn), added
+  current project structure, added full reading list pointing at the 6
+  new docs.
+
+**(d) Scheduled monthly content refresh routine — SEE INVESTIGATION
+SECTION ABOVE.** `trig_017PQNaJ2eN6X86T7bo6Zu7Y`, scheduled 2026-06-01
+14:08 UTC, attached to `env_01RNWmw8TJ4rZMPEAfpRTjTk` (Build-Folio
+environment, pre-existing on user's account, mystery origin). User has
+asked to NOT touch this further until investigated. Will fail-clean on
+first run if WP secrets aren't on that environment.
+
 ---
 
 ## Action items for outside persons
@@ -356,7 +509,13 @@ populated within ~30s.
 
 ---
 
-## Manual items the user should do (post-Batch-2)
+## Manual items the user should do (post-2026-05-05)
+
+0. **INVESTIGATE the Anthropic Cloud routine + environment mystery first.**
+   See top-of-file investigation section. Decide whether to delete the
+   monthly WP refresh routine (`trig_017PQNaJ2eN6X86T7bo6Zu7Y`) until
+   the environment story is sorted. Routine deletion is browser-only at
+   https://claude.ai/code/routines.
 
 1. **Smoke-test Batch 2 on prod.**
    - **E1:** open any validation, scroll to "Deal outcome" card,
@@ -386,8 +545,9 @@ populated within ~30s.
      503 with friendly message. Re-enable.
 3. **Walk the demo runbook** at
    `/Users/zachwade/.claude/plans/ok-so-now-what-delightful-lark.md`
-   (Phase 1-7). Includes the deferred print test for `/handoff/[id]`
-   and `/validations/[id]/risk-methodology` — physically print to verify
+   (Phase 1-7) AND the new in-repo runbook at `docs/NPLA-RUNBOOK.md`.
+   Includes the deferred print test for `/handoff/[id]` and
+   `/validations/[id]/risk-methodology` — physically print to verify
    page-break / margin / color rules.
 4. **NPLA pre-flight, ~1 week out:** verify all 25 migrations
    idempotent on a fresh tenant.
@@ -397,6 +557,42 @@ populated within ~30s.
 6. **Rotate Cobalt API keys** for demo-day capacity (~6/10). Multiple
    keys in env; rotation logic TBD when implementing — could be
    round-robin in `src/lib/adapters/cobalt.ts` or env-swap pre-demo.
+7. **Review WP drafts and decide promotion timing.** 36 pages on
+   pulseclose.com are currently drafts (1 pillar post + 20 glossary +
+   15 state guides). Re-running the matching publish script with
+   `--publish` flips a single slug to publish. See `docs/seo-strategy.md`
+   for the GEO retrofit checklist and what to verify before promotion.
+8. **Pitch NPLA Scottsdale (Oct 25-27) speaking slot.** 5 months out;
+   submit a methodology talk abstract NOW. Full pitch in
+   `docs/NPLA-RUNBOOK.md`.
+9. **Set up Build Buy Borrow newsletter cadence** — 1× / week Tuesday
+   9am ET per `docs/DISTRIBUTION-STRATEGY.md`. First post + 8-week
+   format rotation defined there.
+
+---
+
+## Doc map (where to find what)
+
+After the 2026-05-05 doc overhaul:
+
+| Doc | Purpose |
+|---|---|
+| `pickup.md` | This file. Session pickup, current state, investigation flags. |
+| `STRATEGY.md` | Product strategy. Wade Intel parent + current state + roadmap. |
+| `CLAUDE.md` | Tech stack, project structure, key architectural decisions. |
+| `docs/ROADMAP.md` | Journey-organized backlog + 12 cross-cutting design principles + decisions log. |
+| `docs/DATA-MODEL.md` | Schema reference. |
+| `docs/E2E-TEST-PLAN.md` | 17-phase customer walkthrough for pre-NPLA smoke testing. |
+| `docs/DISTRIBUTION-STRATEGY.md` | 2026 distribution playbook (lead doc; replaces seo-strategy.md). |
+| `docs/seo-strategy.md` | Programmatic SEO sub-doc. KEEP/KILL/RESCOPE table + 6-pillar blog calendar. |
+| `docs/NPLA-RUNBOOK.md` | 7-week sprint to NPLA + demo runbooks + Scottsdale speaking pitch. |
+| `docs/DEMO-DATA-HYGIENE.md` | Truong canonical, fresh-tenant procedure, full script catalog. |
+| `docs/PRICING-STRATEGY.md` | Tier rationale + fund-tier hypothesis. |
+| `docs/VENDOR-LEDGER.md` | 17-vendor incident playbook + rotation calendar. |
+| `docs/PRIVACY-POSTURE.md` | Insignia-answerable Q&A + AI privacy bundle + SOC 2 gap inventory. |
+| `docs/design-system.md` | Brand / color / typography (auth product + WordPress site). |
+| `docs/archive/` | Pre-shipment plans for shipped features. Historical only. |
+| `wordpress/README.md` | Marketing-site publish workflow. |
 
 ---
 
@@ -482,6 +678,13 @@ populated within ~30s.
 **Batch 1 ✅ COMPLETE 2026-05-02.**
 **AI privacy bundle ✅ SHIPPED 2026-05-03.**
 **Batch 2 ✅ COMPLETE 2026-05-04 (E1 + A1 + B1).**
+**Doc engine + WP content publish ✅ SHIPPED 2026-05-05.**
+
+**FIRST PRIORITY (carry-forward from 2026-05-05):**
+0. **Investigate the Anthropic Cloud routine + environment situation.**
+   See "INVESTIGATE NEXT SESSION" section at top of file. Decide
+   whether to delete the new monthly routine or leave it. Figure out
+   where the Build-Folio environment came from.
 
 **Recommended next pick: Batch 3 candidates.** With outcomes captured
 (E1) and the NPLA hero shipped (A1), the next leverage points are
@@ -515,9 +718,18 @@ the G filler set). Pick by what Damon's seeing in real testing:
   default is the natural extension).
 - **G7.2 — "next run in N hours"** indicator on MonitorCard (~15 min).
 
-**If asked "what's next?" without direction:** ship A2 + A3 to round
-out the evaluate → handoff arc; demo-day surface area is now the
-limiting factor, not feature count.
+**Distribution / content track (per `docs/DISTRIBUTION-STRATEGY.md`):**
+- Promote the 36 WP drafts to publish after a review pass
+- Pitch Scottsdale Oct (NPLA) speaking slot (do this in May)
+- First Build Buy Borrow Tuesday post + 8-week rotation
+- 5 more pillar blog posts (Jun-Oct)
+- Author bio page at `/about/zach-wade/` with Schema.org Person markup
+- llms.txt at `pulseclose.com/llms.txt`
+
+**If asked "what's next?" without direction:** investigate the routine
+mystery first. Then ship A2 + A3 to round out the evaluate → handoff
+arc; demo-day surface area is now the limiting factor, not feature
+count.
 
 ---
 
@@ -750,11 +962,13 @@ Items to run/check/decide before NPLA. Most are not on the roadmap as
 
 | Date | Item | Action | Owner |
 |---|---|---|---|
-| Now | AI privacy 2-day bundle | ✅ Decided. Ship PII redaction + depersonalized prompt + per-org toggle before A1 starts. | Claude |
+| Next session | Anthropic Cloud routine investigation | See top-of-file investigation section. Decide: delete monthly WP routine `trig_017PQNaJ2eN6X86T7bo6Zu7Y` or leave it. Figure out where the Build-Folio environment came from on user's account. | User + Claude |
+| Done | AI privacy 2-day bundle | ✅ Shipped 2026-05-03 (`a277c23`). | Claude |
 | ~5/27 | OpenSanctions key rotation | ✅ Decided. Rotate trial keys; auto-falls-back to OFAC if rotation fails. | User |
+| ~6/01 | Monthly WP refresh (scheduled) | Will run as `trig_017PQNaJ2eN6X86T7bo6Zu7Y` UNLESS deleted/disabled. Will fail-clean if Build-Folio env doesn't have WP secrets. | Anthropic Cloud agent |
 | ~6/10 | Cobalt key rotation for demo | ✅ Decided. Rotate across multiple keys; cached `liveData=false` as backstop for any single demo validation. | User |
 | ~6/15 | Print test (CSS on paper) | Print `/handoff/[id]` + `/validations/[id]/risk-methodology` on real paper, fix any margins/page-breaks | User |
-| ~6/15 | Migration idempotency on fresh tenant | Spin up a 2nd test org, run all 21 migrations clean, validate one xlsx through full flow | User OR Claude via script |
-| ~6/15 | Demo collateral | One-page leave-behind, 3 talk tracks (lender / fund / consulting), trial-start mechanic | User |
+| ~6/15 | Migration idempotency on fresh tenant | Spin up a 2nd test org, run all 25 migrations clean, validate one xlsx through full flow | User OR Claude via script |
+| ~6/15 | Demo collateral | One-page leave-behind, 3 talk tracks (lender / fund / consulting), trial-start mechanic | User (full plan in docs/NPLA-RUNBOOK.md) |
 | Next Damon sync | Outside-person bundle | Walk through Action items #1-5: Truong xlsx interpretation, co-borrower schema, address shapes, Insignia AI policy, testimonial ask | User + Damon |
 | ~6/20 | Demo dry-run with Damon | Walk the runbook end-to-end, time it, identify rough edges | User + Damon |
