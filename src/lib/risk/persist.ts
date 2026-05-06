@@ -28,7 +28,7 @@ export async function recomputeRiskFactorsForValidation(
 ): Promise<RecomputeResult | null> {
   const { data: validation } = await supabase
     .from("borrower_validations")
-    .select("id, org_id, primary_borrower_id, primary_entity_id")
+    .select("id, org_id, primary_borrower_id, primary_entity_id, borrower_name, guarantor_name")
     .eq("id", validationId)
     .single();
   if (!validation) return null;
@@ -36,7 +36,7 @@ export async function recomputeRiskFactorsForValidation(
   const [entityRes, trackRes, litigationRes, sanctionsRes, gcRes] = await Promise.all([
     supabase
       .from("entity_checks")
-      .select("sos_status, flags, last_filing_date")
+      .select("sos_status, flags, last_filing_date, state, registered_agent")
       .eq("validation_id", validationId)
       .order("check_date", { ascending: false })
       .limit(1)
@@ -162,6 +162,8 @@ export async function recomputeRiskFactorsForValidation(
         sos_status: entityRes.data.sos_status,
         flags: (entityRes.data.flags as string[]) ?? [],
         last_filing_date: entityRes.data.last_filing_date,
+        state: entityRes.data.state ?? null,
+        registered_agent: entityRes.data.registered_agent ?? null,
       }
     : null;
 
@@ -187,7 +189,15 @@ export async function recomputeRiskFactorsForValidation(
       }
     : null;
 
-  const factors = computeRiskFactors({ entity, litigation, sanctions, gc, properties });
+  const factors = computeRiskFactors({
+    entity,
+    litigation,
+    sanctions,
+    gc,
+    properties,
+    borrower_name: validation.borrower_name ?? null,
+    guarantor_name: validation.guarantor_name ?? null,
+  });
   const tier = deriveTier(factors);
 
   // flag_count = active factors at moderate/critical/minor severity.

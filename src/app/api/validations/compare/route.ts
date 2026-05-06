@@ -76,6 +76,7 @@ const FACTOR_ORDER = [
   "gc_license_issue",
   "extended_hold",
   "lender_concentration",
+  "address_consistency",
   "foreclosure_distress",
   "market_outlier",
   "market_outlier_unavailable",

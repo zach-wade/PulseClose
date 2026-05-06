@@ -50,6 +50,10 @@ export interface FactorEntityView {
   sos_status: string | null;
   flags: string[];
   last_filing_date: string | null;
+  // C4 — additional fields for the address-consistency cross-check.
+  // Optional so legacy callers (and tests) keep compiling.
+  state?: string | null;
+  registered_agent?: string | null;
 }
 
 export interface FactorLitigationView {
@@ -76,6 +80,10 @@ export interface ComputeFactorsInput {
   sanctions: FactorSanctionsView | null;
   gc: FactorGCView | null;
   properties: FactorPropertyView[];
+  // C4 — name passed in for the registered-agent self-service check.
+  // Optional; absent in older test callers.
+  borrower_name?: string | null;
+  guarantor_name?: string | null;
 }
 
 // Threshold for the extended-hold flag. 18 months captures stalled flips
@@ -322,6 +330,74 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
     });
   }
 
+  // ── C4: Address consistency cross-check ──────────────────────────────
+  // Informational signal. Catches three classes of weirdness:
+  //   (a) Registered agent name matches the borrower/guarantor → DIY
+  //       agent, not necessarily fraud but worth surfacing (some states
+  //       require third-party service, and an investor underwriter will
+  //       care).
+  //   (b) Entity formed in state X, all properties in state Y where
+  //       X ≠ Y AND |Y - distinct property states| > 0 → cross-state
+  //       paper-only entity. Common with NV/DE LLCs holding CA assets;
+  //       not a flag at small N, surfaces at high N.
+  //   (c) Multiple properties claim the same exact street address
+  //       (common during portfolio-fraud stings).
+  const consistencyFindings: string[] = [];
+  const consistencyDetails: Record<string, unknown> = {};
+  if (input.entity?.registered_agent && (input.borrower_name || input.guarantor_name)) {
+    const ra = canonicalizeForCompare(input.entity.registered_agent);
+    const bm = canonicalizeForCompare(input.borrower_name);
+    const gm = canonicalizeForCompare(input.guarantor_name);
+    if (ra && (ra === bm || ra === gm)) {
+      consistencyFindings.push(
+        `Registered agent (${input.entity.registered_agent}) is the same person as the borrower/guarantor — third-party agent recommended.`,
+      );
+      consistencyDetails.self_served_registered_agent = true;
+    }
+  }
+  if (input.entity?.state && input.properties.length >= 3) {
+    const propStates = new Set(
+      input.properties
+        .map((p) => extractStateFromAddress(p.property_address))
+        .filter((s): s is string => s !== null),
+    );
+    const entityState = input.entity.state.toUpperCase();
+    if (propStates.size > 0 && !propStates.has(entityState)) {
+      consistencyFindings.push(
+        `Entity formed in ${entityState} but no properties in that state (${[...propStates].join(", ")}).`,
+      );
+      consistencyDetails.cross_state = {
+        entity_state: entityState,
+        property_states: [...propStates],
+      };
+    }
+  }
+  // Property-line clustering — exact duplicates of the same line1.
+  const addrCounts = new Map<string, number>();
+  for (const p of input.properties) {
+    const line1 = (p.property_address ?? "").split(",")[0]?.trim().toLowerCase();
+    if (!line1) continue;
+    addrCounts.set(line1, (addrCounts.get(line1) ?? 0) + 1);
+  }
+  const dupes = [...addrCounts.entries()].filter(([, n]) => n > 1);
+  if (dupes.length > 0) {
+    consistencyFindings.push(
+      `${dupes.length} street address${dupes.length === 1 ? "" : "es"} appear in the track record more than once.`,
+    );
+    consistencyDetails.duplicate_addresses = dupes.map(([line1, count]) => ({ line1, count }));
+  }
+
+  if (consistencyFindings.length > 0) {
+    factors.push({
+      factor_key: "address_consistency",
+      severity: "informational",
+      excluded: false,
+      exclusion_reason: null,
+      contributing_data: consistencyDetails,
+      explanation: consistencyFindings.join(" "),
+    });
+  }
+
   // ── Foreclosure / distress ───────────────────────────────────────────
   const distressed = input.properties.filter((p) => {
     const raw = p.raw_response as Record<string, unknown> | null;
@@ -369,6 +445,40 @@ export function humanizeFactorKey(key: string): string {
     lender_concentration: "Lender concentration",
     foreclosure_distress: "Foreclosure / distress",
     market_outlier: "Market outlier (vs. zip median)",
+    market_outlier_unavailable: "Market outlier (data unavailable)",
+    address_consistency: "Address consistency",
   };
   return map[key] ?? key.replace(/_/g, " ");
+}
+
+// Local helpers for the address-consistency factor. canonicalize is
+// intentionally lighter than the dedup canonicalizeName (we tolerate
+// "John A. Smith" vs "John Smith" via tokenize-and-set rather than
+// requiring the entity-suffix-stripped canonical form).
+function canonicalizeForCompare(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const tokens = input
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2)
+    .sort();
+  return tokens.length > 0 ? tokens.join(" ") : null;
+}
+
+// Best-effort state extraction from a property_address. Pulls the
+// first 2-letter token followed by a 5-digit zip OR a token in the
+// known state-code set as a fallback.
+const STATE_CODES = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
+]);
+function extractStateFromAddress(addr: string | null | undefined): string | null {
+  if (!addr) return null;
+  // First try ", ST ZIP" tail — most reliable.
+  const m = addr.match(/,\s*([A-Z]{2})\s+\d{5}/);
+  if (m && STATE_CODES.has(m[1])) return m[1];
+  // Fallback: any 2-letter uppercase token in the canonical set.
+  for (const tok of addr.split(/[^A-Z]+/)) {
+    if (tok.length === 2 && STATE_CODES.has(tok)) return tok;
+  }
+  return null;
 }
