@@ -90,11 +90,29 @@ function fmtDate(s: string): string {
 export default function PortfolioPage() {
   const [data, setData] = useState<PortfolioPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/portfolio");
-      if (res.ok) setData(await res.json());
+      try {
+        const res = await fetch("/api/portfolio");
+        if (res.ok) {
+          setData(await res.json());
+        } else {
+          // Surface the actual server-side error so we can debug rather
+          // than just showing "Failed to load."
+          let msg = `HTTP ${res.status}`;
+          try {
+            const body = await res.json();
+            if (body?.error) msg += ` — ${body.error}`;
+          } catch {
+            // body wasn't JSON
+          }
+          setErrorDetail(msg);
+        }
+      } catch (e) {
+        setErrorDetail(e instanceof Error ? e.message : String(e));
+      }
       setLoading(false);
     })();
   }, []);

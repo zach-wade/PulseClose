@@ -116,6 +116,21 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Derive a live status from the current tier so the badge reflects
+// post-override state, not the frozen overall_status that was set at
+// validation creation. Overrides that drop tier from HIGH→LOW now show
+// up as Flagged→Verified instead of stuck-at-Flagged.
+function statusFromTier(
+  tier: "HIGH" | "MEDIUM" | "LOW" | null | undefined,
+  overallStatus: string,
+): string {
+  if (overallStatus === "pending") return "pending";
+  if (tier === "HIGH") return "flagged";
+  if (tier === "MEDIUM") return "partial";
+  if (tier === "LOW") return "verified";
+  return overallStatus;
+}
+
 function ExperienceStars({ tier }: { tier: number | null }) {
   if (!tier) return <span className="text-muted-foreground text-sm">N/A</span>;
   const stars = 5 - tier;
@@ -200,14 +215,26 @@ export default function ValidationDetailPage() {
     };
   }, [params.id]);
 
-  // After an override is applied: refetch immediately to pick up new
-  // risk_factors + tier, then schedule one more refetch in ~5s to catch
-  // the AI memo regeneration that runs via after().
+  // After an override / edit / signal is applied: refetch immediately
+  // to pick up the new risk_factors + tier (synchronous via the
+  // recompute RPC), then start a polling loop for ~3 minutes looking
+  // for the AI memo to update. Memo regen is fire-and-forget and takes
+  // 30s+; without this the page sees the new tier but a stale memo
+  // until manual refresh.
   const handleSignalApplied = useCallback(async () => {
-    await refetch();
-    setTimeout(() => {
-      refetch();
-    }, 5000);
+    const before = await refetch();
+    const beforeJson = JSON.stringify(before?.ai_analysis ?? null);
+    let polls = 0;
+    const tick = async () => {
+      polls++;
+      if (polls > 30) return; // ~3 min @ 6s
+      await new Promise((r) => setTimeout(r, 6000));
+      const next = await refetch();
+      const nextJson = JSON.stringify(next?.ai_analysis ?? null);
+      if (nextJson !== beforeJson) return; // memo actually updated, done
+      void tick();
+    };
+    void tick();
   }, [refetch]);
 
   if (loading) {
@@ -283,7 +310,7 @@ export default function ValidationDetailPage() {
               <h1 className="text-2xl font-bold tracking-tight">
                 {data.borrower_name}
               </h1>
-              <StatusBadge status={data.overall_status} />
+              <StatusBadge status={statusFromTier(data.tier, data.overall_status)} />
             </div>
             <p className="text-muted-foreground text-sm mt-1">
               {data.borrower_entity_name}

@@ -21,7 +21,11 @@ export async function GET() {
   const [validationsRes, factorsRes, outcomesRes, attentionRes] = await Promise.all([
     supabase
       .from("borrower_validations")
-      .select("id, overall_status, experience_tier, borrower_id, borrower_name, validation_date, created_at")
+      // Alias primary_borrower_id → borrower_id so the response shape
+      // stays unchanged for the page consumer. The underlying column was
+      // renamed in 00010 but this route still referenced the old name —
+      // hence the silent 500 the page surfaced as "Failed to load."
+      .select("id, overall_status, experience_tier, borrower_id:primary_borrower_id, borrower_name, validation_date, created_at")
       .eq("org_id", profile.org_id)
       .order("created_at", { ascending: false }),
     supabase
@@ -41,7 +45,7 @@ export async function GET() {
       .from("borrower_validations")
       .select(`
         id,
-        borrower_id,
+        borrower_id:primary_borrower_id,
         borrower_name,
         borrower_entity_name,
         overall_status,
