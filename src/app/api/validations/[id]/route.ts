@@ -91,6 +91,15 @@ export async function GET(
   const riskFactors = (riskFactorsRes.data ?? []) as RiskFactor[];
   const tier = deriveTier(riskFactors);
 
+  // Org-level monitor pause indicator — surfaces on MonitorCard so the
+  // lender knows monitoring is silenced even though their per-validation
+  // sub still says "enabled".
+  const { data: orgRow } = await supabase
+    .from("organizations")
+    .select("monitor_paused_until")
+    .eq("id", profile.org_id)
+    .maybeSingle();
+
   return NextResponse.json({
     ...validationRes.data,
     entity_checks: entityRes.data ?? [],
@@ -103,5 +112,6 @@ export async function GET(
     risk_factors: riskFactors,
     tier,
     deal_outcome: dealOutcomeRes.data ?? null,
+    org_monitor_paused_until: orgRow?.monitor_paused_until ?? null,
   });
 }

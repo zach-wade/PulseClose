@@ -93,6 +93,7 @@ interface ValidationDetail {
     chosen_investor_id?: string | null;
   } | null;
   deal_outcome: DealOutcome | null;
+  org_monitor_paused_until: string | null;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
@@ -546,6 +547,7 @@ export default function ValidationDetailPage() {
         validationId={data.id}
         borrowerId={data.primary_borrower_id}
         borrowerName={data.borrower_name}
+        orgMonitorPausedUntil={data.org_monitor_paused_until}
       />
 
       {/* Deal outcome (E1) — what actually happened to this loan after

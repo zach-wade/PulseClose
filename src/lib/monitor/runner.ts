@@ -10,6 +10,7 @@ import { getAdapter } from "@/lib/adapters";
 import { sendEmail } from "@/lib/email/resend";
 import { materializeLitigationCases } from "@/lib/litigation/materialize";
 import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
+import { dispatchNotification } from "@/lib/notifications/dispatch";
 
 export type ChangeSeverity = "info" | "warning" | "critical";
 
@@ -390,12 +391,12 @@ function escapeHtml(s: string): string {
 }
 
 export async function notifyChanges(
+  supabase: SupabaseClient,
   sub: SubscriptionRow,
   borrower: { borrower_name: string; borrower_entity_name: string | null },
   changes: MonitorChange[],
   publicBaseUrl: string,
 ): Promise<boolean> {
-  if (sub.notify_emails.length === 0) return false;
   // critical_only filters BEFORE deciding whether to send at all — a
   // borrower-level sub configured for critical-only shouldn't email on
   // a filing-date drift even though we still recorded the change in
@@ -404,6 +405,7 @@ export async function notifyChanges(
     ? changes.filter((c) => c.severity === "critical")
     : changes;
   if (filtered.length === 0) return false;
+
   const validationUrl = `${publicBaseUrl}/dashboard/validations/${sub.validation_id}`;
   const subject = `PulseClose: ${filtered.length} change${filtered.length === 1 ? "" : "s"} on ${borrower.borrower_name}`;
   const html = buildEmailHtml({
@@ -412,5 +414,26 @@ export async function notifyChanges(
     changes: filtered,
     validationUrl,
   });
-  return sendEmail({ to: sub.notify_emails, subject, html });
+  const text = `${filtered.length} change${filtered.length === 1 ? "" : "s"} detected on ${borrower.borrower_name}.\n\n${filtered.map((c) => `- ${c.source} · ${c.field}: ${String(c.before).slice(0, 40)} → ${String(c.after).slice(0, 40)}`).join("\n")}\n\nReview: ${validationUrl}`;
+
+  // Subscription-pinned emails (the lender's chosen recipients on this
+  // sub). Always fires regardless of notification_preferences — the
+  // sub's notify_emails IS the contract.
+  let subscriptionEmailOk = false;
+  if (sub.notify_emails.length > 0) {
+    subscriptionEmailOk = await sendEmail({ to: sub.notify_emails, subject, html });
+  }
+
+  // Org-wide notification_preferences for monitor_change. This is the
+  // path that fires Slack / Teams / webhook / additional emails per
+  // user. Independent of the per-subscription notify_emails so an org
+  // can route every monitor change to a #credit-team Slack channel
+  // even if individual subs only have one personal email.
+  const dispatchResult = await dispatchNotification(supabase, {
+    orgId: sub.org_id,
+    eventType: "monitor_change",
+    payload: { subject, html, text },
+  });
+
+  return subscriptionEmailOk || dispatchResult.sent > 0;
 }

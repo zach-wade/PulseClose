@@ -79,9 +79,13 @@ interface MonitorCardProps {
   validationId: string;
   borrowerId?: string | null;
   borrowerName?: string | null;
+  // ISO timestamp; when in the future, monitor cron skips this org.
+  // Passed down from the validation detail GET so MonitorCard can show
+  // the pause status inline rather than the lender having to remember.
+  orgMonitorPausedUntil?: string | null;
 }
 
-export function MonitorCard({ validationId, borrowerId, borrowerName }: MonitorCardProps) {
+export function MonitorCard({ validationId, borrowerId, borrowerName, orgMonitorPausedUntil }: MonitorCardProps) {
   const [state, setState] = useState<State>({ subscription: null, runs: [] });
   const [loading, setLoading] = useState(true);
   const [emailInput, setEmailInput] = useState("");
@@ -208,6 +212,22 @@ export function MonitorCard({ validationId, borrowerId, borrowerName }: MonitorC
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Org-level pause indicator — overrides per-validation enabled
+            state. Cron skips while paused; lender flipped via Settings →
+            Org → Pause monitoring. */}
+        {orgMonitorPausedUntil &&
+          new Date(orgMonitorPausedUntil) > new Date() && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 flex items-start gap-2">
+              <span className="font-medium">Org-wide pause active.</span>
+              <span>
+                Monitoring is paused until{" "}
+                {new Date(orgMonitorPausedUntil).toLocaleString()}. Per-
+                validation subs stay configured but the cron skips them
+                until the window passes (Settings → Org to resume early).
+              </span>
+            </div>
+          )}
+
         <p className="text-xs text-muted-foreground">
           Re-runs entity SOS, federal litigation, and sanctions screens on the configured cadence; emails recipients when something changes (entity status, new litigation case, new sanctions hit). Track-record + GC stay one-shot — too costly per run.
         </p>

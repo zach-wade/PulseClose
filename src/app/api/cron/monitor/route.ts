@@ -147,7 +147,7 @@ export async function GET(request: Request) {
           .eq("id", sub.validation_id)
           .single();
         if (validation) {
-          const sent = await notifyChanges(sub, validation, result.changes, PUBLIC_BASE_URL);
+          const sent = await notifyChanges(supabase, sub, validation, result.changes, PUBLIC_BASE_URL);
           emailStatus = sent ? "sent" : "failed";
           if (runRow) {
             const runUpdate: Record<string, unknown> = {};
