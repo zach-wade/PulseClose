@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Save, Trash2, BarChart3 } from "lucide-react";
+import { InvestorPerformanceCard } from "@/components/dashboard/investor-performance-card";
 
 interface CriterionRow {
   criteria_key: string;
@@ -198,6 +199,19 @@ export default function InvestorsAdminPage() {
                     </>
                   ) : (
                     <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        render={
+                          <Link
+                            href={`/dashboard/evaluate/investors/${inv.id}`}
+                            title="Open investor detail page with full performance + rate trend + recent evaluations."
+                          />
+                        }
+                      >
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        Performance
+                      </Button>
                       <InvestorExtractModal
                         investorId={inv.id}
                         investorName={inv.display_name}
@@ -243,6 +257,8 @@ export default function InvestorsAdminPage() {
                   ))}
                 </div>
               )}
+              {/* A4 — at-a-glance performance strip per investor */}
+              <InvestorPerformanceCard investorId={inv.id} compact />
             </CardContent>
           </Card>
         ))

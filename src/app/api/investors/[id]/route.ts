@@ -1,3 +1,4 @@
+// GET /api/investors/[id] — single investor + active criteria
 // PUT /api/investors/[id] — update investor + replace its active criteria
 // DELETE /api/investors/[id] — delete investor (cascades criteria + results)
 
@@ -12,6 +13,38 @@ interface CriterionInput {
   criteria_value: unknown;
   source?: "pdf_parse" | "user_input";
   source_doc_url?: string | null;
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const profile = await getUserProfile();
+  if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const supabase = createAdminClient();
+  const [invRes, critRes] = await Promise.all([
+    supabase
+      .from("investors")
+      .select("*")
+      .eq("id", id)
+      .eq("org_id", profile.org_id)
+      .maybeSingle(),
+    supabase
+      .from("investor_criteria")
+      .select("criteria_key, criteria_value, effective_from, source, source_doc_url")
+      .eq("investor_id", id)
+      .is("effective_to", null),
+  ]);
+
+  if (!invRes.data) {
+    return NextResponse.json({ error: "Investor not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    investor: { ...invRes.data, criteria: critRes.data ?? [] },
+  });
 }
 
 export async function PUT(
