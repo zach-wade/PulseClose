@@ -33,7 +33,9 @@ import {
   RefreshCw,
   Check,
   Shield,
+  Bell,
 } from "lucide-react";
+import { NotificationsTab } from "./notifications-tab";
 import { toast } from "sonner";
 
 interface SettingsData {
@@ -211,6 +213,10 @@ export default function SettingsPage() {
           <TabsTrigger value="team">
             <Users className="mr-2 h-4 w-4" />
             Team
+          </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <Bell className="mr-2 h-4 w-4" />
+            Notifications
           </TabsTrigger>
           <TabsTrigger value="api">
             <Key className="mr-2 h-4 w-4" />
@@ -527,6 +533,11 @@ export default function SettingsPage() {
               </form>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Notifications tab */}
+        <TabsContent value="notifications" className="space-y-6 mt-6">
+          <NotificationsTab />
         </TabsContent>
 
         {/* API Keys tab */}
