@@ -196,6 +196,8 @@ export function ApiKeysTab() {
         </CardContent>
       </Card>
 
+      <BookmarkletCard />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">API documentation</CardTitle>
@@ -236,5 +238,58 @@ GET /borrowers/{id}`}
         </CardContent>
       </Card>
     </>
+  );
+}
+
+// D4 — Browser bookmarklet. Drag the "Validate this" link to the
+// bookmarks bar. When clicked on any page, the bookmarklet:
+//  - grabs the highlighted text (if any) as the borrower address
+//  - falls back to the page title (Zillow / Realtor.com)
+//  - opens /dashboard/new with ?address=... and ?source=bookmarklet
+function BookmarkletCard() {
+  const APP_BASE =
+    typeof window !== "undefined" ? window.location.origin : "https://app.pulseclose.com";
+
+  // Compact javascript: URL. Build the script as a single line so the
+  // browser accepts it as a bookmark target. encodeURIComponent on the
+  // address / borrower keeps query-param boundaries safe.
+  const SCRIPT = `(function(){var s=window.getSelection&&String(window.getSelection())||'';var a=encodeURIComponent(s.trim());var t=encodeURIComponent(document.title||'');var u='${APP_BASE}/dashboard/new?source=bookmarklet'+(a?'&address='+a:'')+(t?'&borrower='+t:'');window.open(u,'_blank');})();`;
+  const HREF = `javascript:${encodeURIComponent(SCRIPT)}`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Browser bookmarklet</CardTitle>
+        <CardDescription>
+          Drag the link below to your bookmarks bar. On any page (Zillow,
+          a CRM record, an email), highlight the borrower address or
+          name, click the bookmarklet — PulseClose opens a new
+          validation pre-filled from the highlight + page title.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border bg-muted/20 p-4 flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a
+            href={HREF}
+            onClick={(e) => {
+              e.preventDefault();
+              toast.info("Drag this link to your bookmarks bar.");
+            }}
+            className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium cursor-grab"
+          >
+            Validate with PulseClose
+          </a>
+        </div>
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground">
+            View the bookmarklet source
+          </summary>
+          <pre className="mt-2 p-2 rounded bg-muted overflow-x-auto whitespace-pre-wrap break-all">
+            {SCRIPT}
+          </pre>
+        </details>
+      </CardContent>
+    </Card>
   );
 }

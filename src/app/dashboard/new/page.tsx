@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,20 +31,53 @@ import { DocIngest, type IngestExtraction } from "@/components/dashboard/doc-ing
 import { BorrowerMatchHint } from "@/components/dashboard/borrower-match-hint";
 
 export default function NewValidationPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewValidationInner />
+    </Suspense>
+  );
+}
+
+function NewValidationInner() {
   const router = useRouter();
-  const [borrowerName, setBorrowerName] = useState("");
-  const [entityName, setEntityName] = useState("");
-  const [entityState, setEntityState] = useState("");
-  const [guarantorName, setGuarantorName] = useState("");
+  // D4 — Browser bookmarklet support. Pulls borrower / address /
+  // entity from URL params on page load. Useful when the lender is on
+  // Zillow / a CRM and clicks a "Validate this" bookmarklet that
+  // routes to /dashboard/new?address=...&borrower=....
+  const searchParams = useSearchParams();
+  const [borrowerName, setBorrowerName] = useState(
+    searchParams.get("borrower") ?? "",
+  );
+  const [entityName, setEntityName] = useState(
+    searchParams.get("entity") ?? "",
+  );
+  const [entityState, setEntityState] = useState(
+    searchParams.get("state") ?? "",
+  );
+  const [guarantorName, setGuarantorName] = useState(
+    searchParams.get("guarantor") ?? "",
+  );
   const [gcName, setGcName] = useState("");
   const [gcLicense, setGcLicense] = useState("");
   const [gcState, setGcState] = useState("");
   // One address per line — sent as string[] to the API. Pre-filled from
   // doc-ingest extraction when the borrower's intake doc lists properties.
   // Lender can edit before running.
-  const [propertyAddresses, setPropertyAddresses] = useState("");
+  const [propertyAddresses, setPropertyAddresses] = useState(
+    searchParams.get("address") ?? "",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // One-shot pulse so the user sees the prefill landed.
+  useEffect(() => {
+    const fromBookmarklet = searchParams.get("source") === "bookmarklet";
+    if (fromBookmarklet) {
+      toast.success("Pre-filled from bookmarklet. Review and run.");
+    }
+    // intentionally one-shot — searchParams changes only on first mount here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function applyExtraction(data: IngestExtraction) {
     if (data.borrower_name) setBorrowerName(data.borrower_name);
