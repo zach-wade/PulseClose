@@ -98,6 +98,21 @@ export interface HandoffDocument {
 
   // Manual narrative
   overall_narrative: string | null;
+
+  // G6.1 — when a chosen investor is set on handoff_data, builder pulls
+  // the investor's name + most recent computed_terms tied to this
+  // validation. Renders as an "Intended investor" block in Excel/PDF.
+  intended_investor: {
+    investor_id: string;
+    display_name: string;
+    result: "pass" | "conditional" | "fail" | null;
+    rate: number | null;
+    points: number | null;
+    max_ltv_pct: number | null;
+    max_loan_amount: number | null;
+    rationale: string | null;
+    computed_at: string | null;
+  } | null;
 }
 
 export async function buildHandoffDocument(
@@ -164,7 +179,74 @@ export async function buildHandoffDocument(
     preparer_name?: string;
     preparer_email?: string;
     properties?: Record<string, { rehab_spend?: number; gc_name?: string; gc_license?: string; narrative?: string }>;
+    chosen_investor_id?: string | null;
   };
+
+  // G6.1 — pull the chosen investor's most-recent eligibility result for
+  // this validation (via the linking deal_evaluation). Only runs when an
+  // investor is actually chosen — keeps the unchosen-investor handoff
+  // path zero-cost.
+  let intendedInvestor: HandoffDocument["intended_investor"] = null;
+  if (handoffData.chosen_investor_id) {
+    const [invRes, evalRes] = await Promise.all([
+      supabase
+        .from("investors")
+        .select("id, display_name")
+        .eq("id", handoffData.chosen_investor_id)
+        .eq("org_id", orgId)
+        .maybeSingle(),
+      supabase
+        .from("deal_evaluations")
+        .select("id, evaluated_at")
+        .eq("validation_id", validationId)
+        .eq("org_id", orgId)
+        .order("evaluated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (invRes.data) {
+      let result: "pass" | "conditional" | "fail" | null = null;
+      let rate: number | null = null;
+      let points: number | null = null;
+      let max_ltv_pct: number | null = null;
+      let max_loan_amount: number | null = null;
+      let rationale: string | null = null;
+      let computedAt: string | null = null;
+
+      if (evalRes.data) {
+        const { data: elig } = await supabase
+          .from("deal_eligibility_results")
+          .select("result, computed_terms, reasoning, computed_at")
+          .eq("deal_evaluation_id", evalRes.data.id)
+          .eq("investor_id", handoffData.chosen_investor_id)
+          .maybeSingle();
+        if (elig) {
+          result = elig.result as "pass" | "conditional" | "fail";
+          const terms = (elig.computed_terms ?? {}) as Record<string, unknown>;
+          const asNum = (v: unknown) => (typeof v === "number" ? v : null);
+          rate = asNum(terms.rate);
+          points = asNum(terms.points);
+          max_ltv_pct = asNum(terms.max_ltv_pct ?? terms.max_ltv);
+          max_loan_amount = asNum(terms.max_loan_amount);
+          rationale = elig.reasoning ?? null;
+          computedAt = elig.computed_at;
+        }
+      }
+
+      intendedInvestor = {
+        investor_id: invRes.data.id,
+        display_name: invRes.data.display_name,
+        result,
+        rate,
+        points,
+        max_ltv_pct,
+        max_loan_amount,
+        rationale,
+        computed_at: computedAt,
+      };
+    }
+  }
 
   const tracks = ((trackRes.data ?? []) as unknown as Array<{
     property_id: string | null;
@@ -320,5 +402,6 @@ export async function buildHandoffDocument(
       tier,
     },
     overall_narrative: handoffData.overall_narrative ?? null,
+    intended_investor: intendedInvestor,
   };
 }

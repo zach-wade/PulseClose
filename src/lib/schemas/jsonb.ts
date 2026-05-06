@@ -147,6 +147,10 @@ export const handoffDataV1 = z.object({
   preparer_name: z.string().optional(),
   preparer_email: z.string().optional(),
   properties: z.record(z.string(), handoffPropertyManualV1).optional(),
+  // G6.1 — optional pointer to an investor in the same org. When set,
+  // the Excel + PDF render an "Intended investor" block with terms +
+  // rationale pulled from deal_eligibility_results.
+  chosen_investor_id: z.string().uuid().nullable().optional(),
 });
 export type HandoffDataV1 = z.infer<typeof handoffDataV1>;
 export const parseHandoffDataV1 = safe(handoffDataV1);

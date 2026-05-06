@@ -135,6 +135,38 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
   }
   cover.addRow([]);
 
+  // G6.1 — Intended investor block. Only renders when one was chosen.
+  if (doc.intended_investor) {
+    cover.addRow([]);
+    const invHeader = cover.addRow(["Intended Investor"]);
+    invHeader.font = { size: 12, bold: true, color: { argb: ACCENT } };
+    cover.mergeCells(`A${invHeader.number}:B${invHeader.number}`);
+    const inv = doc.intended_investor;
+    const invRows: Array<[string, string]> = [
+      ["Investor", inv.display_name],
+    ];
+    if (inv.result) {
+      invRows.push(["Eligibility", inv.result]);
+    }
+    if (inv.rate != null) invRows.push(["Quoted rate", `${inv.rate}%`]);
+    if (inv.points != null) invRows.push(["Points", String(inv.points)]);
+    if (inv.max_ltv_pct != null) invRows.push(["Max LTV", `${inv.max_ltv_pct}%`]);
+    if (inv.max_loan_amount != null)
+      invRows.push(["Max loan amount", `$${fmtMoney(inv.max_loan_amount).toLocaleString()}`]);
+    if (inv.computed_at)
+      invRows.push(["Evaluated", inv.computed_at.slice(0, 10)]);
+    for (const [label, value] of invRows) {
+      const r = cover.addRow([label, value]);
+      r.getCell(1).font = { bold: true };
+    }
+    if (inv.rationale) {
+      const ratRow = cover.addRow([inv.rationale, ""]);
+      ratRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      cover.mergeCells(`A${ratRow.number}:B${ratRow.number}`);
+      ratRow.height = 40;
+    }
+  }
+
   // Overall narrative (manual input via UI)
   if (doc.overall_narrative) {
     const narrHeader = cover.addRow(["Project Narrative"]);

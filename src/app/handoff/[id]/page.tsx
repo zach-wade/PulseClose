@@ -210,6 +210,61 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
         </table>
       </section>
 
+      {/* G6.1 — Intended investor block when one was chosen on the
+          handoff card. Renders before the narrative so the audience
+          (investor or the originator's contact at one) sees their
+          terms in context. */}
+      {doc.intended_investor && (
+        <section className="hf-section">
+          <h2>Intended investor</h2>
+          <div className="hf-investor">
+            <p>
+              <strong>{doc.intended_investor.display_name}</strong>
+              {doc.intended_investor.result && (
+                <span className={`hf-elig hf-elig-${doc.intended_investor.result}`}>
+                  {" "}
+                  · {doc.intended_investor.result}
+                </span>
+              )}
+            </p>
+            <ul className="hf-investor-terms">
+              {doc.intended_investor.rate != null && (
+                <li>
+                  Quoted rate: <strong>{doc.intended_investor.rate}%</strong>
+                </li>
+              )}
+              {doc.intended_investor.points != null && (
+                <li>
+                  Points: <strong>{doc.intended_investor.points}</strong>
+                </li>
+              )}
+              {doc.intended_investor.max_ltv_pct != null && (
+                <li>
+                  Max LTV: <strong>{doc.intended_investor.max_ltv_pct}%</strong>
+                </li>
+              )}
+              {doc.intended_investor.max_loan_amount != null && (
+                <li>
+                  Max loan amount:{" "}
+                  <strong>
+                    ${doc.intended_investor.max_loan_amount.toLocaleString()}
+                  </strong>
+                </li>
+              )}
+              {doc.intended_investor.computed_at && (
+                <li>
+                  Evaluated:{" "}
+                  {doc.intended_investor.computed_at.slice(0, 10)}
+                </li>
+              )}
+            </ul>
+            {doc.intended_investor.rationale && (
+              <p className="hf-narrative">{doc.intended_investor.rationale}</p>
+            )}
+          </div>
+        </section>
+      )}
+
       {doc.overall_narrative && (
         <section className="hf-section">
           <h2>Project narrative</h2>
@@ -281,6 +336,13 @@ const HF_STYLES = `
   .hf-sub { font-size: 7.5pt; color: #64748b; margin-top: 0.1rem; }
   .hf-blank { color: #94a3b8; font-style: italic; }
   .hf-narrative { white-space: pre-wrap; padding: 0.5rem; background: #f8fafc; border-left: 3px solid #3b82f6; }
+  .hf-investor { padding: 0.5rem 0.75rem; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; }
+  .hf-investor-terms { padding-left: 1.1rem; margin: 0.4rem 0; column-count: 2; column-gap: 1rem; }
+  .hf-investor-terms li { break-inside: avoid; margin-bottom: 0.2rem; }
+  .hf-elig { font-size: 9pt; }
+  .hf-elig-pass { color: #047857; }
+  .hf-elig-conditional { color: #b45309; }
+  .hf-elig-fail { color: #b91c1c; }
   .hf-footer { margin-top: 1.5rem; padding-top: 0.5rem; border-top: 1px solid #cbd5e1; font-size: 8pt; color: #64748b; text-align: center; }
 `;
 

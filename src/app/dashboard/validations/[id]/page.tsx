@@ -90,6 +90,7 @@ interface ValidationDetail {
     overall_narrative?: string | null;
     preparer_name?: string | null;
     preparer_email?: string | null;
+    chosen_investor_id?: string | null;
   } | null;
   deal_outcome: DealOutcome | null;
 }

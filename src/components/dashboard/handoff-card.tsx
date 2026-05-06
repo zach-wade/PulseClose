@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,12 @@ interface HandoffData {
   preparer_name?: string | null;
   preparer_email?: string | null;
   properties?: Record<string, { rehab_spend?: number | null; gc_name?: string | null; gc_license?: string | null; narrative?: string | null }>;
+  chosen_investor_id?: string | null;
+}
+
+interface InvestorOption {
+  id: string;
+  display_name: string;
 }
 
 interface Props {
@@ -24,10 +30,23 @@ export function HandoffCard({ validationId, initial }: Props) {
   const [narrative, setNarrative] = useState(initial?.overall_narrative ?? "");
   const [preparerName, setPreparerName] = useState(initial?.preparer_name ?? "");
   const [preparerEmail, setPreparerEmail] = useState(initial?.preparer_email ?? "");
+  const [chosenInvestorId, setChosenInvestorId] = useState(
+    initial?.chosen_investor_id ?? "",
+  );
+  const [investors, setInvestors] = useState<InvestorOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch("/api/investors")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((j: Array<{ id: string; display_name: string }>) =>
+        setInvestors(j.map((i) => ({ id: i.id, display_name: i.display_name }))),
+      )
+      .catch(() => setInvestors([]));
+  }, []);
 
   // Client-side hint when the email field doesn't look like an email — not
   // a hard block (the server schema is loose), just a heads-up so the user
@@ -43,7 +62,8 @@ export function HandoffCard({ validationId, initial }: Props) {
   const dirty =
     narrative.trim() !== (initial?.overall_narrative ?? "").trim() ||
     preparerName.trim() !== (initial?.preparer_name ?? "").trim() ||
-    preparerEmail.trim() !== (initial?.preparer_email ?? "").trim();
+    preparerEmail.trim() !== (initial?.preparer_email ?? "").trim() ||
+    (chosenInvestorId || null) !== (initial?.chosen_investor_id ?? null);
 
   async function save(): Promise<boolean> {
     setSaving(true);
@@ -55,6 +75,7 @@ export function HandoffCard({ validationId, initial }: Props) {
         overall_narrative: narrative.trim() || null,
         preparer_name: preparerName.trim() || null,
         preparer_email: preparerEmail.trim() || null,
+        chosen_investor_id: chosenInvestorId || null,
       };
       const res = await fetch(`/api/handoff/${validationId}`, {
         method: "PUT",
@@ -83,6 +104,7 @@ export function HandoffCard({ validationId, initial }: Props) {
         initial.overall_narrative = body.overall_narrative;
         initial.preparer_name = body.preparer_name;
         initial.preparer_email = body.preparer_email;
+        initial.chosen_investor_id = body.chosen_investor_id;
       }
       return true;
     } catch (err) {
@@ -171,6 +193,34 @@ export function HandoffCard({ validationId, initial }: Props) {
               <p className="text-xs text-amber-600">{emailHint}</p>
             ) : null}
           </div>
+        </div>
+        {/* G6.1 — chosen investor. When set, builder embeds an "Intended
+            investor" block in the Excel/PDF with terms + rationale from
+            the most recent eligibility result for this validation. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="chosen_investor">Intended investor (optional)</Label>
+          <select
+            id="chosen_investor"
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+            value={chosenInvestorId || ""}
+            onChange={(e) => setChosenInvestorId(e.target.value)}
+          >
+            <option value="">— None (generic handoff) —</option>
+            {investors.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.display_name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            When set, the handoff includes the investor&apos;s name + computed
+            terms (rate, points, max LTV) + rationale from the most recent
+            evaluation. Run an evaluation on{" "}
+            <a href="/dashboard/evaluate" className="underline">
+              /dashboard/evaluate
+            </a>{" "}
+            first to populate the terms.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="narrative">Project narrative (optional)</Label>

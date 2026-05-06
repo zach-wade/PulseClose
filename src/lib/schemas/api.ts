@@ -112,6 +112,9 @@ export const handoffUpdateBodyV1 = z.object({
       }),
     )
     .optional(),
+  // G6.1 — when set, builder includes the investor's name + most-recent
+  // computed_terms in the handoff. Pass null to clear.
+  chosen_investor_id: z.string().uuid().nullable().optional(),
 });
 export type HandoffUpdateBodyV1 = z.infer<typeof handoffUpdateBodyV1>;
 
