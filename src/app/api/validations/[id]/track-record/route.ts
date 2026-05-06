@@ -81,7 +81,7 @@ export async function POST(
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  void logEdit(supabase, {
+  await logEdit(supabase, {
     orgId: profile.org_id,
     validationId,
     tableName: "track_record_entries",

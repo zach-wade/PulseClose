@@ -29,6 +29,10 @@ export async function GET(
     return NextResponse.json({ error: "Borrower not found" }, { status: 404 });
   }
 
+  // Cap at 500 — at >500 validations per borrower the JS aggregation +
+  // factor join below would slow the page. Single-borrower roll-up
+  // prioritizes the latest history; older runs accessible via search.
+  const VALIDATIONS_LIMIT = 500;
   const { data: validations } = await supabase
     .from("borrower_validations")
     .select(
@@ -36,7 +40,8 @@ export async function GET(
     )
     .eq("primary_borrower_id", borrowerId)
     .eq("org_id", profile.org_id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(VALIDATIONS_LIMIT);
 
   const validationIds = (validations ?? []).map((v) => v.id);
 

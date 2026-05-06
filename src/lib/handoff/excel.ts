@@ -238,7 +238,8 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
       { header: "Field", key: "field_name", width: 24 },
       { header: "Action", key: "edit_kind", width: 10 },
       { header: "Change", key: "value_summary", width: 36 },
-      { header: "Reason", key: "reason", width: 50 },
+      { header: "Edit reason", key: "edit_reason", width: 40 },
+      { header: "Factor exclusion reason", key: "exclusion_reason", width: 40 },
     ];
     audit.getRow(1).font = { bold: true };
     for (const ev of doc.lender_edits.events) {
@@ -248,7 +249,8 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
         field_name: ev.field_name,
         edit_kind: ev.edit_kind,
         value_summary: ev.value_summary ?? "",
-        reason: ev.reason ?? "",
+        edit_reason: ev.edit_reason ?? "",
+        exclusion_reason: ev.exclusion_reason ?? "",
       });
     }
   }

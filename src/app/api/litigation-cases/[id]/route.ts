@@ -98,7 +98,7 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   for (const field of Object.keys(updates) as EditableField[]) {
-    void logEdit(supabase, {
+    await logEdit(supabase, {
       orgId: profile.org_id,
       validationId: row.validation_id,
       tableName: "litigation_cases",
@@ -142,7 +142,7 @@ export async function DELETE(
     .maybeSingle();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  void logEdit(supabase, {
+  await logEdit(supabase, {
     orgId: profile.org_id,
     validationId: row.validation_id,
     tableName: "litigation_cases",

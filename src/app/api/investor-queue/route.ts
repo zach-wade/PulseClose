@@ -43,27 +43,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // UPSERT — same (investor_id, validation_id) is idempotent; re-route
-  // after withdrawal would surface as a 409 today (caller decides
-  // whether to delete + re-insert or update status).
+  // True UPSERT — re-routing the same (investor_id, validation_id) pair
+  // returns the existing row instead of 409. Caller treats the response
+  // as "this validation is in this investor's queue" regardless of
+  // whether they were the one who put it there.
   const { data, error } = await supabase
     .from("investor_deal_queue")
-    .insert({
-      investor_id: body.investor_id,
-      validation_id: body.validation_id,
-      deal_evaluation_id: body.deal_evaluation_id ?? null,
-      org_id: profile.org_id,
-      routed_by_user_id: profile.id,
-    })
+    .upsert(
+      {
+        investor_id: body.investor_id,
+        validation_id: body.validation_id,
+        deal_evaluation_id: body.deal_evaluation_id ?? null,
+        org_id: profile.org_id,
+        routed_by_user_id: profile.id,
+      },
+      { onConflict: "investor_id,validation_id", ignoreDuplicates: false },
+    )
     .select("id, status, created_at")
     .single();
   if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json(
-        { error: "Already routed to this investor" },
-        { status: 409 },
-      );
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

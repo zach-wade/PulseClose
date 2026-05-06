@@ -55,10 +55,29 @@ export function BorrowerUploadsCard({ validationId }: Props) {
   const [photos, setPhotos] = useState<PhotoRow[] | null>(null);
   const [statements, setStatements] = useState<BankRow[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
+
+  function load() {
+    setLoading(true);
+    setErrored(false);
+    return fetch(`/api/validations/${validationId}/borrower-uploads`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("load failed"))))
+      .then((j: { photos: PhotoRow[]; statements: BankRow[] }) => {
+        setPhotos(j.photos);
+        setStatements(j.statements);
+      })
+      .catch(() => {
+        setPhotos(null);
+        setStatements(null);
+        setErrored(true);
+      })
+      .finally(() => setLoading(false));
+  }
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setErrored(false);
     fetch(`/api/validations/${validationId}/borrower-uploads`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("load failed"))))
       .then((j: { photos: PhotoRow[]; statements: BankRow[] }) => {
@@ -68,8 +87,9 @@ export function BorrowerUploadsCard({ validationId }: Props) {
       })
       .catch(() => {
         if (!cancelled) {
-          setPhotos([]);
-          setStatements([]);
+          setPhotos(null);
+          setStatements(null);
+          setErrored(true);
         }
       })
       .finally(() => !cancelled && setLoading(false));
@@ -83,6 +103,26 @@ export function BorrowerUploadsCard({ validationId }: Props) {
       <Card>
         <CardContent className="p-4">
           <Skeleton className="h-12 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Distinguish "no uploads" (silent) from "couldn't load" (visible).
+  // Without this a transient API error read as "no uploads," which
+  // misled the lender into assuming the borrower hadn't submitted.
+  if (errored) {
+    return (
+      <Card>
+        <CardContent className="p-4 text-xs text-muted-foreground flex items-center justify-between">
+          <span>Borrower-submitted artifacts unavailable.</span>
+          <button
+            type="button"
+            className="underline underline-offset-2 hover:text-foreground"
+            onClick={() => void load()}
+          >
+            Retry
+          </button>
         </CardContent>
       </Card>
     );

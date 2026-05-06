@@ -65,9 +65,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "target_address required" }, { status: 400 });
   }
   // Light shape validation per channel — the dispatch path tolerates
-  // failure but a typo at create-time should surface immediately.
-  if (channel === "email" && !target.includes("@")) {
-    return NextResponse.json({ error: "Email target must contain @" }, { status: 400 });
+  // failure but a typo at create-time should surface immediately. The
+  // email regex is intentionally permissive (RFC 5322 in full is huge);
+  // it just rejects the obvious mistakes "a@" / "@b" / "no-at" that
+  // .includes("@") used to let through.
+  if (channel === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
+    return NextResponse.json(
+      { error: "Email target must look like name@domain.tld" },
+      { status: 400 },
+    );
   }
   if ((channel === "slack" || channel === "teams" || channel === "webhook") && !target.startsWith("https://")) {
     return NextResponse.json(

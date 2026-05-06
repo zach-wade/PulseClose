@@ -45,17 +45,22 @@ interface Props {
 export function BorrowerHistoryCard({ borrowerId, currentValidationId }: Props) {
   const [rep, setRep] = useState<Reputation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setErrored(false);
     fetch(`/api/borrowers/${borrowerId}/reputation`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("load failed"))))
       .then((j) => {
         if (!cancelled) setRep(j.reputation);
       })
       .catch(() => {
-        if (!cancelled) setRep(null);
+        if (!cancelled) {
+          setRep(null);
+          setErrored(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -71,6 +76,35 @@ export function BorrowerHistoryCard({ borrowerId, currentValidationId }: Props) 
         <CardContent className="p-4">
           <Skeleton className="h-4 w-48" />
           <Skeleton className="h-8 w-full mt-3" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Distinguish "no history yet" (silent) from "couldn't load" (visible).
+  // Without this the UI silently swallowed transient API failures.
+  if (errored) {
+    return (
+      <Card>
+        <CardContent className="p-4 text-xs text-muted-foreground flex items-center justify-between">
+          <span>Borrower history unavailable.</span>
+          <button
+            type="button"
+            className="underline underline-offset-2 hover:text-foreground"
+            onClick={() => {
+              setErrored(false);
+              setLoading(true);
+              fetch(`/api/borrowers/${borrowerId}/reputation`)
+                .then((r) => (r.ok ? r.json() : Promise.reject(new Error("load failed"))))
+                .then((j) => {
+                  setRep(j.reputation);
+                })
+                .catch(() => setErrored(true))
+                .finally(() => setLoading(false));
+            }}
+          >
+            Retry
+          </button>
         </CardContent>
       </Card>
     );

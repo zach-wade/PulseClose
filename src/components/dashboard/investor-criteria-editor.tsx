@@ -305,11 +305,22 @@ function CriterionInput({
           type="number"
           value={asPct}
           min={0}
-          max={200}
+          max={100}
           step={0.5}
           onChange={(e) => {
-            const v = e.target.value === "" ? null : Number(e.target.value) / 100;
-            onChange(Number.isFinite(v) ? v : null);
+            if (e.target.value === "") {
+              onChange(null);
+              return;
+            }
+            // Clamp to [0, 1] — LTV/LTC/LTARV above 100% are non-physical
+            // and previously silently saved (e.g. max_ltv: 1.5).
+            const raw = Number(e.target.value) / 100;
+            if (!Number.isFinite(raw)) {
+              onChange(null);
+              return;
+            }
+            const clamped = Math.min(1, Math.max(0, raw));
+            onChange(clamped);
           }}
         />
         <span className="text-sm text-muted-foreground">%</span>

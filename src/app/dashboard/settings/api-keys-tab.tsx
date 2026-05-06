@@ -252,8 +252,10 @@ function BookmarkletCard() {
 
   // Compact javascript: URL. Build the script as a single line so the
   // browser accepts it as a bookmark target. encodeURIComponent on the
-  // address / borrower keeps query-param boundaries safe.
-  const SCRIPT = `(function(){var s=window.getSelection&&String(window.getSelection())||'';var a=encodeURIComponent(s.trim());var t=encodeURIComponent(document.title||'');var u='${APP_BASE}/dashboard/new?source=bookmarklet'+(a?'&address='+a:'')+(t?'&borrower='+t:'');window.open(u,'_blank');})();`;
+  // address / borrower keeps query-param boundaries safe. document.title
+  // is sliced to 80 chars before encoding — Zillow titles routinely run
+  // 200+ chars and overflow URL length limits.
+  const SCRIPT = `(function(){var s=window.getSelection&&String(window.getSelection())||'';var a=encodeURIComponent(s.trim().slice(0,200));var t=encodeURIComponent((document.title||'').slice(0,80));var u='${APP_BASE}/dashboard/new?source=bookmarklet'+(a?'&address='+a:'')+(t?'&borrower='+t:'');window.open(u,'_blank');})();`;
   const HREF = `javascript:${encodeURIComponent(SCRIPT)}`;
 
   return (

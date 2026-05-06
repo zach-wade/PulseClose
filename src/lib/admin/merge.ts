@@ -2,40 +2,14 @@
 // scripts/cleanup-canonical-duplicates.ts. Same primitives, scoped to
 // a single org, callable from the API.
 //
-// Each merge re-points every FK reference from `source_id` to
-// `target_id`, then deletes the source row. Idempotent — running it
-// twice on the same pair is a no-op the second time.
+// All work happens inside the merge_records_atomic RPC (00035) so two
+// admins clicking "Keep this" on the same dupe pair simultaneously
+// can't leave the data in a half-merged state. The FK list lives in
+// the SQL function — keep it in sync there if a new FK is added.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type MergeEntityType = "borrower" | "entity" | "lender";
-
-interface RePointSpec {
-  table: string;
-  fk: string;
-}
-
-const FK_REPOINTS: Record<MergeEntityType, RePointSpec[]> = {
-  borrower: [
-    { table: "borrower_validations", fk: "primary_borrower_id" },
-    { table: "borrower_validations", fk: "guarantor_borrower_id" },
-    { table: "borrower_entities", fk: "borrower_id" },
-    { table: "borrower_signals", fk: "borrower_id" },
-    { table: "borrower_property_signals", fk: "borrower_id" },
-    { table: "monitor_subscriptions", fk: "borrower_id" },
-    { table: "deal_evaluations", fk: "borrower_id" },
-  ],
-  entity: [
-    { table: "borrower_validations", fk: "primary_entity_id" },
-    { table: "entity_checks", fk: "entity_id" },
-    { table: "borrower_entities", fk: "entity_id" },
-    { table: "entity_signals", fk: "entity_id" },
-  ],
-  lender: [
-    { table: "property_ownership", fk: "lender_id" },
-    { table: "track_record_entries", fk: "lender_id" },
-  ],
-};
 
 const TABLE_BY_TYPE: Record<MergeEntityType, string> = {
   borrower: "borrowers",
@@ -59,48 +33,16 @@ export async function mergeRecords(
     throw new Error("source_id and target_id must differ");
   }
 
-  // Both rows must exist + belong to caller's org. Without this check a
-  // misconfigured admin client could re-point cross-org rows.
-  const table = TABLE_BY_TYPE[entityType];
-  const { data: rows } = await supabase
-    .from(table)
-    .select("id, org_id")
-    .in("id", [sourceId, targetId]);
-  const found = new Map((rows ?? []).map((r) => [r.id, r.org_id]));
-  if (found.size !== 2 || found.get(sourceId) !== orgId || found.get(targetId) !== orgId) {
-    throw new Error("Both records must exist and belong to your org");
+  const { data, error } = await supabase.rpc("merge_records_atomic", {
+    p_entity_type: entityType,
+    p_org_id: orgId,
+    p_source_id: sourceId,
+    p_target_id: targetId,
+  });
+  if (error) {
+    throw new Error(`merge ${entityType}: ${error.message}`);
   }
-
-  const re_pointed: MergeResult["re_pointed"] = [];
-  for (const spec of FK_REPOINTS[entityType]) {
-    // Count first (so we can report rows-touched), then update.
-    const { count } = await supabase
-      .from(spec.table)
-      .select("*", { count: "exact", head: true })
-      .eq(spec.fk, sourceId);
-    if ((count ?? 0) === 0) continue;
-    const { error } = await supabase
-      .from(spec.table)
-      .update({ [spec.fk]: targetId })
-      .eq(spec.fk, sourceId);
-    if (error) {
-      throw new Error(`re-point ${spec.table}.${spec.fk}: ${error.message}`);
-    }
-    re_pointed.push({ table: spec.table, column: spec.fk, rows: count ?? 0 });
-  }
-
-  // Delete the source row last so a mid-merge failure leaves the source
-  // intact + retryable.
-  const { error: delError } = await supabase
-    .from(table)
-    .delete()
-    .eq("id", sourceId)
-    .eq("org_id", orgId);
-  if (delError) {
-    throw new Error(`delete ${table}: ${delError.message}`);
-  }
-
-  return { re_pointed, deleted_source: true };
+  return data as MergeResult;
 }
 
 export interface DuplicateGroup {

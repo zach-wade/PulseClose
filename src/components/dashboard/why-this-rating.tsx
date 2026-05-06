@@ -392,7 +392,7 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, validationId, onS
             );
           })}
           <p className="text-xs text-muted-foreground italic pt-1">
-            Tier is computed deterministically from the factor list above. Critical → HIGH; ≥2 active moderate → MEDIUM; otherwise LOW. The AI memo narrates these factors but never sets the tier.
+            Tier is computed deterministically from the active (non-excluded) factors above, after lender overrides have been applied. Critical → HIGH; ≥2 active moderate → MEDIUM; otherwise LOW. The AI memo narrates these factors but never sets the tier.
           </p>
         </CardContent>
       )}

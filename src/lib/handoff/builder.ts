@@ -129,7 +129,14 @@ export interface HandoffDocument {
       table_name: string;
       field_name: string;
       edit_kind: "update" | "add" | "delete";
-      reason: string | null;
+      // Two distinct sources of explanation, kept separate so the renderer
+      // can label them differently. `edit_reason` is the lender's free-text
+      // note when editing/adding/deleting a vendor row; `exclusion_reason`
+      // is the lender's note when overriding a derived risk factor. They
+      // used to share one `reason` field which conflated the two
+      // semantically-different things.
+      edit_reason: string | null;
+      exclusion_reason: string | null;
       edited_at: string;
       // Light context: row_id for traceability, value summary
       row_id: string;
@@ -484,7 +491,9 @@ async function buildLenderEditTrail(
 
   // Render-friendly events. Combines data_edits + factor_overrides into
   // one chronological list. Edit value_summary collapses before/after
-  // into a one-line readable string.
+  // into a one-line readable string. Each event populates exactly one of
+  // edit_reason / exclusion_reason — never both — so the renderer can
+  // label them distinctly without inferring intent from the table_name.
   const events: HandoffDocument["lender_edits"]["events"] = [];
   for (const e of edits) {
     let summary: string | null = null;
@@ -501,7 +510,8 @@ async function buildLenderEditTrail(
       table_name: e.table_name,
       field_name: e.field_name,
       edit_kind: e.edit_kind,
-      reason: e.reason,
+      edit_reason: e.reason,
+      exclusion_reason: null,
       edited_at: e.edited_at,
       row_id: e.row_id,
       value_summary: summary,
@@ -512,7 +522,8 @@ async function buildLenderEditTrail(
       table_name: "factor_overrides",
       field_name: o.factor_key,
       edit_kind: "update",
-      reason: o.exclusion_reason,
+      edit_reason: null,
+      exclusion_reason: o.exclusion_reason,
       edited_at: o.updated_at,
       row_id: o.factor_key,
       value_summary: "factor excluded by lender",

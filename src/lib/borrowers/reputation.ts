@@ -54,12 +54,18 @@ export async function getBorrowerReputation(
     .maybeSingle();
   if (!borrower) return null;
 
+  // Cap at 500 — same reasoning as the validations roll-up route. Beyond
+  // this the JS aggregation slows the page and the marginal info from
+  // older runs is low. If a borrower legitimately exceeds this we'd
+  // switch to a SQL aggregation.
+  const REPUTATION_VALIDATIONS_LIMIT = 500;
   const { data: validations } = await supabase
     .from("borrower_validations")
     .select("id, created_at")
     .eq("primary_borrower_id", borrowerId)
     .eq("org_id", orgId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(REPUTATION_VALIDATIONS_LIMIT);
 
   const validationIds = (validations ?? []).map((v) => v.id);
   const validationCount = validationIds.length;

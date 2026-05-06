@@ -64,6 +64,11 @@ function parseTiff(buf: Buffer, base: number): ExifData {
   let lng: number | null = null;
   if (ifd0Tags.has(TAG_GPS_IFD)) {
     const gpsOffset = base + (ifd0Tags.get(TAG_GPS_IFD)!.valueOffset ?? 0);
+    // Malformed JPEGs can encode a huge valueOffset that points past
+    // buffer end. readIfd has its own length guard, but re-checking here
+    // gives an early exit before the function call and protects against
+    // any future readIfd refactor losing the inner check.
+    if (gpsOffset >= buf.length) return { lat: null, lng: null, timestamp: null, camera_model: cameraModel };
     const gpsTags = readIfd(buf, gpsOffset, base, r16, r32);
     const latRef = gpsTags.has(TAG_GPS_LAT_REF) ? readAsciiTag(buf, gpsTags.get(TAG_GPS_LAT_REF)!, base, r32) : null;
     const lngRef = gpsTags.has(TAG_GPS_LNG_REF) ? readAsciiTag(buf, gpsTags.get(TAG_GPS_LNG_REF)!, base, r32) : null;
@@ -81,6 +86,7 @@ function parseTiff(buf: Buffer, base: number): ExifData {
   let timestamp: string | null = null;
   if (ifd0Tags.has(TAG_EXIF_IFD)) {
     const exifOffset = base + (ifd0Tags.get(TAG_EXIF_IFD)!.valueOffset ?? 0);
+    if (exifOffset >= buf.length) return { lat, lng, timestamp: null, camera_model: cameraModel };
     const exifTags = readIfd(buf, exifOffset, base, r16, r32);
     if (exifTags.has(TAG_DATETIME_ORIGINAL)) {
       const dtRaw = readAsciiTag(buf, exifTags.get(TAG_DATETIME_ORIGINAL)!, base, r32);

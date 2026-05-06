@@ -41,7 +41,11 @@ export async function resolveApiKey(
   const match = authHeader.match(/^Bearer\s+(\S+)$/i);
   if (!match) return null;
   const token = match[1];
-  if (!token.startsWith("pck_")) return null;
+  // Tighten the prefix check so future test keys (pck_test_…) and any
+  // other env-mode prefix have to be added explicitly. A bare "pck_"
+  // prefix would let typos / legacy formats through to the hash lookup
+  // (which would 401 anyway, but on a noisier code path).
+  if (!/^pck_(live|test)_/.test(token)) return null;
 
   const hash = sha256(token);
   const { data: row } = await supabase

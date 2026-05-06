@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { History } from "lucide-react";
+import { History, Loader2 } from "lucide-react";
 
 // B4 — debounced lookup. Surfaces a one-line hint inline below the
 // borrower name input on /dashboard/new. Click-through to the borrower
@@ -29,6 +29,7 @@ export function BorrowerMatchHint({ borrowerName }: Props) {
     const trimmed = borrowerName.trim();
     if (trimmed.length < 3) {
       setMatches([]);
+      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -46,7 +47,18 @@ export function BorrowerMatchHint({ borrowerName }: Props) {
     };
   }, [borrowerName]);
 
-  if (loading || matches.length === 0) return null;
+  // While the debounced search is in flight, show a small inline spinner
+  // so the user knows something is happening — without it the hint blinks
+  // in suddenly after 350ms+RTT and reads as a layout shift.
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground px-1 py-1">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Checking borrower history…
+      </div>
+    );
+  }
+  if (matches.length === 0) return null;
 
   const top = matches[0];
   const more = matches.length > 1 ? matches.length - 1 : 0;

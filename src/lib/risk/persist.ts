@@ -203,7 +203,7 @@ export async function recomputeRiskFactorsForValidation(
   // can mark any factor excluded with a free-text reason; tier rebuilds
   // accordingly. ROADMAP override-and-rerun principle (broadened from
   // the original signal-only scope).
-  const overrides = await loadFactorOverrides(supabase, validationId);
+  const overrides = await loadFactorOverrides(supabase, validationId, validation.org_id);
   const factors = applyFactorOverrides(baseFactors, overrides);
   const tier = deriveTier(factors);
 

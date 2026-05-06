@@ -325,7 +325,18 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
                       <div className="hf-mono hf-sub">{ev.value_summary}</div>
                     )}
                   </td>
-                  <td>{ev.reason ?? <span className="hf-blank">—</span>}</td>
+                  <td>
+                    {ev.exclusion_reason ? (
+                      <>
+                        <span className="hf-sub">Factor exclusion:</span>{" "}
+                        {ev.exclusion_reason}
+                      </>
+                    ) : ev.edit_reason ? (
+                      ev.edit_reason
+                    ) : (
+                      <span className="hf-blank">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

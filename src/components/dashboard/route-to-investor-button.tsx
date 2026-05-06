@@ -26,6 +26,7 @@ interface InvestorOption {
 interface QueuedRow {
   id: string;
   investor_id: string;
+  validation_id: string;
   status: string;
   created_at: string;
 }
@@ -54,7 +55,7 @@ export function RouteToInvestorButton({ validationId }: Props) {
 
   // For this validation specifically — show which investors already have it.
   const queuedForThisValidation = queued.filter(
-    (q) => (q as unknown as { validation_id?: string }).validation_id === validationId,
+    (q) => q.validation_id === validationId,
   );
   const queuedInvestorIds = new Set(queuedForThisValidation.map((q) => q.investor_id));
   const available = investors.filter((i) => !queuedInvestorIds.has(i.id));

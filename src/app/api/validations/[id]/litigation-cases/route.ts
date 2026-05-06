@@ -79,7 +79,7 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  void logEdit(supabase, {
+  await logEdit(supabase, {
     orgId: profile.org_id,
     validationId,
     tableName: "litigation_cases",

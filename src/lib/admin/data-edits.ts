@@ -48,10 +48,11 @@ export async function logEdit(
     edited_by_user_id: input.editedByUserId,
   });
   if (error) {
-    // Edit-log failures are non-fatal for the actual edit but we surface
-    // them in console so an operator notices a misconfigured table or
-    // RLS issue.
-    console.warn(`[data-edits] log failed:`, error.message);
+    // The handoff renders aggregated counts from data_edits — silent loss
+    // means the receiving investor sees under-reported edits. Throw so the
+    // route returns 500 and Sentry captures via @sentry/nextjs auto-
+    // instrumentation. Callers must `await logEdit(...)` (no `void`).
+    throw new Error(`data_edits insert failed: ${error.message}`);
   }
 }
 
@@ -94,11 +95,15 @@ export interface FactorOverrideRow {
 export async function loadFactorOverrides(
   supabase: SupabaseClient,
   validationId: string,
+  orgId: string,
 ): Promise<Map<string, FactorOverrideRow>> {
+  // Defense in depth: org_id filter beyond RLS so an admin client misuse
+  // can't leak overrides cross-org.
   const { data } = await supabase
     .from("factor_overrides")
     .select("factor_key, excluded, exclusion_reason")
-    .eq("validation_id", validationId);
+    .eq("validation_id", validationId)
+    .eq("org_id", orgId);
   const out = new Map<string, FactorOverrideRow>();
   for (const r of (data ?? []) as FactorOverrideRow[]) {
     out.set(r.factor_key, r);

@@ -2,6 +2,8 @@
 // more named factors with a severity tag; the tier is then derived purely
 // from the active (non-excluded) factors. Pure functions only — DB I/O
 // happens in the caller.
+
+import { normalizeAddress } from "@/lib/domain/upsert";
 //
 // Factor catalogue v1 (per ROADMAP — "Risk-tier rebuild"):
 //   - entity_status            severity from sos_status
@@ -373,11 +375,15 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
     }
   }
   // Property-line clustering — exact duplicates of the same line1.
+  // Use the USPS-canonical normalizer (00029) so "1259 Almaden Ave" and
+  // "1259 ALMADEN AVE." collapse to the same key. Falls back to the raw
+  // pre-comma slice if normalize returns null (e.g. empty input).
   const addrCounts = new Map<string, number>();
   for (const p of input.properties) {
-    const line1 = (p.property_address ?? "").split(",")[0]?.trim().toLowerCase();
-    if (!line1) continue;
-    addrCounts.set(line1, (addrCounts.get(line1) ?? 0) + 1);
+    const raw = (p.property_address ?? "").split(",")[0]?.trim();
+    if (!raw) continue;
+    const key = normalizeAddress(raw) ?? raw.toLowerCase();
+    addrCounts.set(key, (addrCounts.get(key) ?? 0) + 1);
   }
   const dupes = [...addrCounts.entries()].filter(([, n]) => n > 1);
   if (dupes.length > 0) {

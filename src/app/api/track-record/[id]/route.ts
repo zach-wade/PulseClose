@@ -79,7 +79,7 @@ export async function PATCH(
   // different we still log (the value_before equals value_after) so the
   // edit timestamp is recorded; cleaner than dropping silent no-ops.
   for (const field of Object.keys(updates) as EditableField[]) {
-    void logEdit(supabase, {
+    await logEdit(supabase, {
       orgId: profile.org_id,
       validationId: row.validation_id,
       tableName: "track_record_entries",
@@ -124,7 +124,7 @@ export async function DELETE(
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Log the delete BEFORE removing — preserve the row context.
-  void logEdit(supabase, {
+  await logEdit(supabase, {
     orgId: profile.org_id,
     validationId: row.validation_id,
     tableName: "track_record_entries",
