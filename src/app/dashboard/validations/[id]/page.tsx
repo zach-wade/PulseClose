@@ -32,6 +32,7 @@ import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { TrackRecordTable } from "@/components/dashboard/track-record-table";
 import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
+import { AddGCCard } from "@/components/dashboard/add-gc-card";
 import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
 import { WhyThisRating } from "@/components/dashboard/why-this-rating";
@@ -495,10 +496,18 @@ export default function ValidationDetailPage() {
         <SanctionsCard data={data.sanctions_checks[0]} />
       )}
 
-      {/* GC Validation */}
-      {data.gc_validations.map((gc) => (
-        <GCResultCard key={gc.id} data={gc} />
-      ))}
+      {/* GC Validation — render existing or offer to add one */}
+      {data.gc_validations.length === 0 ? (
+        <AddGCCard
+          validationId={data.id}
+          defaultState={data.entity_checks?.[0]?.state ?? null}
+          onAdded={refetch}
+        />
+      ) : (
+        data.gc_validations.map((gc) => (
+          <GCResultCard key={gc.id} data={gc} />
+        ))
+      )}
 
       {/* Operational layer — produce artifacts + watch for changes */}
 

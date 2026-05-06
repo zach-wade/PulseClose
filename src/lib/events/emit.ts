@@ -40,7 +40,8 @@ export type ActivityVerb =
   | "unsubscribed_from_monitor"
   | "overrode_factor"
   | "compared"
-  | "regenerated_memo";
+  | "regenerated_memo"
+  | "added_gc";
 
 export type ActivitySubjectType =
   | "validation"
