@@ -255,7 +255,7 @@ export default function DashboardPage() {
                   <TableHead>Borrower</TableHead>
                   <TableHead>Entity</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Confidence</TableHead>
+                  <TableHead className="text-right">Completeness</TableHead>
                   <TableHead className="text-right">Tier</TableHead>
                   <TableHead className="text-right">Props</TableHead>
                   <TableHead className="text-right">Flags</TableHead>
@@ -424,7 +424,7 @@ export default function DashboardPage() {
                   <TableHead>Borrower</TableHead>
                   <TableHead>Entity</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Confidence</TableHead>
+                  <TableHead className="text-right">Completeness</TableHead>
                   <TableHead className="text-right">Tier</TableHead>
                   <TableHead className="text-right">Props</TableHead>
                   <TableHead className="text-right">Flags</TableHead>

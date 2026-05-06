@@ -219,7 +219,7 @@ function ComparePageInner() {
                 </span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-muted-foreground">
-                  {v.confidence_score != null ? `${v.confidence_score}% confidence` : "—"}
+                  {v.confidence_score != null ? `${v.confidence_score}% completeness` : "—"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">

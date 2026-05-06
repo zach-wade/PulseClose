@@ -21,7 +21,13 @@ import {
   FileDown,
   Sparkles,
   Calculator,
+  Info,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { TrackRecordTable } from "@/components/dashboard/track-record-table";
 import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
@@ -350,7 +356,25 @@ export default function ValidationDetailPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Confidence</p>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="text-sm text-muted-foreground inline-flex items-center gap-1 cursor-help">
+                    Completeness
+                    <Info className="h-3 w-3 opacity-60" />
+                  </span>
+                }
+              />
+              <TooltipContent side="bottom" className="max-w-sm">
+                <div className="space-y-1.5 text-left">
+                  <p className="font-semibold">How this is computed</p>
+                  <p>Composite signal score, base 50, clamped 10–100.</p>
+                  <p><span className="font-semibold text-emerald-300">+</span> Entity SOS active (+15) · 10+ properties (+20) / 5+ (+15) / 1+ (+10) · No active federal litigation (+10) · GC license active or N/A (+5) · Sanctions clear (+5)</p>
+                  <p><span className="font-semibold text-red-300">−</span> Entity suspended/dissolved (−20) · Active litigation (−15) · Sanctions hit (−30)</p>
+                  <p className="opacity-70">Higher = more verified data + cleaner flags. This is not a model prediction.</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
             <p className="text-2xl font-bold mt-1">{data.confidence_score}%</p>
           </CardContent>
         </Card>

@@ -63,7 +63,7 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
     ["Overall status", doc.overall_status],
     ["Risk tier", doc.tier],
     ["Experience tier", doc.experience_tier ? `Tier ${doc.experience_tier}` : "—"],
-    ["Confidence score", doc.confidence_score != null ? `${doc.confidence_score}%` : "—"],
+    ["Completeness score", doc.confidence_score != null ? `${doc.confidence_score}%` : "—"],
   ];
   for (const [label, value] of profile) {
     const r = cover.addRow([label, value ?? "—"]);

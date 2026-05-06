@@ -94,7 +94,7 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
             <tr><th>Registered agent</th><td>{doc.entity?.registered_agent ?? "—"}</td></tr>
             <tr><th>Validation date</th><td>{fmtDate(doc.validation_date)}</td></tr>
             <tr><th>Experience tier</th><td>{doc.experience_tier ? `Tier ${doc.experience_tier}` : "—"}</td></tr>
-            <tr><th>Confidence score</th><td>{doc.confidence_score != null ? `${doc.confidence_score}%` : "—"}</td></tr>
+            <tr><th>Completeness score</th><td>{doc.confidence_score != null ? `${doc.confidence_score}%` : "—"}</td></tr>
           </tbody>
         </table>
       </section>
