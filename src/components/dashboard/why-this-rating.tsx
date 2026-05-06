@@ -286,11 +286,13 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, validationId, onS
                         >
                           {pendingKey === `factor_override_remove:${f.factor_key}` ? "…" : "Remove override"}
                         </Button>
-                      ) : !f.excluded ? (
+                      ) : !f.excluded && overrideForFactor !== f.factor_key ? (
+                        // Hide the trigger when the form is open below
+                        // (cleaner than disabling — the form is the active
+                        // surface, the trigger is now redundant).
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={overrideForFactor === f.factor_key}
                           onClick={() => {
                             setOverrideForFactor(f.factor_key);
                             setOverrideReason("");

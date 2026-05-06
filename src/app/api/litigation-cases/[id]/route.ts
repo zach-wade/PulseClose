@@ -17,6 +17,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { logEdit } from "@/lib/admin/data-edits";
+import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
+import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
 const EDITABLE_FIELDS = [
   "case_name",
@@ -110,6 +112,13 @@ export async function PATCH(
     });
   }
 
+  // Memo regen so the AI memo narrative reflects the corrected case
+  // data even though the factor doesn't directly recompute (engine
+  // reads litigation_checks). Recompute is still cheap and rebuilds
+  // tier from a fresh read.
+  await recomputeRiskFactorsForValidation(supabase, row.validation_id);
+  void regenerateAiMemoForValidation(supabase, row.validation_id).catch(() => {});
+
   return NextResponse.json({ id, updated_fields: Object.keys(updates) });
 }
 
@@ -151,6 +160,13 @@ export async function DELETE(
     .delete()
     .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Recompute + memo regen so the UI / handoff / methodology reflect the
+  // lender's deletion. The factors engine reads from litigation_checks,
+  // not litigation_cases, so factor severity won't change — but the
+  // litigation_cases display + AI memo narrative will.
+  await recomputeRiskFactorsForValidation(supabase, row.validation_id);
+  void regenerateAiMemoForValidation(supabase, row.validation_id).catch(() => {});
 
   return NextResponse.json({ id });
 }

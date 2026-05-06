@@ -129,7 +129,9 @@ export async function POST(
     try {
       const response = await client.messages.create({
         model: "claude-sonnet-4-5-20250929",
-        max_tokens: 512,
+        // 4096 per ROADMAP principle 11 (truncation defense). The
+        // verdict + notes shape is short but giving headroom is cheap.
+        max_tokens: 4096,
         messages: [
           {
             role: "user",
@@ -145,16 +147,33 @@ export async function POST(
       });
       visionInputTokens = response.usage?.input_tokens ?? null;
       visionOutputTokens = response.usage?.output_tokens ?? null;
-      const text = response.content[0]?.type === "text" ? response.content[0].text : "";
-      const m = text.match(/\{[\s\S]*\}/);
-      if (m) {
-        const parsed = JSON.parse(m[0]) as { verdict?: string; notes?: string };
-        const verdict = ["plausible_property", "stock_or_synthetic", "indoor_only", "unknown"].includes(
-          parsed.verdict ?? "",
-        )
-          ? (parsed.verdict as VisionResult["verdict"])
-          : "unknown";
-        vision = { verdict, notes: typeof parsed.notes === "string" ? parsed.notes.slice(0, 500) : "" };
+      // ROADMAP principle 11 — explicit truncation check. The regex
+      // pattern below would happily match truncated JSON with the trailing
+      // brace cut off; better to surface "model truncated" and skip the
+      // verdict than persist a malformed verdict.
+      if (response.stop_reason === "max_tokens") {
+        console.warn("[upload-photo] vision response truncated; skipping verdict");
+      } else {
+        const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+        const m = text.match(/\{[\s\S]*\}/);
+        if (m) {
+          try {
+            const parsed = JSON.parse(m[0]) as { verdict?: string; notes?: string };
+            const verdict = ["plausible_property", "stock_or_synthetic", "indoor_only", "unknown"].includes(
+              parsed.verdict ?? "",
+            )
+              ? (parsed.verdict as VisionResult["verdict"])
+              : "unknown";
+            vision = {
+              verdict,
+              notes: typeof parsed.notes === "string" ? parsed.notes.slice(0, 500) : "",
+            };
+          } catch {
+            // Truncated-but-not-flagged JSON, malformed model output, etc.
+            // Skip the verdict; EXIF + photo still persist.
+            console.warn("[upload-photo] vision JSON parse failed");
+          }
+        }
       }
     } catch (err) {
       console.warn("[upload-photo] vision check failed:", err);
