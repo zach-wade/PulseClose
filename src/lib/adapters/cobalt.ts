@@ -15,6 +15,7 @@ import { stubAdapter } from "./stub";
 import { searchPropertiesRealie, RealieError } from "./realie";
 import { searchPropertiesRegrid, RegridError } from "./regrid";
 import { enrichPropertiesWithAttom } from "./attom";
+import { canonicalizeName } from "@/lib/domain/upsert";
 import { searchLitigationCourtListener } from "./courtlistener";
 import { lookupCSLB, CSLBError } from "./cslb";
 import { screenSanctionsOpenSanctions, OpenSanctionsError } from "./opensanctions";
@@ -172,16 +173,27 @@ function mapSosStatus(
   return "dissolved";
 }
 
-// Normalize entity names so "TT INVESTMENT PROPERTIES, LLC" and
-// "TT Investment Properties" compare as the same name. Without this we'd
-// flag every search where the user dropped the suffix or used different case.
-function normalizeEntityName(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[.,;:'"()/\\&]/g, " ")
-    .replace(/\b(llc|inc|incorporated|corp|corporation|ltd|limited|lp|llp|trust|company|co)\b\.?/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+// Tokenize-and-set comparison via the canonical primitive used
+// elsewhere (verify-core deed-chain matcher, validations input warning,
+// 00021 dedup keys). Drift between the substring-based fallback that
+// lived here and canonicalizeName(true) created false-mismatch warnings
+// like "Registered name 'TT Investment Properties LLC' differs from
+// search 'TT INVESTMENT PROPERTIES, LLC'" (entity-suffix tokens were
+// stripped on one side but not the other). ROADMAP cross-cutting
+// principle 8.
+function namesMatchCanonically(a: string, b: string): boolean {
+  const ca = canonicalizeName(a, { stripEntitySuffixes: true });
+  const cb = canonicalizeName(b, { stripEntitySuffixes: true });
+  if (!ca || !cb) return false;
+  if (ca === cb) return true;
+  // Subset match — if the smaller token set is contained in the larger,
+  // treat as a match. Handles "TT Investment Properties" ⊂ "TT
+  // Investment Properties Holdings".
+  const aTokens = new Set(ca.split(" "));
+  const bTokens = new Set(cb.split(" "));
+  const [smaller, larger] = aTokens.size <= bTokens.size ? [aTokens, bTokens] : [bTokens, aTokens];
+  for (const t of smaller) if (!larger.has(t)) return false;
+  return true;
 }
 
 function buildFlags(biz: CobaltBusiness, entityName: string): string[] {
@@ -216,8 +228,9 @@ function buildFlags(biz: CobaltBusiness, entityName: string): string[] {
   }
 
   // Name mismatch — only flag if the names differ in a meaningful way
-  // (not just casing or LLC/Inc suffix differences).
-  if (biz.title && normalizeEntityName(biz.title) !== normalizeEntityName(entityName)) {
+  // (not just casing or LLC/Inc suffix differences). Tokenize-and-set
+  // via canonicalizeName per ROADMAP cross-cutting principle 8.
+  if (biz.title && !namesMatchCanonically(biz.title, entityName)) {
     flags.push(`Registered name "${biz.title}" differs from search "${entityName}"`);
   }
 
