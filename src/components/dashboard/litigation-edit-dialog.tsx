@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,23 +32,39 @@ interface Props {
 // update the displayed data + audit trail.
 
 export function LitigationEditDialog({ open, onOpenChange, caseRow, onSaved }: Props) {
-  const [case_name, setCaseName] = useState(caseRow?.case_name ?? "");
-  const [case_number, setCaseNumber] = useState(caseRow?.case_number ?? "");
-  const [court, setCourt] = useState(caseRow?.court ?? "");
-  const [filed_at, setFiledAt] = useState(caseRow?.filed_at ?? "");
-  const [terminated_at, setTerminatedAt] = useState(caseRow?.terminated_at ?? "");
-  const [category, setCategory] = useState<typeof CATEGORIES[number]>(
-    (caseRow?.category as typeof CATEGORIES[number]) ?? "other",
-  );
-  const [status, setStatus] = useState<typeof STATUSES[number]>(
-    (caseRow?.status as typeof STATUSES[number]) ?? "unknown",
-  );
-  const [dollar_amount_estimated, setDollarAmount] = useState(
-    caseRow?.dollar_amount_estimated != null ? String(caseRow.dollar_amount_estimated) : "",
-  );
-  const [lender_notes, setNotes] = useState(caseRow?.lender_notes ?? "");
+  // Same useState-init issue as the track-record dialog: parent keeps
+  // this mounted across rows, useState only fires on first mount, so
+  // the form stays empty / stale. Re-sync via useEffect on entry change
+  // or dialog re-open.
+  const [case_name, setCaseName] = useState("");
+  const [case_number, setCaseNumber] = useState("");
+  const [court, setCourt] = useState("");
+  const [filed_at, setFiledAt] = useState("");
+  const [terminated_at, setTerminatedAt] = useState("");
+  const [category, setCategory] = useState<typeof CATEGORIES[number]>("other");
+  const [status, setStatus] = useState<typeof STATUSES[number]>("unknown");
+  const [dollar_amount_estimated, setDollarAmount] = useState("");
+  const [lender_notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!caseRow || !open) return;
+    setCaseName(caseRow.case_name ?? "");
+    setCaseNumber(caseRow.case_number ?? "");
+    setCourt(caseRow.court ?? "");
+    setFiledAt(caseRow.filed_at ?? "");
+    setTerminatedAt(caseRow.terminated_at ?? "");
+    setCategory((caseRow.category as typeof CATEGORIES[number]) ?? "other");
+    setStatus((caseRow.status as typeof STATUSES[number]) ?? "unknown");
+    setDollarAmount(
+      caseRow.dollar_amount_estimated != null
+        ? String(caseRow.dollar_amount_estimated)
+        : "",
+    );
+    setNotes(caseRow.lender_notes ?? "");
+    setReason("");
+  }, [caseRow, open]);
 
   if (!caseRow) return null;
 

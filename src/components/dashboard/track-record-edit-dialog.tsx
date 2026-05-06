@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,23 +28,33 @@ interface Props {
 // PDF + handoff PDF render the reason next to the changed value.
 
 export function TrackRecordEditDialog({ open, onOpenChange, entry, onSaved }: Props) {
-  const [acquisition_date, setAcqDate] = useState(entry?.acquisition_date ?? "");
-  const [disposition_date, setDispDate] = useState(entry?.disposition_date ?? "");
-  const [acquisition_price, setAcqPrice] = useState(
-    entry?.acquisition_price != null ? String(entry.acquisition_price) : "",
-  );
-  const [disposition_price, setDispPrice] = useState(
-    entry?.disposition_price != null ? String(entry.disposition_price) : "",
-  );
-  const [hold_months, setHold] = useState(
-    entry?.hold_months != null ? String(entry.hold_months) : "",
-  );
-  const [profit, setProfit] = useState(
-    entry?.profit != null ? String(entry.profit) : "",
-  );
-  const [lender_notes, setNotes] = useState(entry?.lender_notes ?? "");
+  // useState initializers only fire on first mount. The parent keeps
+  // this component mounted and swaps `entry` when the user clicks a
+  // different row, so without re-syncing in an effect the inputs stay
+  // empty / stuck at the first row's values. Reinit every time `entry`
+  // changes OR the dialog re-opens (so reopening on the same row also
+  // resets the unsaved reason field).
+  const [acquisition_date, setAcqDate] = useState("");
+  const [disposition_date, setDispDate] = useState("");
+  const [acquisition_price, setAcqPrice] = useState("");
+  const [disposition_price, setDispPrice] = useState("");
+  const [hold_months, setHold] = useState("");
+  const [profit, setProfit] = useState("");
+  const [lender_notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!entry || !open) return;
+    setAcqDate(entry.acquisition_date ?? "");
+    setDispDate(entry.disposition_date ?? "");
+    setAcqPrice(entry.acquisition_price != null ? String(entry.acquisition_price) : "");
+    setDispPrice(entry.disposition_price != null ? String(entry.disposition_price) : "");
+    setHold(entry.hold_months != null ? String(entry.hold_months) : "");
+    setProfit(entry.profit != null ? String(entry.profit) : "");
+    setNotes(entry.lender_notes ?? "");
+    setReason("");
+  }, [entry, open]);
 
   if (!entry) return null;
 
