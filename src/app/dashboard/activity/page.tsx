@@ -16,7 +16,9 @@ import { ActivityFeed, type ActivityFeedItem } from "@/components/dashboard/acti
 const VERB_FILTERS: Array<{ label: string; verb: string | null }> = [
   { label: "All", verb: null },
   { label: "Validations", verb: "created" },
-  { label: "Overrides", verb: "applied_signal" },
+  // "Overrides" bundles signal applies + factor-overrides apply/remove.
+  // The API parses comma-separated verbs and OR-matches.
+  { label: "Overrides", verb: "applied_signal,overrode_factor,removed_factor_override" },
   { label: "Monitor", verb: "ran_monitor" },
   { label: "Handoffs", verb: "sent_handoff" },
   { label: "Share links", verb: "sent_share_link" },

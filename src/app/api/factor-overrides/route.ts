@@ -111,6 +111,14 @@ export async function DELETE(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const recomputed = await recomputeRiskFactorsForValidation(supabase, validationId);
+  void emitActivity(supabase, {
+    orgId: profile.org_id,
+    actorUserId: profile.id,
+    verb: "removed_factor_override",
+    subjectType: "validation",
+    subjectId: validationId,
+    metadata: { factor_key: factorKey },
+  });
   void regenerateAiMemoForValidation(supabase, validationId, {
     factors: recomputed?.factors,
     tier: recomputed?.tier,

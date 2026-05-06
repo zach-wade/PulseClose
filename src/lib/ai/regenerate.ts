@@ -52,10 +52,6 @@ export async function regenerateAiMemoForValidation(
     }>();
   if (!validation) return;
 
-  // Capture the version we observed; the final write will only succeed
-  // if it hasn't changed (i.e., no other regen finished in the meantime).
-  const observedVersion = validation.ai_analysis_version;
-
   let factors: RiskFactor[];
   let tier: Tier;
   if (opts.factors && opts.tier) {
@@ -200,25 +196,26 @@ export async function regenerateAiMemoForValidation(
     // schema_version=2 is stamped server-side by generateValidationAnalysis;
     // the 00016 CHECK constraint requires the key, which is already present.
     //
-    // Optimistic-lock write: only update if ai_analysis_version still
-    // matches what we read at the start. If a concurrent regen finished
-    // first, our memo is stale and we abandon it cleanly.
-    const { count } = await supabase
+    // No optimistic lock here — the earlier "only write if version
+    // unchanged" check (00037) had inverted semantics: it preferred
+    // the FIRST-finishing regen, but Claude's ~30s latency means the
+    // first to finish is usually the EARLIEST-started, which has the
+    // STALEST input. After a user removes an override before the apply's
+    // regen finished, the apply's stale memo would win and the remove's
+    // fresher memo would be silently dropped.
+    //
+    // Last-write-wins matches user intent here because Claude latency
+    // correlates writes with starts. If proper concurrency control
+    // becomes necessary (rare in single-user usage), use a token-claim
+    // pattern: stamp a unique token at start, write only if token still
+    // matches at end. Tracked in docs/IDEAS.md.
+    await supabase
       .from("borrower_validations")
-      .update(
-        {
-          ai_analysis: aiAnalysis,
-          ai_analysis_version: observedVersion + 1,
-          updated_at: new Date().toISOString(),
-        },
-        { count: "exact" },
-      )
-      .eq("id", validationId)
-      .eq("ai_analysis_version", observedVersion);
-    if (count === 0) {
-      console.info(
-        `[regenerate] ai_analysis_version drift on ${validationId} — abandoning stale memo`,
-      );
-    }
+      .update({
+        ai_analysis: aiAnalysis,
+        ai_analysis_version: validation.ai_analysis_version + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", validationId);
   }
 }

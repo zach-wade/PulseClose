@@ -60,6 +60,16 @@ lender that adopts will surface most of these.
 - **Underwriter QA / second-set-of-eyes flow.** Required-reviewer
   workflow on HIGH-risk validations.
   *Unblocks when:* a lender's compliance team asks for it.
+- **Token-claim concurrency control on AI memo regen.** Today's
+  `regenerateAiMemoForValidation` is last-write-wins. With Claude
+  ~30s latency, that effectively means "last-started wins" for a
+  single user. With multiple concurrent users editing the same
+  validation, two simultaneous regens could race and the wrong one's
+  output could win. Fix when it bites: stamp a unique token at start,
+  write only if token still matches at end (replaces the inverted
+  optimistic-lock removed in `c9d1836`-ish).
+  *Unblocks when:* multi-underwriter editing surfaces a wrong-memo
+  bug in the wild.
 - **Cross-underwriter notes on borrowers.** Lender's running notes
   accumulate across validations of the same borrower. ("This guy is
   always late on payoff but always pays.") `borrower_signals` could

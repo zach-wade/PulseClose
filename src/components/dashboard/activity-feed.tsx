@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  ShieldOff,
   Sparkles,
   TrendingUp,
 } from "lucide-react";
@@ -80,6 +81,25 @@ const VERB: Record<string, VerbDescriptor> = {
         return `${actorPhrase(i)} applied "${key.replace(/_/g, " ")}" signal${scope ? ` (${scope})` : ""} on ${i.subject_label}`;
       }
       return `${actorPhrase(i)} applied an override on ${i.subject_label}`;
+    },
+  },
+  overrode_factor: {
+    Icon: ShieldOff,
+    iconClass: "text-amber-600 bg-amber-50",
+    describe: (i) => {
+      const m = i.metadata as { factor_key?: string; reason?: string };
+      const key = m.factor_key?.replace(/_/g, " ") ?? "factor";
+      const reason = m.reason ? ` — "${m.reason.slice(0, 80)}${m.reason.length > 80 ? "…" : ""}"` : "";
+      return `${actorPhrase(i)} overrode ${key} on ${i.subject_label}${reason}`;
+    },
+  },
+  removed_factor_override: {
+    Icon: RefreshCw,
+    iconClass: "text-info bg-info/10",
+    describe: (i) => {
+      const m = i.metadata as { factor_key?: string };
+      const key = m.factor_key?.replace(/_/g, " ") ?? "factor";
+      return `${actorPhrase(i)} removed override on ${key} for ${i.subject_label}`;
     },
   },
   ran_monitor: {

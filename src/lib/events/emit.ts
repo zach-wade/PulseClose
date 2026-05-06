@@ -39,6 +39,7 @@ export type ActivityVerb =
   | "subscribed_to_monitor"
   | "unsubscribed_from_monitor"
   | "overrode_factor"
+  | "removed_factor_override"
   | "compared"
   | "regenerated_memo"
   | "added_gc"

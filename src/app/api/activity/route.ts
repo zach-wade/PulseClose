@@ -49,7 +49,11 @@ export async function GET(request: Request) {
     Math.max(1, parseInt(url.searchParams.get("limit") ?? String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT),
   );
   const before = url.searchParams.get("before");
-  const verb = url.searchParams.get("verb");
+  // Allow either a single verb or a comma-separated list (e.g.
+  // ?verb=overrode_factor,removed_factor_override,applied_signal). The
+  // "Overrides" filter on the activity page now bundles multiple verbs.
+  const verbParam = url.searchParams.get("verb");
+  const verbs = verbParam ? verbParam.split(",").map((v) => v.trim()).filter(Boolean) : [];
   const subjectType = url.searchParams.get("subject_type");
   const subjectId = url.searchParams.get("subject_id");
 
@@ -62,7 +66,8 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (before) q = q.lt("created_at", before);
-  if (verb) q = q.eq("verb", verb);
+  if (verbs.length === 1) q = q.eq("verb", verbs[0]);
+  else if (verbs.length > 1) q = q.in("verb", verbs);
   if (subjectType) q = q.eq("subject_type", subjectType);
   if (subjectId) q = q.eq("subject_id", subjectId);
 
