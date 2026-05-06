@@ -27,7 +27,7 @@ export async function POST(
   }
 
   // Per-token rate limit so a single share link can't be hammered.
-  const rl = checkRateLimit(`share:${token}`, 5, 60_000);
+  const rl = await checkRateLimit(`share:${token}`, 5, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Too many requests — try again in a minute" },

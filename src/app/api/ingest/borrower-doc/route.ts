@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   const profile = await getUserProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rl = checkRateLimit(`ingest:${profile.org_id}`, 10, 60_000);
+  const rl = await checkRateLimit(`ingest:${profile.org_id}`, 10, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many requests", code: "RATE_LIMITED" }, { status: 429 });
   }

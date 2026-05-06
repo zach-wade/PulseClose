@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rl = checkRateLimit(`signals:${profile.org_id}`, 60, 60_000);
+  const rl = await checkRateLimit(`signals:${profile.org_id}`, 60, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Too many requests", code: "RATE_LIMITED" },

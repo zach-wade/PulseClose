@@ -35,7 +35,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rl = checkRateLimit(`investor-extract:${profile.org_id}`, 5, 60_000);
+  const rl = await checkRateLimit(`investor-extract:${profile.org_id}`, 5, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Too many requests", code: "RATE_LIMITED" },

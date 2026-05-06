@@ -50,7 +50,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid share token" }, { status: 400 });
   }
 
-  const rl = checkRateLimit(`share-extract:${token}`, 5, 60_000);
+  const rl = await checkRateLimit(`share-extract:${token}`, 5, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }

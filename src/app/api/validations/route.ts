@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   }
 
   // Rate limit: 10 validations per minute per org
-  const rl = checkRateLimit(`validations:${profile.org_id}`, 10, 60_000);
+  const rl = await checkRateLimit(`validations:${profile.org_id}`, 10, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please wait before running another validation.", code: "RATE_LIMITED" },

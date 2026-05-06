@@ -192,14 +192,15 @@ Three critical bugs were fixed in commit `72e9291`. Everything below is document
 2. **Print physical paper test** of `/handoff/[id]` + `/validations/[id]/risk-methodology`.
 3. **OpenSanctions key rotation** by 2026-05-28.
 4. **Cobalt key rotation** for demo capacity by ~2026-06-10.
+5. **Activate Upstash Redis for rate limiter** — code is shipped + falls back to per-lambda in-memory until the env vars exist. Steps: (a) sign up at upstash.com, (b) create a Redis database (Global tier is free + fine), (c) Vercel project → settings → environment variables → add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, (d) redeploy. No code change needed; `src/lib/rate-limit.ts` auto-detects.
 
 ---
 
-## Database state (as of 2026-05-06 EOS)
+## Database state
 
-**Migrations applied (34 total):** 00001-00034 inclusive.
+**Migrations applied (38 total):** 00001-00038 inclusive.
 
-Today's new migrations:
+Recent additions from the audit cleanup rounds:
 ```
 00027 monitor_pause                     organizations.monitor_paused_until
 00028 api_keys                          api_keys (hashed bearer tokens)
@@ -209,6 +210,10 @@ Today's new migrations:
 00032 bank_statements                   bank_statement_summaries (C5 substrate)
 00033 photo_verification                property_photo_verifications (C1 substrate)
 00034 lender_overrides                  data_edits + factor_overrides + source/lender_notes columns
+00035 merge_atomic                      merge_records_atomic RPC (initial; FK list incomplete)
+00036 merge_atomic_complete_fks         merge_records_atomic with full FK list + public_profiles unique-handling
+00037 ai_memo_version                   borrower_validations.ai_analysis_version (regen optimistic lock)
+00038 introspect_fks                    _introspect_merge_target_fks RPC (used by scripts/verify-merge-fks.ts)
 ```
 
 ---

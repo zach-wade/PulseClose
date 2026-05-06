@@ -32,7 +32,7 @@ export async function POST(
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Rate-limit per-org so a malicious key doesn't spam borrowers via Resend.
-  const rl = checkRateLimit(`send-share-link:${profile.org_id}`, 20, 60_000);
+  const rl = await checkRateLimit(`send-share-link:${profile.org_id}`, 20, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many requests", code: "RATE_LIMITED" }, { status: 429 });
   }
