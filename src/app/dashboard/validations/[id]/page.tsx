@@ -469,6 +469,7 @@ export default function ValidationDetailPage() {
         tier={data.tier}
         riskFactors={data.risk_factors ?? []}
         borrowerId={data.primary_borrower_id}
+        validationId={data.id}
         onSignalApplied={handleSignalApplied}
       />
 

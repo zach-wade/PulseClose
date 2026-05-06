@@ -16,6 +16,7 @@ import {
   type RiskFactor,
   type Tier,
 } from "./factors";
+import { applyFactorOverrides, loadFactorOverrides } from "@/lib/admin/data-edits";
 
 export interface RecomputeResult {
   factors: RiskFactor[];
@@ -189,7 +190,7 @@ export async function recomputeRiskFactorsForValidation(
       }
     : null;
 
-  const factors = computeRiskFactors({
+  const baseFactors = computeRiskFactors({
     entity,
     litigation,
     sanctions,
@@ -198,6 +199,12 @@ export async function recomputeRiskFactorsForValidation(
     borrower_name: validation.borrower_name ?? null,
     guarantor_name: validation.guarantor_name ?? null,
   });
+  // Apply manual factor overrides on top of engine output. The lender
+  // can mark any factor excluded with a free-text reason; tier rebuilds
+  // accordingly. ROADMAP override-and-rerun principle (broadened from
+  // the original signal-only scope).
+  const overrides = await loadFactorOverrides(supabase, validationId);
+  const factors = applyFactorOverrides(baseFactors, overrides);
   const tier = deriveTier(factors);
 
   // flag_count = active factors at moderate/critical/minor severity.

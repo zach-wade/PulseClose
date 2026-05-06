@@ -46,6 +46,7 @@ interface Props {
   tier: Tier;
   riskFactors: RiskFactor[];
   borrowerId: string | null;
+  validationId?: string;
   onSignalApplied: () => void | Promise<void>;
 }
 
@@ -94,10 +95,69 @@ function TierBadge({ tier }: { tier: Tier }) {
   );
 }
 
-export function WhyThisRating({ tier, riskFactors, borrowerId, onSignalApplied }: Props) {
+export function WhyThisRating({ tier, riskFactors, borrowerId, validationId, onSignalApplied }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [overrideForFactor, setOverrideForFactor] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
+
+  async function applyFactorOverride(factorKey: string) {
+    const reason = overrideReason.trim();
+    if (!reason) {
+      setError("Provide a reason — this becomes part of the audit trail.");
+      return;
+    }
+    if (!validationId) {
+      setError("Cannot override: missing validation_id.");
+      return;
+    }
+    setPendingKey(`factor_override:${factorKey}`);
+    setError(null);
+    try {
+      const res = await fetch("/api/factor-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          validation_id: validationId,
+          factor_key: factorKey,
+          exclusion_reason: reason,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      }
+      setOverrideForFactor(null);
+      setOverrideReason("");
+      await onSignalApplied();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPendingKey(null);
+    }
+  }
+
+  async function removeFactorOverride(factorKey: string) {
+    if (!validationId) return;
+    setPendingKey(`factor_override_remove:${factorKey}`);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/factor-overrides?validation_id=${validationId}&factor_key=${factorKey}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Request failed (${res.status})`);
+      }
+      await onSignalApplied();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPendingKey(null);
+    }
+  }
 
   async function applyPrimaryResidenceOverride(propertyId: string, address: string) {
     if (!borrowerId) {
@@ -212,7 +272,79 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, onSignalApplied }
                       </p>
                     )}
                   </div>
+                  {/* Universal override button — any active factor can be
+                      excluded with a reason. Excluded-via-lender factors
+                      get a "Remove override" affordance. */}
+                  {validationId && f.severity !== "none" && (
+                    <div className="shrink-0">
+                      {f.excluded && f.exclusion_reason?.startsWith("Lender override:") ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={pendingKey === `factor_override_remove:${f.factor_key}`}
+                          onClick={() => removeFactorOverride(f.factor_key)}
+                        >
+                          {pendingKey === `factor_override_remove:${f.factor_key}` ? "…" : "Remove override"}
+                        </Button>
+                      ) : !f.excluded ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={overrideForFactor === f.factor_key}
+                          onClick={() => {
+                            setOverrideForFactor(f.factor_key);
+                            setOverrideReason("");
+                            setError(null);
+                          }}
+                        >
+                          Override
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
+                {/* Inline reason form for the active override target. */}
+                {overrideForFactor === f.factor_key && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+                    <p className="text-xs text-amber-900">
+                      Excluding this factor from the tier computation. Reason
+                      becomes part of the audit trail and renders on the
+                      handoff PDF.
+                    </p>
+                    <textarea
+                      className="w-full text-xs rounded border border-input bg-white p-2"
+                      rows={2}
+                      placeholder="e.g. Reviewed the case — frivolous suit dismissed in state court 2025-11"
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      maxLength={1000}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setOverrideForFactor(null);
+                          setOverrideReason("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={
+                          pendingKey === `factor_override:${f.factor_key}` ||
+                          !overrideReason.trim()
+                        }
+                        onClick={() => applyFactorOverride(f.factor_key)}
+                      >
+                        {pendingKey === `factor_override:${f.factor_key}`
+                          ? "Saving…"
+                          : "Apply override"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Inline overrides for extended_hold: per-property "Mark as primary residence" */}
                 {isExtendedHold && properties.length > 0 && (
