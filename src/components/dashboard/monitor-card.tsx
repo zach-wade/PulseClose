@@ -8,6 +8,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bell, BellOff, AlertTriangle, CheckCircle2, Eye } from "lucide-react";
 
+// G7.2 — "in N hours / days" indicator for next_run_at. Render alongside
+// the absolute timestamp so the user can scan at a glance and verify the
+// exact time on a follow-up read.
+function relativeTime(iso: string): string {
+  const target = new Date(iso).getTime();
+  const now = Date.now();
+  const deltaMs = target - now;
+  const past = deltaMs < 0;
+  const abs = Math.abs(deltaMs);
+  const minutes = Math.round(abs / 60_000);
+  if (minutes < 1) return past ? "just now" : "any moment";
+  if (minutes < 60) return past ? `${minutes}m ago` : `in ${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return past ? `${hours}h ago` : `in ${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return past ? `${days}d ago` : `in ${days}d`;
+  const weeks = Math.round(days / 7);
+  return past ? `${weeks}w ago` : `in ${weeks}w`;
+}
+
 interface MonitorChange {
   field: string;
   before: unknown;
@@ -214,7 +234,8 @@ export function MonitorCard({ validationId, borrowerId, borrowerName }: MonitorC
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Next run</p>
-                <p>{new Date(sub.next_run_at).toLocaleString()}</p>
+                <p className="font-medium">{relativeTime(sub.next_run_at)}</p>
+                <p className="text-xs text-muted-foreground">{new Date(sub.next_run_at).toLocaleString()}</p>
               </div>
             </div>
 
