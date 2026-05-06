@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { assertSafePublicUrl, UnsafeWebhookUrlError } from "@/lib/notifications/ssrf";
 
 const VALID_CHANNELS = ["email", "slack", "teams", "sms", "webhook"] as const;
 const VALID_EVENT_TYPES = [
@@ -75,11 +76,19 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if ((channel === "slack" || channel === "teams" || channel === "webhook") && !target.startsWith("https://")) {
-    return NextResponse.json(
-      { error: `${channel} target must be an HTTPS webhook URL` },
-      { status: 400 },
-    );
+  if (channel === "slack" || channel === "teams" || channel === "webhook") {
+    try {
+      // SSRF defense — rejects internal/private/link-local targets.
+      // Re-runs at dispatch time too in case DNS rebinds between create
+      // and send.
+      await assertSafePublicUrl(target);
+    } catch (err) {
+      const msg =
+        err instanceof UnsafeWebhookUrlError
+          ? err.message
+          : `${channel} target must be an HTTPS webhook URL`;
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
   }
 
   const supabase = createAdminClient();

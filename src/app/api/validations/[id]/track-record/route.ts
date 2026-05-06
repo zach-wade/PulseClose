@@ -4,6 +4,7 @@
 // from vendor-returned ones.
 
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { logEdit } from "@/lib/admin/data-edits";
@@ -11,20 +12,31 @@ import { upsertProperty } from "@/lib/domain/upsert";
 import { recomputeRiskFactorsForValidation } from "@/lib/risk/persist";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
-interface PostBody {
-  property_address: string;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
-  acquisition_date?: string | null;
-  disposition_date?: string | null;
-  acquisition_price?: number | null;
-  disposition_price?: number | null;
-  hold_months?: number | null;
-  profit?: number | null;
-  lender_notes?: string | null;
-  reason?: string | null;
-}
+// Audit L2 — explicit shape validation. Previously the route trusted the
+// client to send numeric prices / valid date strings; bad inputs flowed
+// straight to Postgres which rejected with confusing "invalid input
+// syntax" errors.
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD")
+  .nullish();
+// Hold months realistically capped at 50 years; prices at $50M (above
+// which a manual entry is almost certainly a typo).
+const PostBodySchema = z.object({
+  property_address: z.string().trim().min(1).max(500),
+  city: z.string().max(120).nullish(),
+  state: z.string().max(40).nullish(),
+  zip: z.string().max(20).nullish(),
+  acquisition_date: isoDate,
+  disposition_date: isoDate,
+  acquisition_price: z.number().min(0).max(50_000_000).nullish(),
+  disposition_price: z.number().min(0).max(50_000_000).nullish(),
+  hold_months: z.number().int().min(0).max(600).nullish(),
+  profit: z.number().min(-50_000_000).max(50_000_000).nullish(),
+  lender_notes: z.string().max(2000).nullish(),
+  reason: z.string().max(2000).nullish(),
+});
+type PostBody = z.infer<typeof PostBodySchema>;
 
 export async function POST(
   request: Request,
@@ -34,9 +46,15 @@ export async function POST(
   const profile = await getUserProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await request.json()) as PostBody;
-  if (!body.property_address?.trim()) {
-    return NextResponse.json({ error: "property_address required" }, { status: 400 });
+  let body: PostBody;
+  try {
+    body = PostBodySchema.parse(await request.json());
+  } catch (e) {
+    const issues = e instanceof z.ZodError ? e.issues : [];
+    return NextResponse.json(
+      { error: "Invalid body", issues },
+      { status: 400 },
+    );
   }
 
   const supabase = createAdminClient();
@@ -54,7 +72,7 @@ export async function POST(
   // shares a property_id with any vendor-returned row at the same
   // address. Future vendor results enrich the same property.
   const propertyId = await upsertProperty(supabase, profile.org_id, {
-    addressDisplay: body.property_address.trim(),
+    addressDisplay: body.property_address,
     city: body.city ?? null,
     state: body.state ?? null,
     zip: body.zip ?? null,
@@ -66,7 +84,7 @@ export async function POST(
       validation_id: validationId,
       org_id: profile.org_id,
       property_id: propertyId,
-      property_address: body.property_address.trim(),
+      property_address: body.property_address,
       acquisition_date: body.acquisition_date ?? null,
       disposition_date: body.disposition_date ?? null,
       acquisition_price: body.acquisition_price ?? null,
@@ -94,8 +112,11 @@ export async function POST(
     editedByUserId: profile.id,
   });
 
-  await recomputeRiskFactorsForValidation(supabase, validationId);
-  void regenerateAiMemoForValidation(supabase, validationId).catch(() => {});
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, validationId);
+  void regenerateAiMemoForValidation(supabase, validationId, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch(() => {});
 
   return NextResponse.json({ id: row.id, property_id: propertyId }, { status: 201 });
 }

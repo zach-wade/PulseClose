@@ -118,8 +118,11 @@ export async function PATCH(
   // data even though the factor doesn't directly recompute (engine
   // reads litigation_checks). Recompute is still cheap and rebuilds
   // tier from a fresh read.
-  await recomputeRiskFactorsForValidation(supabase, row.validation_id);
-  void regenerateAiMemoForValidation(supabase, row.validation_id).catch(() => {});
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, row.validation_id);
+  void regenerateAiMemoForValidation(supabase, row.validation_id, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch(() => {});
 
   return NextResponse.json({ id, updated_fields: Object.keys(updates) });
 }
@@ -169,8 +172,11 @@ export async function DELETE(
   // lender's deletion. The factors engine reads from litigation_checks,
   // not litigation_cases, so factor severity won't change — but the
   // litigation_cases display + AI memo narrative will.
-  await recomputeRiskFactorsForValidation(supabase, row.validation_id);
-  void regenerateAiMemoForValidation(supabase, row.validation_id).catch(() => {});
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, row.validation_id);
+  void regenerateAiMemoForValidation(supabase, row.validation_id, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch(() => {});
 
   return NextResponse.json({ id });
 }

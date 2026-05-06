@@ -13,7 +13,10 @@ import { scrubPii } from "@/lib/ai/redact-pii";
 
 export const maxDuration = 60;
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+// Vercel App Router caps request bodies at 4.5MB by default; values
+// above that are unreachable. See upload-photo route for the path to
+// raise this (signed direct-to-Supabase upload).
+const MAX_BYTES = 4 * 1024 * 1024;
 const SUPPORTED = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

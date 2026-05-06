@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await recomputeRiskFactorsForValidation(supabase, body.validation_id);
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, body.validation_id);
   void emitActivity(supabase, {
     orgId: profile.org_id,
     actorUserId: profile.id,
@@ -77,7 +77,10 @@ export async function POST(request: Request) {
   });
   // Memo regeneration is fire-and-forget so the override returns fast;
   // the validation page polls for the new memo.
-  void regenerateAiMemoForValidation(supabase, body.validation_id).catch((err: unknown) => {
+  void regenerateAiMemoForValidation(supabase, body.validation_id, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch((err: unknown) => {
     console.warn("[factor-overrides] memo regen failed:", err);
   });
 
@@ -107,8 +110,11 @@ export async function DELETE(request: Request) {
     .eq("org_id", profile.org_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await recomputeRiskFactorsForValidation(supabase, validationId);
-  void regenerateAiMemoForValidation(supabase, validationId).catch(() => {});
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, validationId);
+  void regenerateAiMemoForValidation(supabase, validationId, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

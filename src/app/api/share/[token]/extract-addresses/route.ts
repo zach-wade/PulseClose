@@ -137,6 +137,19 @@ export async function POST(
       max_tokens: 4096,
       messages: [{ role: "user", content: userContent }],
     });
+    // ROADMAP principle 11 — explicit truncation check before parse.
+    // The doc-ingest bug class (b3bd964) was a max_tokens cutoff that
+    // looked like a JSON parse failure; surface the real cause so the
+    // borrower sees "split the file" instead of generic "parse_failed".
+    if (response.stop_reason === "max_tokens") {
+      return NextResponse.json(
+        {
+          error: "truncated",
+          message: "Document too long for one pass — try splitting into smaller files.",
+        },
+        { status: 422 },
+      );
+    }
     const text = response.content[0]?.type === "text" ? response.content[0].text : "";
     const arrMatch = text.match(/\[[\s\S]*\]/);
     if (!arrMatch) {

@@ -19,22 +19,53 @@ import type {
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
 import type { VerifiedFlipForAI } from "@/lib/ai/analysis";
 
+export interface RegenerateOptions {
+  // Pre-computed factors + tier — when the caller already ran a recompute
+  // (route handlers always do), pass them in so we skip the second round
+  // trip. Audit M5: the route awaits recompute, then regen does its own
+  // recompute, doubling DB load and creating a race window.
+  factors?: RiskFactor[];
+  tier?: Tier;
+}
+
 export async function regenerateAiMemoForValidation(
   supabase: SupabaseClient,
   validationId: string,
+  opts: RegenerateOptions = {},
 ): Promise<void> {
   const { data: validation } = await supabase
     .from("borrower_validations")
     .select(
-      "id, org_id, borrower_name, borrower_entity_name, guarantor_name, experience_tier, overall_status, confidence_score",
+      "id, org_id, borrower_name, borrower_entity_name, guarantor_name, experience_tier, overall_status, confidence_score, ai_analysis_version",
     )
     .eq("id", validationId)
-    .single();
+    .single<{
+      id: string;
+      org_id: string;
+      borrower_name: string;
+      borrower_entity_name: string | null;
+      guarantor_name: string | null;
+      experience_tier: number | null;
+      overall_status: string;
+      confidence_score: number | null;
+      ai_analysis_version: number;
+    }>();
   if (!validation) return;
 
-  const recompute = await recomputeRiskFactorsForValidation(supabase, validationId);
-  const factors: RiskFactor[] = recompute?.factors ?? [];
-  const tier: Tier = recompute?.tier ?? "LOW";
+  // Capture the version we observed; the final write will only succeed
+  // if it hasn't changed (i.e., no other regen finished in the meantime).
+  const observedVersion = validation.ai_analysis_version;
+
+  let factors: RiskFactor[];
+  let tier: Tier;
+  if (opts.factors && opts.tier) {
+    factors = opts.factors;
+    tier = opts.tier;
+  } else {
+    const recompute = await recomputeRiskFactorsForValidation(supabase, validationId);
+    factors = recompute?.factors ?? [];
+    tier = recompute?.tier ?? "LOW";
+  }
 
   const [entityRes, trackRes, litigationRes, sanctionsRes, gcRes, verifiedRes] = await Promise.all([
     supabase
@@ -168,9 +199,26 @@ export async function regenerateAiMemoForValidation(
   if (aiAnalysis) {
     // schema_version=2 is stamped server-side by generateValidationAnalysis;
     // the 00016 CHECK constraint requires the key, which is already present.
-    await supabase
+    //
+    // Optimistic-lock write: only update if ai_analysis_version still
+    // matches what we read at the start. If a concurrent regen finished
+    // first, our memo is stale and we abandon it cleanly.
+    const { count } = await supabase
       .from("borrower_validations")
-      .update({ ai_analysis: aiAnalysis, updated_at: new Date().toISOString() })
-      .eq("id", validationId);
+      .update(
+        {
+          ai_analysis: aiAnalysis,
+          ai_analysis_version: observedVersion + 1,
+          updated_at: new Date().toISOString(),
+        },
+        { count: "exact" },
+      )
+      .eq("id", validationId)
+      .eq("ai_analysis_version", observedVersion);
+    if (count === 0) {
+      console.info(
+        `[regenerate] ai_analysis_version drift on ${validationId} — abandoning stale memo`,
+      );
+    }
   }
 }

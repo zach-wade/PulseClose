@@ -351,6 +351,18 @@ Use bridge lending terminology naturally. Be direct and specific — no buzzword
       messages: [{ role: "user", content: redactedPrompt }],
     });
 
+    // ROADMAP principle 11 — explicit truncation check. A `max_tokens`
+    // stop_reason produces broken JSON (trailing keys cut off) that the
+    // regex below would happily match and then fail at JSON.parse. Catch
+    // the truncation here and surface a null memo so the route falls back
+    // to "memo unavailable" instead of persisting garbage.
+    if (response.stop_reason === "max_tokens") {
+      console.error(
+        "AI analysis truncated at max_tokens — increase the budget or cut the input",
+      );
+      return null;
+    }
+
     const text =
       response.content[0].type === "text" ? response.content[0].text : "";
 

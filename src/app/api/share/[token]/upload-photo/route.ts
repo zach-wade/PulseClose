@@ -19,7 +19,12 @@ import { storeDocument } from "@/lib/documents/store";
 import { extractExif, haversineMeters } from "@/lib/photo/exif";
 
 export const maxDuration = 60;
-const MAX_BYTES = 15 * 1024 * 1024;
+// Vercel App Router caps request bodies at 4.5MB by default; the in-code
+// 15MB previously was unreachable (Vercel rejected first with a confusing
+// 413/500). Lowered to a value the platform actually accepts so users get
+// a clean error. To raise this we'd switch to signed direct-to-Supabase
+// upload — track in pickup.md if real photos start exceeding 4MB.
+const MAX_BYTES = 4 * 1024 * 1024;
 
 const PROMPT = `Look at this image. Decide which category it falls into and return JSON only.
 

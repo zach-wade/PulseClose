@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/resend";
+import { assertSafePublicUrl, UnsafeWebhookUrlError } from "@/lib/notifications/ssrf";
 
 export type NotificationChannel = "email" | "slack" | "teams" | "sms" | "webhook";
 
@@ -83,40 +84,69 @@ export async function dispatchNotification(
   }
 
   const rows = (prefs ?? []) as PreferenceRow[];
+
+  // Audit M2 — fan out in parallel. A single slow webhook used to stall
+  // the entire loop (each channel has a 10s timeout, 5 prefs × 10s = 50s
+  // before next sub starts). allSettled keeps the cron under budget.
+  type Outcome = "sent" | "failed" | "skipped";
+  const results = await Promise.allSettled(
+    rows.map(async (pref): Promise<Outcome> => {
+      if (pref.channel === "email") {
+        return (await sendEmail({
+          to: pref.target_address,
+          subject: opts.payload.subject,
+          html: opts.payload.html,
+          text: opts.payload.text,
+        }))
+          ? "sent"
+          : "failed";
+      }
+      if (pref.channel === "slack") {
+        return (await postSlack(pref.target_address, opts.payload)) ? "sent" : "failed";
+      }
+      if (pref.channel === "teams") {
+        return (await postTeams(pref.target_address, opts.payload)) ? "sent" : "failed";
+      }
+      if (pref.channel === "webhook") {
+        return (await postWebhook(pref.target_address, opts)) ? "sent" : "failed";
+      }
+      // sms — implemented when a feature first needs.
+      console.info(`[dispatch] channel ${pref.channel} not yet implemented; skipping`);
+      return "skipped";
+    }),
+  );
+
   let sent = 0;
   let failed = 0;
   let skipped = 0;
-
-  for (const pref of rows) {
-    if (pref.channel === "email") {
-      const ok = await sendEmail({
-        to: pref.target_address,
-        subject: opts.payload.subject,
-        html: opts.payload.html,
-        text: opts.payload.text,
-      });
-      if (ok) sent++;
-      else failed++;
-    } else if (pref.channel === "slack") {
-      const ok = await postSlack(pref.target_address, opts.payload);
-      if (ok) sent++;
-      else failed++;
-    } else if (pref.channel === "teams") {
-      const ok = await postTeams(pref.target_address, opts.payload);
-      if (ok) sent++;
-      else failed++;
-    } else if (pref.channel === "webhook") {
-      const ok = await postWebhook(pref.target_address, opts);
-      if (ok) sent++;
-      else failed++;
-    } else {
-      // sms — implemented when a feature first needs.
-      console.info(`[dispatch] channel ${pref.channel} not yet implemented; skipping`);
-      skipped++;
+  for (const r of results) {
+    if (r.status === "rejected") {
+      failed++;
+      continue;
     }
+    if (r.value === "sent") sent++;
+    else if (r.value === "skipped") skipped++;
+    else failed++;
   }
 
   return { total: rows.length, sent, failed, skipped };
+}
+
+// Re-check the URL right before posting. Defense against DNS rebinding —
+// a hostname that resolved cleanly at create-time could now point at
+// 169.254.169.254. Cheap (single DNS lookup) and fails closed.
+async function checkWebhookOrLog(url: string, channel: string): Promise<boolean> {
+  try {
+    await assertSafePublicUrl(url);
+    return true;
+  } catch (e) {
+    if (e instanceof UnsafeWebhookUrlError) {
+      console.warn(`[dispatch] ${channel} URL failed SSRF re-check: ${e.message}`);
+    } else {
+      console.warn(`[dispatch] ${channel} URL re-check error:`, e);
+    }
+    return false;
+  }
 }
 
 // Slack incoming webhook. Payload is a simple text + blocks shape — Slack
@@ -126,6 +156,7 @@ async function postSlack(
   webhookUrl: string,
   payload: NotificationPayload,
 ): Promise<boolean> {
+  if (!(await checkWebhookOrLog(webhookUrl, "slack"))) return false;
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",
@@ -165,6 +196,7 @@ async function postTeams(
   webhookUrl: string,
   payload: NotificationPayload,
 ): Promise<boolean> {
+  if (!(await checkWebhookOrLog(webhookUrl, "teams"))) return false;
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",
@@ -197,6 +229,7 @@ async function postWebhook(
   webhookUrl: string,
   opts: DispatchOptions,
 ): Promise<boolean> {
+  if (!(await checkWebhookOrLog(webhookUrl, "webhook"))) return false;
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",

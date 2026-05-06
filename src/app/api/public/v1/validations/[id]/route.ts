@@ -20,8 +20,20 @@ export async function GET(
     return NextResponse.json({ error: "Invalid or missing API key" }, { status: 401 });
   }
 
+  // Audit L3 — short-circuit ownership check before kicking off 9 child
+  // queries. Previously all 10 ran in parallel; a foreign / missing id
+  // still produced 404 to the caller but burnt DB time on the children.
+  const validationRes = await supabase
+    .from("borrower_validations")
+    .select("*")
+    .eq("id", id)
+    .eq("org_id", auth.org_id)
+    .single();
+  if (validationRes.error || !validationRes.data) {
+    return NextResponse.json({ error: "Validation not found" }, { status: 404 });
+  }
+
   const [
-    validationRes,
     entityRes,
     trackRecordRes,
     litigationRes,
@@ -32,12 +44,6 @@ export async function GET(
     riskFactorsRes,
     dealOutcomeRes,
   ] = await Promise.all([
-    supabase
-      .from("borrower_validations")
-      .select("*")
-      .eq("id", id)
-      .eq("org_id", auth.org_id)
-      .single(),
     supabase
       .from("entity_checks")
       .select("*")
@@ -78,10 +84,6 @@ export async function GET(
       .eq("validation_id", id)
       .maybeSingle(),
   ]);
-
-  if (validationRes.error || !validationRes.data) {
-    return NextResponse.json({ error: "Validation not found" }, { status: 404 });
-  }
 
   const riskFactors = (riskFactorsRes.data ?? []) as RiskFactor[];
   const tier = deriveTier(riskFactors);

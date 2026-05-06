@@ -95,10 +95,14 @@ export async function PATCH(
     })),
   );
 
-  // Recompute + regenerate. Both are awaited only enough to start them;
-  // memo regen is fire-and-forget per the existing override pattern.
-  await recomputeRiskFactorsForValidation(supabase, row.validation_id);
-  void regenerateAiMemoForValidation(supabase, row.validation_id).catch((err: unknown) => {
+  // Recompute + regenerate. Pass the recompute result into regen so it
+  // doesn't re-fetch + re-derive the factor list immediately after we
+  // just wrote it. Memo regen stays fire-and-forget.
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, row.validation_id);
+  void regenerateAiMemoForValidation(supabase, row.validation_id, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch((err: unknown) => {
     console.warn("[track-record edit] memo regen failed:", err);
   });
 
@@ -148,8 +152,11 @@ export async function DELETE(
     editedByUserId: profile.id,
   });
 
-  await recomputeRiskFactorsForValidation(supabase, row.validation_id);
-  void regenerateAiMemoForValidation(supabase, row.validation_id).catch(() => {});
+  const recomputed = await recomputeRiskFactorsForValidation(supabase, row.validation_id);
+  void regenerateAiMemoForValidation(supabase, row.validation_id, {
+    factors: recomputed?.factors,
+    tier: recomputed?.tier,
+  }).catch(() => {});
 
   return NextResponse.json({ id });
 }

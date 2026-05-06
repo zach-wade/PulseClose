@@ -30,6 +30,10 @@ export async function sendEmail(opts: {
         html: opts.html,
         text: opts.text,
       }),
+      // Audit M3 — without a timeout a Resend outage hangs the request
+      // until Vercel kills the function at maxDuration. Match the
+      // Slack/Teams/webhook helpers which all use 10s.
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
       console.error(`Resend ${res.status}: ${await res.text()}`);

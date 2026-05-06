@@ -136,6 +136,23 @@ export async function extractInvestorCriteriaFromPdf(
   const inputTokens = response.usage?.input_tokens ?? null;
   const outputTokens = response.usage?.output_tokens ?? null;
 
+  // ROADMAP principle 11 — short-circuit on max_tokens. A truncated array
+  // would still match the regex below but JSON.parse blows up; even when
+  // it parses, the last row is missing fields. Caller sees an empty list
+  // + the stop_reason in metadata so the UI can show "PDF too long, try
+  // splitting" instead of "we extracted 0 criteria from your 80-page
+  // term sheet."
+  if (stopReason === "max_tokens") {
+    return {
+      rows: [],
+      raw_text: text,
+      stop_reason: stopReason,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      model: INVESTOR_EXTRACT_MODEL,
+    };
+  }
+
   const arrMatch = text.match(/\[[\s\S]*\]/);
   if (!arrMatch) {
     return {

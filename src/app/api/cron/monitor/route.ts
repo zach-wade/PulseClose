@@ -44,16 +44,34 @@ export async function GET(request: Request) {
   // POST handler. The cron skips them so runSubscription never sees a
   // null validation_id. (Belt + suspenders: the runner also requires a
   // non-null validation_id to fetch the validation context.)
-  const { data: dueSubs } = await supabase
+  //
+  // Audit H2 — atomic claim-lease. Without this, a stuck adapter on tick N
+  // could leave a sub mid-run while tick N+1 picks the same row (we
+  // previously only updated next_run_at after runSubscription completed).
+  // Result was duplicate vendor calls + double billing + duplicate change
+  // emails. The lease moves next_run_at out 1h on read, atomically; a
+  // successful run later overwrites it with the real cadence-derived
+  // next_run_at, a crashed run gets retried in 1h (not immediately).
+  const LEASE_INTERVAL_MS = 60 * 60 * 1000;
+  const { data: candidates } = await supabase
     .from("monitor_subscriptions")
-    .select("*")
+    .select("id")
     .eq("enabled", true)
     .not("validation_id", "is", null)
     .lte("next_run_at", new Date().toISOString())
     .order("next_run_at", { ascending: true })
     .limit(25);
+  const candidateIds = (candidates ?? []).map((r) => r.id);
 
-  let subs = dueSubs ?? [];
+  const { data: leasedSubs } = candidateIds.length
+    ? await supabase
+        .from("monitor_subscriptions")
+        .update({ next_run_at: new Date(Date.now() + LEASE_INTERVAL_MS).toISOString() })
+        .in("id", candidateIds)
+        .select("*")
+    : { data: [] };
+
+  let subs = leasedSubs ?? [];
 
   // G7.3 filler — drop subs whose org has monitor_paused_until in the
   // future. Single query keyed on the org_ids actually present in this

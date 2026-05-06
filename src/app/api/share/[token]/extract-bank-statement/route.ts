@@ -17,7 +17,9 @@ import { AiDisabledError, requireAiEnabled } from "@/lib/ai/check-enabled";
 import { scrubPii } from "@/lib/ai/redact-pii";
 
 export const maxDuration = 60;
-const MAX_BYTES = 15 * 1024 * 1024;
+// See upload-photo route for the Vercel 4.5MB body-size constraint
+// rationale. Statement PDFs are typically <2MB so this is rarely felt.
+const MAX_BYTES = 4 * 1024 * 1024;
 
 const PROMPT = `Extract a structured summary from this bank statement. Return JSON only — no prose, no markdown fences.
 

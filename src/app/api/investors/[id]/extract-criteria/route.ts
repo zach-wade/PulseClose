@@ -19,7 +19,11 @@ import { emitActivity } from "@/lib/events/emit";
 
 export const maxDuration = 60;
 
-const MAX_BYTES = 15 * 1024 * 1024; // 15MB — investor PDFs trend bigger than borrower-doc xlsxs
+// Vercel App Router caps request bodies at 4.5MB by default; investor
+// PDFs above that need to be split or routed via signed direct-to-
+// Supabase upload (not implemented yet — track in pickup.md if it
+// becomes a real constraint).
+const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function POST(
   request: Request,
