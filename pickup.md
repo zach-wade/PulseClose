@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-05-06 — Roadmap clear-out)
+# PulseClose — Session Pickup (2026-05-06 — Override spike + audit pass)
 
 > **For session-resumption.** Strategic and architectural detail lives in the
 > dedicated docs — this file orients quickly and points there.
@@ -24,16 +24,52 @@ SaaS at app.pulseclose.com. NPLA conference is the forcing function (June
 **Production health:** ✅ All commits since 2026-04-30 live and verified.
 Vercel auto-deploy fired clean for every push in this batch.
 
-**The roadmap is empty of buildable items.** Everything that wasn't
-blocked on vendor $, external logins, customer-density density, or
-physical-printer-required has shipped. Remaining roadmap items are
-explicitly post-NPLA per ROADMAP, blocked on outside persons, or
-manual-only (print test, Cobalt key rotation, OpenSanctions key
-rotation, WP secrets to Build-Folio env).
+**The roadmap is empty of buildable items.** Plus a major spike
+shipped 2026-05-06 PM expanding the override-and-rerun product-promise
+from narrow signal-keys to "any factor + any vendor field can be
+overridden by lender domain knowledge with audit trail visible to the
+receiving investor."
 
 ---
 
-## ✅ COMPLETE 2026-05-06 — Final roadmap clear-out (20 features, one session)
+## ✅ COMPLETE 2026-05-06 PM — Override-and-rerun expansion (4 commits) + audit pass (2 fix commits)
+
+User caught a real product gap during testing: vendor data is
+incomplete by design (we deferred BatchData / state courts / county
+liens / photo verification at scale on cost), but the shipped
+override system was narrow (signal-keys only on
+is_primary_residence / is_bank_financed). If the lender knew more
+than the vendors (frivolous nuisance suit, hold months wrong, missing
+property), they couldn't input it. The tier we computed was theater.
+
+**Override expansion (4 commits):**
+
+| Commit | What it ships |
+|---|---|
+| `700788a` 1/4 | Migration 00034: `data_edits` (audit log), `factor_overrides` (manual factor exclude with reason). POST/DELETE `/api/factor-overrides`. WhyThisRating gets per-factor "Override" button → free-text reason → recompute + AI memo regen. "Remove override" affordance reverts. Engine-derived primary_residence still takes precedence. |
+| `5c13f39` 2/4 | PATCH `/api/track-record/[id]` (7 editable fields with audit log), DELETE same, POST `/api/validations/[id]/track-record` (manual add via canonical dedup, source='manual'). Same shape for litigation_cases. UI: pencil per row → edit dialog. "Add property" / "Add case" buttons. Manual rows tagged amber. lender_notes render inline. |
+| `ac53a5e` 3/4 | builder.ts grows `lender_edits` aggregate. Excel cover renders headline counts; new "Audit Log" worksheet. PDF view renders chronological table before narrative. Methodology PDF gets "Lender data edits" section. The receiving investor + credit committee see exactly what was edited, when, and why. |
+| `a18f2d7` B6 fix | Compare-to-prior button label now shows the prior validation's date or time (same-day shows H:MM). Compare page renders M/D/YY HH:MM in same-day banner + per-card timestamps. |
+
+**Audit pass on the morning's 20 features (2 fix commits):**
+
+User asked me to re-review for similar misses. Six real ones found:
+
+| Commit | What it fixes |
+|---|---|
+| `a34885f` audit fix 1/4 | **D2:** monitor cron's `notifyChanges` now calls `dispatchNotification` in addition to direct sendEmail. Without this, every Slack/Teams pref configured in Settings was theater — the only emit point bypassed dispatch. **G7.3 indicator:** validation API returns `org_monitor_paused_until`; MonitorCard renders amber "Org-wide pause active" banner. |
+| `db98471` audit fix 2/4 | **F3:** RouteToInvestorButton on validation detail header — lists configured investors, idempotent route. Without this, F3 substrate was unreachable from the UI. **C5 + C1:** borrower share page gets BankStatementUpload + PropertyPhotoUpload cards. Lender side: new BorrowerUploadsCard on validation detail with combined view. `GET /api/validations/[id]/borrower-uploads` endpoint. |
+
+**Audit-pass misses NOT fixed (deferred to follow-up):**
+- **D5 POST endpoint** — public REST is GET-only. POST refactor needs extracting heavy logic from 850-line internal POST. ~1d follow-up.
+- **Liquidity factor** reading bank statement data — substrate stores it, factor needs threshold calibration with real data.
+- **photo_verified signal** write — verifications stored, distance threshold needs calibration.
+- **F3 investor signup flow** — investor_users table exists, no self-serve signup. Lender INSERTs rows via SQL today.
+- **F1 multi-dimension scenarios** — only LTV varies. Picker for LTC / ARV / FICO / loan_amount is v2.
+
+---
+
+## ✅ COMPLETE 2026-05-06 AM — Final roadmap clear-out (20 features, one session)
 
 Twenty features shipped end-to-end in a single autonomous run. Each one
 git-pushed independently to prod, typechecked clean, build verified.
