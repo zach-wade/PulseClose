@@ -533,7 +533,7 @@ export default function ValidationDetailPage() {
         trackRecord={data.track_record}
         verifiedFlips={data.verified_flips ?? []}
         validationId={data.id}
-        onUpdated={refetch}
+        onUpdated={handleSignalApplied}
       />
 
       {/* Borrower-uploaded artifacts (photos + bank statements) — auto-
@@ -556,7 +556,7 @@ export default function ValidationDetailPage() {
         cases={data.litigation_cases ?? []}
         legacyChecks={data.litigation_checks}
         validationId={data.id}
-        onUpdated={refetch}
+        onUpdated={handleSignalApplied}
       />
 
       {/* Sanctions / PEP */}
@@ -569,7 +569,7 @@ export default function ValidationDetailPage() {
         <AddGCCard
           validationId={data.id}
           defaultState={data.entity_checks?.[0]?.state ?? null}
-          onAdded={refetch}
+          onAdded={handleSignalApplied}
         />
       ) : (
         data.gc_validations.map((gc) => (
