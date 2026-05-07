@@ -54,12 +54,21 @@ export function TrackRecordAddDialog({ open, onOpenChange, validationId, onAdded
     setReason("");
   }
 
+  // Field-level Zod issues from the server, keyed by field name. Cleared
+  // on each save attempt + when the dialog reopens.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  function fieldError(name: string): string | undefined {
+    return fieldErrors[name];
+  }
+
   async function save() {
     if (!property_address.trim()) {
       toast.error("Property address required.");
       return;
     }
     setSaving(true);
+    setFieldErrors({});
     try {
       const numOrNull = (s: string) => (s.trim() === "" ? null : Number(s));
       const res = await fetch(`/api/validations/${validationId}/track-record`, {
@@ -80,8 +89,28 @@ export function TrackRecordAddDialog({ open, onOpenChange, validationId, onAdded
         }),
       });
       if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: "Save failed" }));
-        toast.error(error || "Save failed");
+        // The server returns Zod issues like
+        //   { error: "Invalid body", issues: [{ path: ["acquisition_price"], message: "..." }] }
+        // Map them back to field-level inline errors so the user sees
+        // exactly which input is wrong, not a useless top-level toast.
+        const body = await res.json().catch(() => ({}));
+        type Issue = { path?: Array<string | number>; message?: string };
+        const issues: Issue[] = Array.isArray(body?.issues) ? body.issues : [];
+        if (issues.length > 0) {
+          const map: Record<string, string> = {};
+          for (const i of issues) {
+            const key = String(i.path?.[0] ?? "");
+            if (key && !map[key]) map[key] = i.message ?? "Invalid";
+          }
+          setFieldErrors(map);
+          const summary = issues
+            .slice(0, 3)
+            .map((i) => `${i.path?.[0] ?? "field"}: ${i.message}`)
+            .join("; ");
+          toast.error(summary);
+        } else {
+          toast.error(body?.error || "Save failed");
+        }
         return;
       }
       toast.success("Property added. Tier + AI memo recomputing.");
@@ -139,15 +168,46 @@ export function TrackRecordAddDialog({ open, onOpenChange, validationId, onAdded
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="acq_price">Acquisition price ($)</Label>
-              <Input id="acq_price" type="number" value={acquisition_price} onChange={(e) => setAcqPrice(e.target.value)} />
+              <Input
+                id="acq_price"
+                type="number"
+                min={0}
+                step={1000}
+                value={acquisition_price}
+                onChange={(e) => setAcqPrice(e.target.value)}
+              />
+              {fieldError("acquisition_price") && (
+                <p className="text-xs text-destructive">{fieldError("acquisition_price")}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="disp_price">Disposition price ($)</Label>
-              <Input id="disp_price" type="number" value={disposition_price} onChange={(e) => setDispPrice(e.target.value)} />
+              <Input
+                id="disp_price"
+                type="number"
+                min={0}
+                step={1000}
+                value={disposition_price}
+                onChange={(e) => setDispPrice(e.target.value)}
+              />
+              {fieldError("disposition_price") && (
+                <p className="text-xs text-destructive">{fieldError("disposition_price")}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="hold_months">Hold months</Label>
-              <Input id="hold_months" type="number" value={hold_months} onChange={(e) => setHold(e.target.value)} />
+              <Input
+                id="hold_months"
+                type="number"
+                min={0}
+                max={600}
+                step={1}
+                value={hold_months}
+                onChange={(e) => setHold(e.target.value)}
+              />
+              {fieldError("hold_months") && (
+                <p className="text-xs text-destructive">{fieldError("hold_months")}</p>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
