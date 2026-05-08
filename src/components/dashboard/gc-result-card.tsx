@@ -15,7 +15,47 @@ export function GCResultCard({ data }: { data: GCValidation }) {
   const raw = (data.raw_response as Record<string, unknown>) ?? {};
   const isStub = !!raw._demo;
   const notAutomated = !!raw._not_automated;
+  const hasError = raw._error === true;
   const reason = (raw._reason as string) ?? null;
+
+  // Same rationale as notAutomated — when the upstream check failed
+  // (rate-limited, 5xx, parse error), a green "ACTIVE" badge implies a
+  // verification we didn't actually perform. Surface as CHECK FAILED.
+  if (hasError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <HardHat className="h-4 w-4" />
+            GC Validation
+            <Badge variant="secondary" className="ml-auto bg-amber-100 text-amber-800">
+              CHECK FAILED
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 mb-3 flex items-start gap-2">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <div>
+              {reason ?? "License verification failed to run. Manual verification recommended."}
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Contractor (as entered)</p>
+              <p className="font-medium">{data.gc_name}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">License # (as entered)</p>
+              <p className="font-mono text-sm">
+                {data.license_number ?? "—"} ({data.license_state})
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // For unautomated states, show a minimal card — fake "ACTIVE" badges
   // and "—" classification fields imply we did a check we didn't do.

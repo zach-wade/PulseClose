@@ -301,7 +301,19 @@ export async function searchPropertiesRealie(
 
       if (!fallbackRes.ok) return [];
       const fallbackData: RealieResponse = await fallbackRes.json();
-      return (fallbackData.properties ?? []).map(mapPropertyToRecord);
+      const fallbackProperties = fallbackData.properties ?? [];
+
+      // Same tokenize-and-set filter as primary search. Realie's prefix-match
+      // server-side returns hits like every "Kim Truong" in the state, not
+      // just the borrower we asked about. Without this filter every same-
+      // surname owner in the state leaks into track_record_entries (Truong
+      // demo 2026-05-08: SJ-only borrower returned Fullerton/Cypress hits).
+      const fallbackTokens = canonicalTokens(req.borrower_name, true);
+      const fallbackMatches = fallbackProperties.filter((p) => {
+        const ownerTokens = canonicalTokens(p.ownerName ?? "", true);
+        return tokensSubset(fallbackTokens, ownerTokens);
+      });
+      return fallbackMatches.map(mapPropertyToRecord);
     }
 
     return results;

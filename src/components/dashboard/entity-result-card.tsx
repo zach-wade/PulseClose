@@ -93,17 +93,23 @@ export function EntityResultCard({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">SOS Status</p>
-              <Badge
-                variant={
-                  data.sos_status === "active"
-                    ? "default"
-                    : data.sos_status === "suspended"
-                      ? "destructive"
-                      : "secondary"
-                }
-              >
-                {data.sos_status.toUpperCase()}
-              </Badge>
+              {hasError ? (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                  CHECK FAILED
+                </Badge>
+              ) : (
+                <Badge
+                  variant={
+                    data.sos_status === "active"
+                      ? "default"
+                      : data.sos_status === "suspended"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {data.sos_status.toUpperCase()}
+                </Badge>
+              )}
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">

@@ -10,6 +10,92 @@ specific journey/stage assignment.
 
 ---
 
+## Drill-down + matcher follow-ups (Noah review, 2026-05-08)
+
+Residual gaps after the post-review fixes (Realie fallback filter,
+check-failed badge state, contributing_data inline render). Each item
+came out of either the audit transcript or an incomplete fix; flagged
+here so they don't get forgotten before the next capital-partner demo.
+
+**Matcher / data integrity**
+
+- **Realie fallback usage telemetry.** Fallback now token-filters, but
+  it still fires silently when an entity-name search returns zero.
+  Common cause is filing-format drift (comma vs none, "LLC" suffix
+  variants) that we should fix at the source rather than rely on the
+  fallback. Add a server-side log/metric every time the fallback fires
+  + the entity-name input that produced zero hits, so we can see how
+  often we're degrading to personal-name search.
+  *Unblocks when:* we have >50 production validations and want to
+  audit identity-match precision empirically.
+- **ATTOM identity match audit.** Same class of bug as Realie was —
+  haven't reviewed how ATTOM enrichment attributes deeds to a borrower.
+  Worth a focused read of `src/lib/adapters/attom.ts` + the deed-chain
+  matcher in `src/lib/track-record/verify-core.ts` for the same
+  prefix-match-without-token-filter pattern.
+  *Unblocks when:* a Noah-class reviewer flags a false-positive deed.
+- **Display-side ownership filter.** `/api/validations/[id]/route.ts`
+  fetches `track_record_entries` filtered only by `validation_id`. If
+  a row was attributed to a shared/merged entity in an earlier
+  validation, no display-side guard catches misattribution. Add
+  `.eq('owning_borrower_id', borrowerId)` as belt-and-suspenders.
+  *Unblocks when:* first cross-borrower entity-merge happens in prod
+  via `merge_records_atomic`.
+
+**Drill-down completeness (audit gaps not yet shipped)**
+
+- **Lender names in concentration evidence.** `lender_concentration`
+  factor now renders lender_id + count, but IDs are opaque. Either
+  enrich `contributing_data` server-side with `lender_name` at compute
+  time, or render-side join via the `lenders` table.
+  *Unblocks when:* user complains "what lender is this?" — fast fix
+  once asked.
+- **Property row → Realie source link.** Unified property table
+  expansion shows transfers as plain text. Each transfer should link
+  to the deed (Realie response includes recordingDate + docType but
+  not a permalink — may require pulling Realie's web URL pattern or
+  storing the response key). Closes the "verify the chain" loop.
+  *Unblocks when:* a capital partner asks "where did this deed come
+  from" mid-demo.
+- **Claimed-only rows expand-and-edit.** Borrower-claimed properties
+  that didn't match public records are non-clickable. They should
+  expand to show what was claimed + a "promote to track record" or
+  "reject claim" affordance. Today the lender has no path to act on
+  unmatched claims.
+  *Unblocks when:* first lender flow surfaces a borrower claim that
+  didn't match deed records and the lender wants to keep the claim.
+- **AI memo factor citations.** Memo pillar assessments are free-form
+  prose. Should anchor-link to the corresponding pillar card AND cite
+  which deterministic factor(s) drove the rating phrase. The V2 risk
+  rows already link via "Why this rating? →" — extend that pattern
+  upward to the pillar narratives.
+  *Unblocks when:* a reviewer says "I don't trust this paragraph" —
+  i.e. once we have evidence the memo undermines instead of helps.
+
+**Risk / failure modes to monitor**
+
+- **Litigation drill-down bug Noah hit live.** Static read of
+  `litigation-cards.tsx` shows the click-through path is intact, so
+  the bug Noah saw 2026-05-07 may be stale or in a different surface
+  (handoff PDF? share view?). Need a live-test pass before NPLA — try
+  every drill-down click on the Truong validation and the share view.
+  *Unblocks when:* always — this is a verification task, not a build.
+- **"Minor" labels on non-pillar surfaces.** Pillar cards now
+  distinguish CHECK FAILED from a minor finding. The same opaque
+  language likely lives on the unified property table provenance
+  badges, the monitor card, and the activity feed. Sweep for
+  generic-severity badges that don't communicate WHAT was measured.
+  *Unblocks when:* schedule a polish pass before NPLA.
+- **Realie state filter assumes borrower has a state.** Adapter
+  early-returns `[]` when `req.state` is missing, but the orchestrator
+  may not pass it for every borrower (test-mode validations, manual
+  property-only flows). Worth confirming every code path that calls
+  `searchPropertiesRealie` resolves a state first.
+  *Unblocks when:* low-priority, but a quick grep would close the
+  loop.
+
+---
+
 ## Demo / NPLA pitch strengtheners
 
 These specifically improve the story for capital-provider endorsement

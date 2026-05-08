@@ -42,6 +42,120 @@ interface ExtendedHoldProperty {
   exclusion_reason: string | null;
 }
 
+function FactorEvidence({ factor }: { factor: RiskFactor }) {
+  const data = factor.contributing_data ?? {};
+  const cases = (data.cases as Array<{ case_number: string; search_type?: string | null }> | undefined) ?? null;
+  const properties = (data.properties as Array<Record<string, unknown>> | undefined) ?? null;
+  const lenders = (data.lenders as Array<{ lender_id: string; count: number }> | undefined) ?? null;
+  const dupes = (data.duplicate_addresses as Array<{ line1: string; count: number }> | undefined) ?? null;
+  const lists = (data.lists as string[] | undefined) ?? null;
+
+  switch (factor.factor_key) {
+    case "active_fed_litigation":
+    case "dismissed_litigation":
+      if (!cases || cases.length === 0) return null;
+      return (
+        <Evidence label={factor.factor_key === "active_fed_litigation" ? "Cases" : "Dismissed cases"}>
+          {cases.map((c, i) => (
+            <li key={i} className="font-mono">
+              {c.case_number}
+              {c.search_type ? <span className="text-muted-foreground ml-1">({c.search_type})</span> : null}
+            </li>
+          ))}
+        </Evidence>
+      );
+    case "sanctions_hit":
+      if (!lists || lists.length === 0) return null;
+      return (
+        <Evidence label="Lists with potential matches">
+          {lists.map((l, i) => <li key={i}>{l}</li>)}
+        </Evidence>
+      );
+    case "entity_status":
+      return (
+        <Evidence label="SOS lookup">
+          <li>Status: <span className="font-mono">{String(data.sos_status ?? "—")}</span></li>
+          <li>Last filing: <span className="font-mono">{String(data.last_filing_date ?? "—")}</span></li>
+        </Evidence>
+      );
+    case "lender_concentration":
+      if (!lenders || lenders.length === 0) return null;
+      return (
+        <Evidence label={`Concentrated lenders (≥${String(data.threshold ?? 3)} loans)`}>
+          {lenders.map((l, i) => (
+            <li key={i} className="font-mono text-xs">
+              {l.lender_id} — {l.count} loans
+            </li>
+          ))}
+        </Evidence>
+      );
+    case "market_outlier":
+      if (!properties || properties.length === 0) return null;
+      return (
+        <Evidence label="Properties deviating from zip median (Zillow ZHVI)">
+          {properties.map((p, i) => {
+            const ratio = typeof p.ratio === "number" ? p.ratio : null;
+            const ratioStr = ratio != null ? `${ratio.toFixed(2)}×` : "—";
+            return (
+              <li key={i}>
+                <span className="font-medium">{String(p.property_address ?? "—")}</span>
+                <span className="text-muted-foreground ml-1">
+                  ({String(p.zip ?? "—")}) · AVM ${formatNum(p.avm)} vs median ${formatNum(p.zip_median)} · {ratioStr} {String(p.direction ?? "")}
+                </span>
+              </li>
+            );
+          })}
+        </Evidence>
+      );
+    case "market_outlier_unavailable":
+      if (!properties || properties.length === 0) return null;
+      return (
+        <Evidence label="Properties without ZHVI coverage">
+          {properties.map((p, i) => (
+            <li key={i}>
+              {String(p.property_address ?? "—")}{" "}
+              <span className="text-muted-foreground">({String(p.zip ?? "—")})</span>
+            </li>
+          ))}
+        </Evidence>
+      );
+    case "foreclosure_distress":
+      if (!properties || properties.length === 0) return null;
+      return (
+        <Evidence label="Properties with foreclosure/auction filing">
+          {properties.map((p, i) => <li key={i}>{String(p.property_address ?? "—")}</li>)}
+        </Evidence>
+      );
+    case "address_consistency":
+      if (!dupes || dupes.length === 0) return null;
+      return (
+        <Evidence label="Duplicate street addresses">
+          {dupes.map((d, i) => (
+            <li key={i}><span className="font-mono">{d.line1}</span> — {d.count}×</li>
+          ))}
+        </Evidence>
+      );
+    default:
+      return null;
+  }
+}
+
+function Evidence({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="pt-2 border-t border-border/50">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+        {label}
+      </p>
+      <ul className="text-sm space-y-0.5 list-none">{children}</ul>
+    </div>
+  );
+}
+
+function formatNum(v: unknown): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+  return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
 interface Props {
   tier: Tier;
   riskFactors: RiskFactor[];
@@ -347,6 +461,11 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, validationId, onS
                     </div>
                   </div>
                 )}
+
+                {/* Drill-down evidence for non-extended-hold factors. The
+                    extended_hold block below renders its own per-property
+                    list with the override action. */}
+                {!isExtendedHold && !f.excluded && <FactorEvidence factor={f} />}
 
                 {/* Inline overrides for extended_hold: per-property "Mark as primary residence" */}
                 {isExtendedHold && properties.length > 0 && (
