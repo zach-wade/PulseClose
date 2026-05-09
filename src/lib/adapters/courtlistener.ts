@@ -7,7 +7,15 @@ import type { LitigationSearchRequest, LitigationRecord } from "./types";
 
 const BASE_URL = "https://www.courtlistener.com/api/rest/v4";
 
+// CourtListener's /search/?type=d endpoint returns Solr-style camelCase
+// for several fields (caseName, dateFiled, dateTerminated, docketNumber,
+// suitNature, docket_absolute_url) while keeping court / court_id / cause
+// in snake_case. The /dockets/ ORM endpoint returns the snake_case form
+// throughout. Declare both so this adapter works with either response
+// shape — historical data stored with one shape, future runs with the
+// other.
 interface CLDocket {
+  // Snake-case (also kept for compatibility with the /dockets/ endpoint).
   absolute_url?: string;
   case_name?: string;
   case_name_short?: string;
@@ -18,6 +26,25 @@ interface CLDocket {
   docket_number?: string;
   cause?: string;
   nature_of_suit?: string;
+  // CamelCase from /search/?type=d Solr index — used by the search call below.
+  caseName?: string;
+  dateFiled?: string;
+  dateTerminated?: string;
+  docketNumber?: string;
+  suitNature?: string;
+  docket_absolute_url?: string;
+  court_citation_string?: string;
+}
+
+function pickDocketField<K extends keyof CLDocket>(
+  d: CLDocket,
+  ...keys: K[]
+): CLDocket[K] | undefined {
+  for (const k of keys) {
+    const v = d[k];
+    if (v != null && v !== "") return v;
+  }
+  return undefined;
 }
 
 interface CLSearchResponse {
@@ -66,12 +93,17 @@ function mapDocketToRecord(
   searchType: "bankruptcy" | "lawsuit",
   searchName: string,
 ): LitigationRecord {
+  const caseName = pickDocketField(docket, "caseName", "case_name", "case_name_short");
+  const dateTerminated = pickDocketField(docket, "dateTerminated", "date_terminated");
+  const natureOfSuit = pickDocketField(docket, "suitNature", "nature_of_suit");
+  const docketNumber = pickDocketField(docket, "docketNumber", "docket_number");
+
   const details = [
-    docket.case_name,
-    docket.nature_of_suit ? `Nature of suit: ${docket.nature_of_suit}` : null,
+    caseName,
+    natureOfSuit ? `Nature of suit: ${natureOfSuit}` : null,
     docket.cause ? `Cause: ${docket.cause}` : null,
-    docket.date_terminated ? `Terminated: ${docket.date_terminated}` : null,
-    !docket.date_terminated ? "Case may be active" : null,
+    dateTerminated ? `Terminated: ${dateTerminated}` : null,
+    !dateTerminated ? "Case may be active" : null,
   ]
     .filter(Boolean)
     .join(". ");
@@ -81,7 +113,7 @@ function mapDocketToRecord(
     entity_name: searchName,
     result: "found",
     details: details || "Federal court record found",
-    case_number: docket.docket_number ?? null,
+    case_number: docketNumber ?? null,
     source: `CourtListener RECAP Archive`,
     raw_response: docket as unknown as Record<string, unknown>,
   };

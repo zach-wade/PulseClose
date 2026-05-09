@@ -91,6 +91,20 @@ function safeStr(input: unknown): string | null {
   return null;
 }
 
+// Read the first non-empty string under any of the given keys from a raw
+// JSON object. CourtListener's /search/ endpoint returns several fields
+// in camelCase (caseName, dateFiled, dateTerminated, docketNumber,
+// suitNature, docket_absolute_url) while the /dockets/ endpoint uses
+// snake_case throughout. Old litigation_checks rows may have either
+// shape, so read both.
+function pick(raw: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const k of keys) {
+    const s = safeStr(raw[k]);
+    if (s) return s;
+  }
+  return null;
+}
+
 /**
  * Extract a structured case from a single litigation_checks row. Returns
  * null when the row is a "clear" / "pending" result — only "found" rows
@@ -100,21 +114,32 @@ export function extractCase(check: LitigationCheckRow): ExtractedCase | null {
   if (check.result !== "found") return null;
   const raw = (check.raw_response ?? {}) as Record<string, unknown>;
 
-  const caseName = safeStr(raw.case_name) ?? safeStr(raw.case_name_short) ?? check.details ?? "Unknown case";
-  const courtId = safeStr(raw.court_id);
-  const court = safeStr(raw.court) ?? courtId;
-  const natureOfSuit = safeStr(raw.nature_of_suit);
-  const filedAt = safeDate(raw.date_filed);
-  const terminatedAt = safeDate(raw.date_terminated);
-  const absoluteUrl = safeStr(raw.absolute_url);
-  const docUrl = absoluteUrl ? (absoluteUrl.startsWith("http") ? absoluteUrl : `${COURTLISTENER_BASE}${absoluteUrl}`) : null;
+  const caseName =
+    pick(raw, "caseName", "case_name", "case_name_short") ??
+    check.details ??
+    "Unknown case";
+  const courtId = pick(raw, "court_id");
+  const court = pick(raw, "court", "court_citation_string") ?? courtId;
+  const natureOfSuit = pick(raw, "suitNature", "nature_of_suit");
+  const filedAt = safeDate(raw.dateFiled ?? raw.date_filed);
+  const terminatedAt = safeDate(raw.dateTerminated ?? raw.date_terminated);
+  const absoluteUrl = pick(raw, "docket_absolute_url", "absolute_url");
+  const docUrl = absoluteUrl
+    ? absoluteUrl.startsWith("http")
+      ? absoluteUrl
+      : `${COURTLISTENER_BASE}${absoluteUrl}`
+    : null;
+  // Pull docket number from raw_response when the row's case_number column
+  // is null (older runs from before the adapter field-name fix).
+  const caseNumber =
+    check.case_number ?? pick(raw, "docketNumber", "docket_number");
 
   const category = deriveCategory(check.search_type, natureOfSuit, courtId);
   const status = deriveStatus(terminatedAt, category);
 
   return {
     case_name: caseName,
-    case_number: check.case_number,
+    case_number: caseNumber,
     court,
     court_id: courtId,
     filed_at: filedAt,
