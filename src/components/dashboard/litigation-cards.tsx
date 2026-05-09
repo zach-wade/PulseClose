@@ -6,7 +6,7 @@
 // LitigationGrid render path when no materialized rows exist (e.g. an
 // older validation predating migration 00018 + backfill).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -145,7 +145,7 @@ export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }
   }
 
   return (
-    <Card>
+    <Card id="litigation-card" className="scroll-mt-20">
       <CardHeader>
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
@@ -321,8 +321,25 @@ function CaseCard({
   const Icon = expanded ? ChevronDown : ChevronRight;
   const isManual = c.source === "manual";
 
+  // Anchor target for factor-evidence hyperlinks (Why-this-rating panel).
+  // Prefer the docket number when present (stable + readable in URL hash);
+  // fall back to the row's uuid so cases without docketNumber still link.
+  const anchorId = `case-${c.case_number ?? c.id}`;
+
+  // Auto-expand when the user lands here via a factor-evidence hyperlink —
+  // landing on a collapsed card defeats the drill-down purpose.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const apply = () => {
+      if (window.location.hash === `#${anchorId}`) setExpanded(true);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, [anchorId]);
+
   return (
-    <div className="rounded-md border p-3">
+    <div id={anchorId} className="rounded-md border p-3 scroll-mt-20">
       <div className="flex items-start gap-2">
         <button
           type="button"

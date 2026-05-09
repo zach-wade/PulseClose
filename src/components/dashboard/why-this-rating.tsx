@@ -44,7 +44,7 @@ interface ExtendedHoldProperty {
 
 function FactorEvidence({ factor }: { factor: RiskFactor }) {
   const data = factor.contributing_data ?? {};
-  const cases = (data.cases as Array<{ case_number: string; search_type?: string | null }> | undefined) ?? null;
+  const cases = (data.cases as Array<{ case_number: string | null; search_type?: string | null }> | undefined) ?? null;
   const properties = (data.properties as Array<Record<string, unknown>> | undefined) ?? null;
   const lenders = (data.lenders as Array<{ lender_id: string; count: number }> | undefined) ?? null;
   const dupes = (data.duplicate_addresses as Array<{ line1: string; count: number }> | undefined) ?? null;
@@ -55,25 +55,44 @@ function FactorEvidence({ factor }: { factor: RiskFactor }) {
     case "dismissed_litigation":
       if (!cases || cases.length === 0) return null;
       return (
-        <Evidence label={factor.factor_key === "active_fed_litigation" ? "Cases" : "Dismissed cases"}>
-          {cases.map((c, i) => (
-            <li key={i} className="font-mono">
-              {c.case_number}
-              {c.search_type ? <span className="text-muted-foreground ml-1">({c.search_type})</span> : null}
-            </li>
-          ))}
+        <Evidence
+          label={factor.factor_key === "active_fed_litigation" ? "Cases" : "Dismissed cases"}
+          jumpLabel="View on litigation card →"
+          jumpHref="#litigation-card"
+        >
+          {cases.map((c, i) => {
+            const inner = (
+              <>
+                <span className="font-mono">{c.case_number ?? "case"}</span>
+                {c.search_type ? <span className="text-muted-foreground ml-1">({c.search_type})</span> : null}
+              </>
+            );
+            return c.case_number ? (
+              <EvidenceLink key={i} href={`#case-${c.case_number}`}>{inner}</EvidenceLink>
+            ) : (
+              <li key={i}>{inner}</li>
+            );
+          })}
         </Evidence>
       );
     case "sanctions_hit":
       if (!lists || lists.length === 0) return null;
       return (
-        <Evidence label="Lists with potential matches">
+        <Evidence
+          label="Lists with potential matches"
+          jumpLabel="View on sanctions card →"
+          jumpHref="#sanctions-card"
+        >
           {lists.map((l, i) => <li key={i}>{l}</li>)}
         </Evidence>
       );
     case "entity_status":
       return (
-        <Evidence label="SOS lookup">
+        <Evidence
+          label="SOS lookup"
+          jumpLabel="View on entity card →"
+          jumpHref="#entity-card"
+        >
           <li>Status: <span className="font-mono">{String(data.sos_status ?? "—")}</span></li>
           <li>Last filing: <span className="font-mono">{String(data.last_filing_date ?? "—")}</span></li>
         </Evidence>
@@ -96,13 +115,19 @@ function FactorEvidence({ factor }: { factor: RiskFactor }) {
           {properties.map((p, i) => {
             const ratio = typeof p.ratio === "number" ? p.ratio : null;
             const ratioStr = ratio != null ? `${ratio.toFixed(2)}×` : "—";
-            return (
-              <li key={i}>
+            const propertyId = typeof p.property_id === "string" ? p.property_id : null;
+            const inner = (
+              <>
                 <span className="font-medium">{String(p.property_address ?? "—")}</span>
                 <span className="text-muted-foreground ml-1">
                   ({String(p.zip ?? "—")}) · AVM ${formatNum(p.avm)} vs median ${formatNum(p.zip_median)} · {ratioStr} {String(p.direction ?? "")}
                 </span>
-              </li>
+              </>
+            );
+            return propertyId ? (
+              <EvidenceLink key={i} href={`#property-${propertyId}`}>{inner}</EvidenceLink>
+            ) : (
+              <li key={i}>{inner}</li>
             );
           })}
         </Evidence>
@@ -111,19 +136,35 @@ function FactorEvidence({ factor }: { factor: RiskFactor }) {
       if (!properties || properties.length === 0) return null;
       return (
         <Evidence label="Properties without ZHVI coverage">
-          {properties.map((p, i) => (
-            <li key={i}>
-              {String(p.property_address ?? "—")}{" "}
-              <span className="text-muted-foreground">({String(p.zip ?? "—")})</span>
-            </li>
-          ))}
+          {properties.map((p, i) => {
+            const propertyId = typeof p.property_id === "string" ? p.property_id : null;
+            const inner = (
+              <>
+                {String(p.property_address ?? "—")}{" "}
+                <span className="text-muted-foreground">({String(p.zip ?? "—")})</span>
+              </>
+            );
+            return propertyId ? (
+              <EvidenceLink key={i} href={`#property-${propertyId}`}>{inner}</EvidenceLink>
+            ) : (
+              <li key={i}>{inner}</li>
+            );
+          })}
         </Evidence>
       );
     case "foreclosure_distress":
       if (!properties || properties.length === 0) return null;
       return (
         <Evidence label="Properties with foreclosure/auction filing">
-          {properties.map((p, i) => <li key={i}>{String(p.property_address ?? "—")}</li>)}
+          {properties.map((p, i) => {
+            const propertyId = typeof p.property_id === "string" ? p.property_id : null;
+            const inner = <>{String(p.property_address ?? "—")}</>;
+            return propertyId ? (
+              <EvidenceLink key={i} href={`#property-${propertyId}`}>{inner}</EvidenceLink>
+            ) : (
+              <li key={i}>{inner}</li>
+            );
+          })}
         </Evidence>
       );
     case "address_consistency":
@@ -140,14 +181,41 @@ function FactorEvidence({ factor }: { factor: RiskFactor }) {
   }
 }
 
-function Evidence({ label, children }: { label: string; children: React.ReactNode }) {
+function Evidence({
+  label,
+  children,
+  jumpLabel,
+  jumpHref,
+}: {
+  label: string;
+  children: React.ReactNode;
+  jumpLabel?: string;
+  jumpHref?: string;
+}) {
   return (
     <div className="pt-2 border-t border-border/50">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
-        {label}
-      </p>
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        {jumpLabel && jumpHref && (
+          <a href={jumpHref} className="text-xs text-blue-600 hover:text-blue-800 hover:underline shrink-0">
+            {jumpLabel}
+          </a>
+        )}
+      </div>
       <ul className="text-sm space-y-0.5 list-none">{children}</ul>
     </div>
+  );
+}
+
+function EvidenceLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <li>
+      <a href={href} className="hover:underline text-foreground hover:text-blue-700">
+        {children}
+      </a>
+    </li>
   );
 }
 

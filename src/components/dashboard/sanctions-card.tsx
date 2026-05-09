@@ -40,7 +40,7 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
   const notRun = data.result === "not_run" || data.result === "pending";
 
   return (
-    <Card>
+    <Card id="sanctions-card" className="scroll-mt-20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Shield className="h-4 w-4" />

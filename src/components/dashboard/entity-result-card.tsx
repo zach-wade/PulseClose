@@ -45,7 +45,7 @@ export function EntityResultCard({
         : null;
 
   return (
-    <Card>
+    <Card id="entity-card" className="scroll-mt-20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Search className="h-4 w-4" />

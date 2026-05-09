@@ -19,7 +19,7 @@
 // Phase 2 feature). All other rows route through the existing edit
 // dialog.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -71,6 +71,9 @@ type Provenance = "verified" | "public_record" | "claimed_only" | "manual";
 interface UnifiedRow {
   // Stable key for React + filtering
   key: string;
+  // Canonical property_id for anchor links from the Why-this-rating panel
+  // (e.g. market_outlier / foreclosure_distress factor evidence rows).
+  property_id: string | null;
   provenance: Provenance;
   property_address: string;
   acquisition_date: string | null;
@@ -199,6 +202,7 @@ function mergeRows(
 
     out.push({
       key: `tr-${tr.id}`,
+      property_id: tr.property_id ?? matchedFlip?.property_id ?? null,
       provenance,
       property_address: tr.property_address,
       acquisition_date: tr.acquisition_date,
@@ -234,6 +238,7 @@ function mergeRows(
     const isUnmatched = vf.match_status === "not_found" || vf.match_status === "never_owned";
     out.push({
       key: `vf-${vf.id}`,
+      property_id: vf.property_id ?? null,
       provenance: isUnmatched ? "claimed_only" : "verified",
       property_address: vf.resolved_address ?? vf.submitted_address,
       acquisition_date: vf.acquisition_date,
@@ -448,11 +453,26 @@ function UnifiedRowDisplay({
 }) {
   const [expanded, setExpanded] = useState(false);
   const provenanceMeta = PROVENANCE[row.provenance];
+  const anchorId = row.property_id ? `property-${row.property_id}` : undefined;
+
+  // When a factor-evidence link points at this row, scroll-anchor lands here
+  // — auto-expand the Realie detail pane so the user sees the data they came
+  // for, not a collapsed row.
+  useEffect(() => {
+    if (typeof window === "undefined" || !anchorId || !details) return;
+    const apply = () => {
+      if (window.location.hash === `#${anchorId}`) setExpanded(true);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, [anchorId, details]);
 
   return (
     <>
       <TableRow
-        className={`${details ? "cursor-pointer" : ""} hover:bg-muted/40 ${provenanceMeta.rowClass}`}
+        id={anchorId}
+        className={`${details ? "cursor-pointer" : ""} hover:bg-muted/40 ${provenanceMeta.rowClass} scroll-mt-20`}
         onClick={() => details && setExpanded(!expanded)}
       >
         <TableCell className="w-8 px-2">
