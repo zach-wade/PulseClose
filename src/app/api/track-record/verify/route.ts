@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
+import { scoreAndPromotePendingRows } from "@/lib/track-record/review";
 import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
 export const maxDuration = 60;
@@ -119,6 +120,15 @@ export async function POST(request: Request) {
       cost_cents: 50,
       response_status: "success" as const,
     })),
+  );
+
+  // Score Flow B pending rows now that we have Flow A's xlsx cluster.
+  // High-scoring pending rows auto-promote into the headline track record.
+  await scoreAndPromotePendingRows(
+    supabase,
+    validation.id,
+    validation.borrower_name,
+    validation.borrower_entity_name,
   );
 
   const summary = {

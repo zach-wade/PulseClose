@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/tooltip";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { UnifiedPropertyTable } from "@/components/dashboard/unified-property-table";
+import { VerifyTray } from "@/components/dashboard/verify-tray";
 import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
 import { AddGCCard } from "@/components/dashboard/add-gc-card";
@@ -528,12 +529,23 @@ export default function ValidationDetailPage() {
       {/* Unified Property Track Record (Phase 1) — merges auto-discovered
           (Realie/Regrid/Attom), borrower-claimed (verified_flips), and
           manual rows into one card with provenance badges. Replaces the
-          old paired TrackRecordTable + VerifiedTrackRecord-rows display. */}
+          old paired TrackRecordTable + VerifiedTrackRecord-rows display.
+          Pending-review rows (Flow B hits below auto-promote threshold)
+          render below in <VerifyTray> instead of polluting the headline. */}
       <UnifiedPropertyTable
-        trackRecord={data.track_record}
+        trackRecord={data.track_record.filter(
+          (r) => r.review_status !== "pending_review" && r.review_status !== "rejected",
+        )}
         verifiedFlips={data.verified_flips ?? []}
         validationId={data.id}
         onUpdated={handleSignalApplied}
+      />
+
+      {/* Flow B's "we also found these, are they actually theirs?" tray.
+          Auto-hides when empty. */}
+      <VerifyTray
+        pendingRows={data.track_record.filter((r) => r.review_status === "pending_review")}
+        onReviewed={handleSignalApplied}
       />
 
       {/* Borrower-uploaded artifacts (photos + bank statements) — auto-

@@ -15,6 +15,7 @@ export interface EntityCheck {
 
 export interface TrackRecordEntry {
   id: string;
+  property_id?: string | null;
   property_address: string;
   acquisition_date: string | null;
   disposition_date: string | null;
@@ -27,6 +28,10 @@ export interface TrackRecordEntry {
   raw_response?: Record<string, unknown>;
   source?: string | null;
   lender_notes?: string | null;
+  // Verify-tray architecture (00039).
+  review_status?: "auto_accepted" | "pending_review" | "confirmed" | "rejected";
+  review_confidence?: number | null;
+  review_signals?: Record<string, { value: unknown; note: string }> | null;
 }
 
 export interface LitigationCheck {

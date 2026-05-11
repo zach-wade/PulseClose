@@ -111,21 +111,44 @@ function tokenize(s: string | null | undefined, opts: { stripEntitySuffixes: boo
     .filter((t) => !opts.stripEntitySuffixes || !ENTITY_SUFFIX_TOKENS.has(t));
 }
 
+// Treat single-character / one-letter middle initials and common
+// generational suffixes as noise — "Kim A Truong" === "Kim Truong" but
+// "Kim Phuong Truong" !== "Kim Truong" because Phuong is a real given
+// name. Noah-review 2026-05-08: common Vietnamese surnames in CA mean
+// "subset OK" matches dozens of unrelated owners; we now require either
+// strict equality or the only difference to be initials / suffixes.
+const NAME_NOISE_TOKENS = new Set(["jr", "sr", "ii", "iii", "iv"]);
+
+function isNameNoise(token: string): boolean {
+  if (token.length === 1) return true;            // middle initial
+  if (NAME_NOISE_TOKENS.has(token)) return true;  // Jr / Sr / III etc.
+  return false;
+}
+
 function tokenSetMatch(deedTokens: string[], claimedTokens: string[]): boolean {
   if (deedTokens.length === 0 || claimedTokens.length === 0) return false;
-  const deedSet = new Set(deedTokens);
-  const claimedSet = new Set(claimedTokens);
-  // The shorter set must be entirely contained in the longer set. With 2+
-  // tokens this avoids false positives on common surnames; with 1 token
-  // we require it to be 3+ chars (so "an" or "jr" alone won't match).
-  const [smaller, larger] =
-    deedSet.size <= claimedSet.size ? [deedSet, claimedSet] : [claimedSet, deedSet];
-  if (smaller.size === 1) {
-    const [only] = smaller;
-    if (only.length < 3) return false;
-    return larger.has(only);
+
+  // Drop noise (middle initials, generational suffixes) so they don't
+  // count as "extra tokens" when we require equality below.
+  const deedSet = new Set(deedTokens.filter((t) => !isNameNoise(t)));
+  const claimedSet = new Set(claimedTokens.filter((t) => !isNameNoise(t)));
+
+  if (deedSet.size === 0 || claimedSet.size === 0) return false;
+
+  // Single-token sets need ≥3 chars to match (so "an"/"jr" don't slip
+  // through if both sides only have one token).
+  if (deedSet.size === 1 && claimedSet.size === 1) {
+    const [d] = deedSet;
+    const [c] = claimedSet;
+    return d.length >= 3 && d === c;
   }
-  for (const t of smaller) if (!larger.has(t)) return false;
+
+  // Multi-token: require strict set equality after noise stripping. This
+  // closes the "Kim Phuong Truong" / "Kim Truong" false-positive Noah
+  // flagged. If the deed has additional given names beyond the claim
+  // (or vice versa), it's a different person.
+  if (deedSet.size !== claimedSet.size) return false;
+  for (const t of deedSet) if (!claimedSet.has(t)) return false;
   return true;
 }
 

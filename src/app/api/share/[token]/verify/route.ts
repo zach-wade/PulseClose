@@ -7,6 +7,7 @@ import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
+import { scoreAndPromotePendingRows } from "@/lib/track-record/review";
 import { upsertProperty } from "@/lib/domain/upsert";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
@@ -150,6 +151,13 @@ export async function POST(
   // in case verified data flips any factor (e.g. surfaces a foreclosure).
   after(async () => {
     try {
+      // Score Flow B pending rows against the fresh xlsx cluster.
+      await scoreAndPromotePendingRows(
+        supabase,
+        validation.id,
+        validation.borrower_name,
+        validation.borrower_entity_name,
+      );
       await regenerateAiMemoForValidation(supabase, validation.id);
     } catch (err) {
       console.error(`AI memo regeneration failed for validation ${validation.id}:`, err);

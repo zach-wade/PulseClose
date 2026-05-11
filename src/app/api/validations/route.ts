@@ -24,6 +24,7 @@ import { materializeLitigationCases } from "@/lib/litigation/materialize";
 import { buildGCSummary } from "@/lib/gc/summary";
 import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
+import { scoreAndPromotePendingRows } from "@/lib/track-record/review";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 
 // Allow up to 60s for vendor API calls + AI analysis
@@ -417,6 +418,10 @@ export async function POST(request: Request) {
             owning_borrower_id: primaryBorrowerId,
             lender_id: lenderId,
             active_ownership_id: p.disposition_date ? null : ownershipId,
+            // Flow B (statewide owner-name search) → verify tray by default.
+            // The score-and-promote pass after Flow A (verifyAddresses) runs
+            // will auto-promote rows that score above threshold.
+            review_status: "pending_review",
           })),
         ),
         `track_record_entries insert (validation_id=${validation.id}, count=${enriched.length})`,
@@ -775,6 +780,18 @@ export async function POST(request: Request) {
                 response_status: "success" as const,
               })),
             );
+            // Score the Flow B pending rows now that we have Flow A's
+            // verified_flips to derive the geographic cluster + date claims.
+            // High-confidence rows auto-promote to auto_accepted (headline
+            // table); low-confidence stay in the verify tray with their
+            // score + signal breakdown stored for explanation.
+            await scoreAndPromotePendingRows(
+              supabase,
+              validationId,
+              borrower_name,
+              borrower_entity_name,
+            );
+
             // Regenerate the AI memo so it references the verified-flip
             // stats (realized profit, confirmed sales count, etc.). The
             // initial memo at create-time runs in parallel with this block

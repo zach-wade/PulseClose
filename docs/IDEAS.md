@@ -10,6 +10,30 @@ specific journey/stage assignment.
 
 ---
 
+## APN / tax-assessor verification (canonical ground truth)
+
+Realie returns an APN (Assessor Parcel Number) on every property. The
+county tax assessor's online lookup is the canonical ground truth for
+ownership at any moment — public, free, slow, and per-county. Cross-
+checking the assessor record against the deed owner would close the
+last identity-match leak the verify-tray confidence score can't catch
+on its own: a deed in escrow / chain-of-title gap where Realie's owner
+field is stale.
+
+- **Why:** ground-truth identity match no other vendor can supply.
+- **Scope:** per-county HTML / API adapters, plus an orchestration
+  layer that picks the right adapter by parcel state + county FIPS.
+  CA alone is 58 counties; nationwide is ~3,100.
+- **Unblocks when:** a verify-tray false-promote slips through (i.e.,
+  the confidence score said high but the lender rejected anyway) AND
+  the deed's APN points to a county whose assessor publishes records
+  via a usable interface. Start with Santa Clara + LA + Orange (the
+  three counties with the highest Bridge ICP volume) and grow from
+  there. Until then, the verify-tray confidence score + lender review
+  is the precision layer.
+
+---
+
 ## Drill-down + matcher follow-ups (Noah review, 2026-05-08)
 
 Residual gaps after the post-review fixes (Realie fallback filter,

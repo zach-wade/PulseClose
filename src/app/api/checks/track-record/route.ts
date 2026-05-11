@@ -148,6 +148,8 @@ export async function POST(request: Request) {
             owning_borrower_id: primaryBorrowerId,
             lender_id: lenderId,
             active_ownership_id: p.disposition_date ? null : ownershipId,
+            // Flow B (statewide owner-name search) → verify tray by default.
+            review_status: "pending_review",
           })),
         ),
         `track_record_entries insert (validation_id=${validation.id}, count=${enriched.length})`,
