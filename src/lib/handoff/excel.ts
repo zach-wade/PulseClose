@@ -46,6 +46,23 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
   cover.mergeCells(`A${subtitle.number}:B${subtitle.number}`);
   cover.addRow([]);
 
+  // Preliminary marker mirrors the PDF / on-page banner. Renders only
+  // when the lender hasn't completed Flow B review — keeps the
+  // receiving investor honest about the memo's state.
+  if (doc.pending_review_count > 0) {
+    const banner = cover.addRow([
+      `PRELIMINARY — ${doc.pending_review_count} property match${doc.pending_review_count === 1 ? "" : "es"} pending lender review. Tier/memo may shift on finalization.`,
+    ]);
+    banner.font = { bold: true, color: { argb: "FF92400E" } };
+    banner.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFEF3C7" },
+    };
+    cover.mergeCells(`A${banner.number}:B${banner.number}`);
+    cover.addRow([]);
+  }
+
   const headerRow = cover.addRow(["Borrower Profile"]);
   headerRow.font = { size: 12, bold: true, color: { argb: ACCENT } };
   cover.mergeCells(`A${headerRow.number}:B${headerRow.number}`);

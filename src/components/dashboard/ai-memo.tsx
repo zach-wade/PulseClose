@@ -35,9 +35,13 @@ interface Props {
   // Optional callback so the "Why this rating?" anchor on a v2 risk row can
   // scroll the parent's WhyThisRating panel into view.
   onJumpToFactor?: (factorKey: string) => void;
+  // When > 0, render a "Preliminary — N items pending review" marker on
+  // the memo header. The handoff PDF surface mirrors this so capital
+  // partners can see the memo hasn't been finalized by the lender yet.
+  pendingReviewCount?: number;
 }
 
-export function AIMemo({ rawAnalysis, onJumpToFactor }: Props) {
+export function AIMemo({ rawAnalysis, onJumpToFactor, pendingReviewCount = 0 }: Props) {
   const parsed = parseAiAnalysisAny(rawAnalysis);
   if (parsed.version === null) {
     return (
@@ -49,14 +53,27 @@ export function AIMemo({ rawAnalysis, onJumpToFactor }: Props) {
     );
   }
 
+  const isPreliminary = pendingReviewCount > 0;
+
   return (
-    <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
+    <Card className={`border-info/30 bg-gradient-to-br from-info/5 to-transparent ${isPreliminary ? "ring-1 ring-amber-300/60" : ""}`}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2 text-base flex-wrap">
           <Sparkles className="h-4 w-4 text-info" />
           AI Risk Assessment
           {parsed.version === 2 && (
             <Badge variant="outline" className="text-[10px] uppercase">Story mode</Badge>
+          )}
+          {isPreliminary && (
+            <a
+              href="#verify-tray"
+              className="inline-flex items-center"
+              title="Memo is preliminary until pending property matches are reviewed. Click to scroll to the verify tray."
+            >
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px] uppercase">
+                Preliminary · {pendingReviewCount} pending
+              </Badge>
+            </a>
           )}
           <RiskBadge rating={parsed.data.risk_rating} />
         </CardTitle>

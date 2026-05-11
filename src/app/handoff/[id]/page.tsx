@@ -73,6 +73,15 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
         </div>
       </header>
 
+      {doc.pending_review_count > 0 && (
+        <div className="hf-preliminary-banner">
+          <strong>PRELIMINARY</strong> — Lender review incomplete.{" "}
+          {doc.pending_review_count} property match
+          {doc.pending_review_count === 1 ? "" : "es"} awaiting confirm/reject.
+          Tier and memo may shift as the lender finalizes review.
+        </div>
+      )}
+
       <section className="hf-section">
         <div className="hf-summary-grid">
           <div className={`hf-tier hf-tier-${doc.tier.toLowerCase()}`}>
@@ -419,6 +428,19 @@ const HF_STYLES = `
   .hf-meta { text-align: right; font-size: 9pt; color: #64748b; }
   .hf-meta p { margin: 0.1rem 0; }
   .hf-section { break-inside: avoid; margin-bottom: 0.75rem; }
+  .hf-preliminary-banner {
+    background: #fef3c7;
+    border: 1px solid #fbbf24;
+    color: #78350f;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 10pt;
+    margin-bottom: 0.75rem;
+  }
+  .hf-preliminary-banner strong {
+    color: #92400e;
+    letter-spacing: 0.05em;
+  }
   .hf-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
   .hf-tier { padding: 0.6rem; border-radius: 6px; }
   .hf-tier-low { background: #ecfdf5; border: 1px solid #6ee7b7; }

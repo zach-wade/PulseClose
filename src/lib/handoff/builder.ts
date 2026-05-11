@@ -93,6 +93,12 @@ export interface HandoffDocument {
   properties: HandoffPropertyRow[];
   verified_property_count: number;
 
+  // Number of Flow B (statewide owner-name) property matches still
+  // sitting in the lender's verify tray awaiting confirm/reject. When
+  // > 0, the handoff renderer stamps "Preliminary — lender review
+  // incomplete" so capital partners know the memo isn't final.
+  pending_review_count: number;
+
   // Summary stats
   summary: HandoffSummary;
 
@@ -174,7 +180,7 @@ export async function buildHandoffDocument(
       .select(`
         property_id, property_address, acquisition_date, disposition_date,
         acquisition_price, disposition_price, hold_months, profit, source,
-        raw_response, lender_id,
+        raw_response, lender_id, review_status,
         properties ( city, state, zip ),
         lenders ( display_name, classification )
       `)
@@ -278,7 +284,7 @@ export async function buildHandoffDocument(
     }
   }
 
-  const tracks = ((trackRes.data ?? []) as unknown as Array<{
+  const rawTracks = ((trackRes.data ?? []) as unknown as Array<{
     property_id: string | null;
     property_address: string;
     acquisition_date: string | null;
@@ -290,6 +296,7 @@ export async function buildHandoffDocument(
     source: string;
     raw_response: Record<string, unknown> | null;
     lender_id: string | null;
+    review_status: string | null;
     properties?: { city: string | null; state: string | null; zip: string | null } | { city: string | null; state: string | null; zip: string | null }[] | null;
     lenders?: { display_name: string; classification: string } | { display_name: string; classification: string }[] | null;
   }>).map((t) => ({
@@ -297,6 +304,13 @@ export async function buildHandoffDocument(
     properties: Array.isArray(t.properties) ? t.properties[0] ?? null : t.properties ?? null,
     lenders: Array.isArray(t.lenders) ? t.lenders[0] ?? null : t.lenders ?? null,
   }));
+
+  // Surface the verify-tray state to the renderer so the PDF/Excel can
+  // stamp "Preliminary" when the lender hasn't completed Flow B review.
+  // Rejected rows are dropped entirely from the handoff — the lender
+  // explicitly said those aren't theirs.
+  const pendingReviewCount = rawTracks.filter((t) => t.review_status === "pending_review").length;
+  const tracks = rawTracks.filter((t) => t.review_status !== "pending_review" && t.review_status !== "rejected");
 
   // Verified flips override / add to track-record by address
   const verifiedByAddress = new Map<string, {
@@ -420,6 +434,7 @@ export async function buildHandoffDocument(
     }),
     properties,
     verified_property_count: verifiedByAddress.size,
+    pending_review_count: pendingReviewCount,
     summary: {
       property_count: properties.length,
       current_holdings: heldProps.length,

@@ -374,6 +374,42 @@ export default function ValidationDetailPage() {
         </div>
       )}
 
+      {/* Review-status banner — surfaces when the AI memo is rendering
+          off of data that still has un-reviewed Flow B matches. Soft
+          gate: the memo + tier still render, but the lender (and a
+          handoff PDF reader) sees that some property matches are
+          pending lender confirmation, and a one-click jump to the
+          verify tray. */}
+      {(() => {
+        const pendingCount = data.track_record.filter(
+          (r) => r.review_status === "pending_review",
+        ).length;
+        if (pendingCount === 0) return null;
+        return (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-900">
+                Memo is preliminary — {pendingCount} property match
+                {pendingCount === 1 ? "" : "es"} pending review.
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                We auto-discovered properties registered to a similar name but
+                the corroborating signals aren&apos;t strong enough to auto-add.
+                Confirm or reject in the verify tray below — the memo + tier
+                will regenerate from your final set.
+              </p>
+            </div>
+            <a
+              href="#verify-tray"
+              className="shrink-0 text-xs font-medium text-amber-900 hover:text-amber-700 underline"
+            >
+              Review now →
+            </a>
+          </div>
+        );
+      })()}
+
       {/* Data source banner — only show if stub data was actually used in any check */}
       {(() => {
         const allRaw = [
@@ -487,6 +523,7 @@ export default function ValidationDetailPage() {
       {data.ai_analysis ? (
         <AIMemo
           rawAnalysis={data.ai_analysis}
+          pendingReviewCount={data.track_record.filter((r) => r.review_status === "pending_review").length}
           onJumpToFactor={(key) => {
             // Anchor-scroll to the WhyThisRating panel — the "Why this rating?"
             // link from a Story Mode risk row jumps the credit analyst to the
