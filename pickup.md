@@ -104,12 +104,24 @@ $X, binding = DSCR, sponsor verified, stance = pursue-with-conditions." **This i
 what makes underwriting demo-able to a capital provider.** Bundle the validation-
 detail tabs (UX-PLAN §3.2) here since both touch the same page.
 
-### 3. D6 item 1 — generic write-back API + webhooks (~3–4 days)
+### 3. ✅ DONE — D6 item 1: generic write-back API + webhooks
 
-[ROADMAP §D6](docs/ROADMAP.md). A `POST` create-validation endpoint + per-org API
-tokens + real `notification_preferences` webhook payloads (validation.completed,
-tier.changed, outcome.reported). *Accept:* an external system can push a deal in
-and subscribe to events out. The answer to "wire it into our LOS."
+Shipped 2026-06-23 (commits `a0dde25` foundation, `8d6cba3` endpoint+triggers).
+- **Dedicated webhook subsystem** (migration 00043): `webhook_endpoints`
+  (per-org subscriptions, HMAC secret) + `webhook_deliveries` (audit + retry
+  queue). Signed delivery (HMAC-SHA256, SSRF re-check, 4xx=dead / 5xx=retry w/
+  exponential backoff to 6 attempts). `/api/webhooks` management CRUD + hourly
+  `/api/cron/webhook-retry`.
+- **`POST /api/public/v1/validations`** — API-key-authed, async (202 + id;
+  completion via `validation.completed` webhook). Reuses existing D5 `api_keys`.
+- **Shared `runValidationPipeline()`** extracted from the 824-line creation
+  route; both the dashboard and public routes call it.
+- **Triggers:** `validation.completed` (pipeline end), `tier.changed`
+  (recompute chokepoint, guarded on real transition), `outcome.reported`
+  (outcomes route).
+
+**Not yet built:** a Settings → Webhooks UI (endpoints are managed via the
+`/api/webhooks` API only). Add when a customer needs self-serve config.
 
 ### 4. Capital-provider "mandate" object (~3–5 days)
 
