@@ -151,6 +151,10 @@ export const handoffDataV1 = z.object({
   // the Excel + PDF render an "Intended investor" block with terms +
   // rationale pulled from deal_eligibility_results.
   chosen_investor_id: z.string().uuid().nullable().optional(),
+  // Item 2 — optional pointer to a uw_model. When set, the Excel + PDF
+  // render a "Loan sizing & AI judgment" block (constraint ladder, binding
+  // constraint, stance, deal-killers, framework, memo).
+  chosen_uw_model_id: z.string().uuid().nullable().optional(),
 });
 export type HandoffDataV1 = z.infer<typeof handoffDataV1>;
 export const parseHandoffDataV1 = safe(handoffDataV1);

@@ -21,6 +21,26 @@ function fmtMoney(n: number | null | undefined): string | number {
   if (n == null) return "—";
   return Math.round(n);
 }
+function pctOf(n: number | null | undefined, d = 1): string {
+  return n == null || Number.isNaN(n) ? "—" : `${(n * 100).toFixed(d)}%`;
+}
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+}
+
+const STANCE_LABEL: Record<"pursue" | "pursue-with-conditions" | "pass", string> = {
+  pursue: "Pursue",
+  "pursue-with-conditions": "Pursue with conditions",
+  pass: "Pass",
+};
+const STANCE_COLOR: Record<"pursue" | "pursue-with-conditions" | "pass", string> = {
+  pursue: "FF15803D",                 // green 700
+  "pursue-with-conditions": "FFB45309", // amber 700
+  pass: "FFB91C1C",                   // red 700
+};
+const DANGER = "FFB91C1C";
+const CONCERN = "FFB45309";
+const STRENGTH = "FF15803D";
 
 export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -151,6 +171,131 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
     }
   }
   cover.addRow([]);
+
+  // Item 2 — Loan sizing + AI judgment. Renders before the intended-investor
+  // block when a uw_model was chosen on the handoff card. The deterministic
+  // engine sizes the loan; the AI judges structure (never the amount).
+  if (doc.loan_sizing) {
+    const s = doc.loan_sizing.sizing;
+    const j = doc.loan_sizing.judgment;
+    cover.addRow([]);
+    const szHeader = cover.addRow(["Loan Sizing & AI Judgment"]);
+    szHeader.font = { size: 12, bold: true, color: { argb: ACCENT } };
+    cover.mergeCells(`A${szHeader.number}:B${szHeader.number}`);
+
+    const bindingLabel = s.constraints.find((c) => c.binding)?.label ?? s.bindingConstraint;
+    const headlineRows: Array<[string, string]> = [
+      ["Max supportable loan", `$${fmtMoney(s.maxLoan).toLocaleString()}`],
+      ["Binding constraint", bindingLabel],
+      ["Equity required", `$${fmtMoney(s.equityRequired).toLocaleString()}`],
+      ["As-is value", `$${fmtMoney(s.asIsValue).toLocaleString()}`],
+      ["Stabilized / ARV", s.stabilizedValue != null ? `$${fmtMoney(s.stabilizedValue).toLocaleString()}` : "—"],
+      ["LTV (as-is)", pctOf(s.ltv)],
+      ["LTC", pctOf(s.ltc)],
+      ["DSCR (in-place)", `${s.dscrCurrent.toFixed(2)}x`],
+      ["Debt yield", pctOf(s.debtYieldCurrent)],
+    ];
+    for (const [label, value] of headlineRows) {
+      const r = cover.addRow([label, value]);
+      r.getCell(1).font = { bold: true };
+    }
+
+    // Constraint ladder — lowest permitted loan binds the deal.
+    cover.addRow([]);
+    const ladderHeader = cover.addRow(["Constraint ladder", "Max loan / basis"]);
+    ladderHeader.font = { bold: true, color: { argb: MUTED } };
+    for (const c of s.constraints) {
+      const r = cover.addRow([
+        `${c.binding ? "▶ " : "    "}${c.label}`,
+        `$${fmtMoney(c.maxLoan).toLocaleString()} — ${c.basis}`,
+      ]);
+      if (c.binding) r.getCell(1).font = { bold: true };
+      r.getCell(2).alignment = { wrapText: true, vertical: "top" };
+    }
+
+    // AI judgment (full) — only when present; degrades to a one-liner.
+    cover.addRow([]);
+    if (j) {
+      const stanceRow = cover.addRow(["AI stance", STANCE_LABEL[j.recommendation.stance]]);
+      stanceRow.getCell(1).font = { bold: true };
+      stanceRow.getCell(2).font = { bold: true, color: { argb: STANCE_COLOR[j.recommendation.stance] } };
+
+      const hl = cover.addRow([j.headline, ""]);
+      hl.getCell(1).font = { bold: true };
+      hl.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      cover.mergeCells(`A${hl.number}:B${hl.number}`);
+
+      if (j.recommendation.rationale) {
+        const rat = cover.addRow([j.recommendation.rationale, ""]);
+        rat.getCell(1).alignment = { wrapText: true, vertical: "top" };
+        cover.mergeCells(`A${rat.number}:B${rat.number}`);
+        rat.height = 30;
+      }
+
+      if (j.dealKillers.length > 0) {
+        const dkHeader = cover.addRow(["Deal-killers"]);
+        dkHeader.getCell(1).font = { bold: true, color: { argb: DANGER } };
+        cover.mergeCells(`A${dkHeader.number}:B${dkHeader.number}`);
+        for (const dk of j.dealKillers) {
+          const r = cover.addRow([`  • ${dk}`, ""]);
+          r.getCell(1).font = { color: { argb: DANGER } };
+          r.getCell(1).alignment = { wrapText: true, vertical: "top" };
+          cover.mergeCells(`A${r.number}:B${r.number}`);
+        }
+      }
+
+      // 5-dimension framework (sponsor / economics / market / structure / exit).
+      cover.addRow([]);
+      const fwHeader = cover.addRow(["Framework", "Read"]);
+      fwHeader.font = { bold: true, color: { argb: MUTED } };
+      for (const d of j.framework) {
+        const flagsSuffix = d.flags.length > 0 ? `  Flags: ${d.flags.join("; ")}` : "";
+        const r = cover.addRow([`${capitalize(d.dimension)} (${d.severity})`, `${d.read}${flagsSuffix}`]);
+        const color =
+          d.severity === "dealkiller" ? DANGER :
+          d.severity === "concern" ? CONCERN :
+          d.severity === "strength" ? STRENGTH : undefined;
+        r.getCell(1).font = color ? { bold: true, color: { argb: color } } : { bold: true };
+        r.getCell(2).alignment = { wrapText: true, vertical: "top" };
+      }
+
+      if (j.fiveConcept) {
+        const fcHeader = cover.addRow(["5-concept lens"]);
+        fcHeader.getCell(1).font = { bold: true };
+        cover.mergeCells(`A${fcHeader.number}:B${fcHeader.number}`);
+        const fc = cover.addRow([j.fiveConcept, ""]);
+        fc.getCell(1).alignment = { wrapText: true, vertical: "top" };
+        cover.mergeCells(`A${fc.number}:B${fc.number}`);
+        fc.height = 40;
+      }
+
+      if (j.memo) {
+        const memoHeader = cover.addRow(["Partner memo"]);
+        memoHeader.getCell(1).font = { bold: true };
+        cover.mergeCells(`A${memoHeader.number}:B${memoHeader.number}`);
+        const memo = cover.addRow([j.memo, ""]);
+        memo.getCell(1).alignment = { wrapText: true, vertical: "top" };
+        cover.mergeCells(`A${memo.number}:B${memo.number}`);
+        memo.height = 60;
+      }
+
+      const modelNote = cover.addRow([
+        `Judgment generated by ${j.model}. Reviewed by a human underwriter. The deterministic engine sets the loan amount; the AI judges structure only.`,
+        "",
+      ]);
+      modelNote.getCell(1).font = { italic: true, size: 9, color: { argb: MUTED } };
+      modelNote.getCell(1).alignment = { wrapText: true };
+      cover.mergeCells(`A${modelNote.number}:B${modelNote.number}`);
+      modelNote.height = 28;
+    } else {
+      const noJ = cover.addRow([
+        "AI judgment",
+        "Not run for this sizing. Sizing is deterministic; the AI judgment is an optional, explicit step.",
+      ]);
+      noJ.getCell(1).font = { bold: true };
+      noJ.getCell(2).alignment = { wrapText: true };
+    }
+  }
 
   // G6.1 — Intended investor block. Only renders when one was chosen.
   if (doc.intended_investor) {

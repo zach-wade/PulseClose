@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveTier } from "@/lib/risk/factors";
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
 import { normalizeAddress } from "@/lib/domain/upsert";
+import type { UwSizingResultV1, UwJudgmentV1 } from "@/lib/schemas/jsonb";
 
 export interface HandoffPropertyRow {
   property_id: string | null;
@@ -120,6 +121,18 @@ export interface HandoffDocument {
     computed_at: string | null;
   } | null;
 
+  // Item 2 — when a uw_model is chosen on handoff_data, builder embeds its
+  // deterministic loan sizing (constraint ladder + binding constraint) and,
+  // when present, the full AI underwriting judgment. The engine sizes; the
+  // AI narrates — same discipline as the rest of the product.
+  loan_sizing: {
+    uw_model_id: string;
+    created_at: string;
+    template: string;
+    sizing: UwSizingResultV1;
+    judgment: UwJudgmentV1 | null;
+  } | null;
+
   // Lender edit + override audit trail. Aggregated counts at the top
   // for the headline; full event list for the methodology PDF.
   lender_edits: {
@@ -216,6 +229,7 @@ export async function buildHandoffDocument(
     preparer_email?: string;
     properties?: Record<string, { rehab_spend?: number; gc_name?: string; gc_license?: string; narrative?: string }>;
     chosen_investor_id?: string | null;
+    chosen_uw_model_id?: string | null;
   };
 
   // G6.1 — pull the chosen investor's most-recent eligibility result for
@@ -280,6 +294,29 @@ export async function buildHandoffDocument(
         max_loan_amount,
         rationale,
         computed_at: computedAt,
+      };
+    }
+  }
+
+  // Item 2 — pull the chosen underwriting model's sizing + judgment. Only
+  // runs when the lender explicitly picked one, keeping the unchosen path
+  // zero-cost. Org-scoped fetch; degrades gracefully (block omitted) if the
+  // model is missing, cross-org, or has no sizing.
+  let loanSizing: HandoffDocument["loan_sizing"] = null;
+  if (handoffData.chosen_uw_model_id) {
+    const { data: model } = await supabase
+      .from("uw_models")
+      .select("id, template, sizing, judgment, created_at")
+      .eq("id", handoffData.chosen_uw_model_id)
+      .eq("org_id", orgId)
+      .maybeSingle();
+    if (model?.sizing) {
+      loanSizing = {
+        uw_model_id: model.id,
+        created_at: model.created_at,
+        template: model.template,
+        sizing: model.sizing as UwSizingResultV1,
+        judgment: (model.judgment ?? null) as UwJudgmentV1 | null,
       };
     }
   }
@@ -448,6 +485,7 @@ export async function buildHandoffDocument(
     },
     overall_narrative: handoffData.overall_narrative ?? null,
     intended_investor: intendedInvestor,
+    loan_sizing: loanSizing,
     lender_edits: await buildLenderEditTrail(supabase, validationId),
   };
 }

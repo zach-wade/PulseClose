@@ -27,11 +27,52 @@ import {
 import { emitActivity } from "@/lib/events/emit";
 import { insertOrThrow } from "@/lib/supabase/insert-or-throw";
 
-export async function GET() {
+export async function GET(request: Request) {
   const profile = await getUserProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = createAdminClient();
+  const validationId = new URL(request.url).searchParams.get("validation_id");
+
+  // Validation-scoped listing for the handoff model picker. Matches models
+  // linked directly to the validation OR via one of its deal evaluations
+  // (covers models sized from the evaluate page before the validation_id
+  // backfill landed). Returns lightweight summaries for the dropdown.
+  if (validationId) {
+    const { data: evals } = await supabase
+      .from("deal_evaluations")
+      .select("id")
+      .eq("org_id", profile.org_id)
+      .eq("validation_id", validationId);
+    const evalIds = (evals ?? []).map((e) => e.id);
+
+    const orParts = [`validation_id.eq.${validationId}`];
+    if (evalIds.length > 0) orParts.push(`deal_evaluation_id.in.(${evalIds.join(",")})`);
+
+    const { data, error } = await supabase
+      .from("uw_models")
+      .select("id, template, sizing, judgment, created_at")
+      .eq("org_id", profile.org_id)
+      .or(orParts.join(","))
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const summaries = (data ?? []).map((m) => {
+      const sizing = m.sizing as { maxLoan?: number; bindingConstraint?: string } | null;
+      const judgment = m.judgment as { recommendation?: { stance?: string } } | null;
+      return {
+        id: m.id,
+        template: m.template,
+        created_at: m.created_at,
+        max_loan: sizing?.maxLoan ?? null,
+        binding_constraint: sizing?.bindingConstraint ?? null,
+        stance: judgment?.recommendation?.stance ?? null,
+      };
+    });
+    return NextResponse.json(summaries);
+  }
+
   const { data, error } = await supabase
     .from("uw_models")
     .select("id, template, inputs, sizing, judgment_version, created_at")
@@ -153,6 +194,22 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
 
+  // Resolve validation linkage. When the model is sized from a deal
+  // evaluation (the usual evaluate-page path) but no validation_id was
+  // passed, inherit it from the evaluation so the handoff builder can find
+  // this model by validation. Keeps uw_models.validation_id populated going
+  // forward — the clean forward-fix for the handoff artifact.
+  let validationId = body.validation_id ?? null;
+  if (!validationId && body.deal_evaluation_id) {
+    const { data: evalRow } = await supabase
+      .from("deal_evaluations")
+      .select("validation_id")
+      .eq("id", body.deal_evaluation_id)
+      .eq("org_id", profile.org_id)
+      .maybeSingle();
+    validationId = (evalRow?.validation_id as string | null) ?? null;
+  }
+
   // Per-investor best-execution overlay (only when we can build a deal for the
   // eligibility engine — needs the structural deal fields).
   let per_investor: ReturnType<typeof sizeAllInvestors> = [];
@@ -214,7 +271,7 @@ export async function POST(request: Request) {
     .insert({
       org_id: profile.org_id,
       deal_evaluation_id: body.deal_evaluation_id ?? null,
-      validation_id: body.validation_id ?? null,
+      validation_id: validationId,
       template: "bridge_value_add",
       inputs: parseUwSizingInputsV1Strict({ ...sizingInputs, schema_version: 1 }),
       sizing: parseUwSizingResultV1Strict({ ...sizing, schema_version: 1 }),

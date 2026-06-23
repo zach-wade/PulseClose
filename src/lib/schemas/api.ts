@@ -115,6 +115,10 @@ export const handoffUpdateBodyV1 = z.object({
   // G6.1 — when set, builder includes the investor's name + most-recent
   // computed_terms in the handoff. Pass null to clear.
   chosen_investor_id: z.string().uuid().nullable().optional(),
+  // Item 2 — when set, builder embeds that uw_model's loan sizing
+  // (constraint ladder + binding constraint) + full AI judgment. Pass null
+  // to clear. The lender picks which sizing scenario goes in the handoff.
+  chosen_uw_model_id: z.string().uuid().nullable().optional(),
 });
 export type HandoffUpdateBodyV1 = z.infer<typeof handoffUpdateBodyV1>;
 

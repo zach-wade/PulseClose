@@ -14,11 +14,38 @@ interface HandoffData {
   preparer_email?: string | null;
   properties?: Record<string, { rehab_spend?: number | null; gc_name?: string | null; gc_license?: string | null; narrative?: string | null }>;
   chosen_investor_id?: string | null;
+  chosen_uw_model_id?: string | null;
 }
 
 interface InvestorOption {
   id: string;
   display_name: string;
+}
+
+interface UwModelOption {
+  id: string;
+  created_at: string;
+  max_loan: number | null;
+  binding_constraint: string | null;
+  stance: string | null;
+}
+
+const STANCE_TEXT: Record<string, string> = {
+  pursue: "Pursue",
+  "pursue-with-conditions": "Pursue w/ conditions",
+  pass: "Pass",
+};
+
+function uwModelLabel(m: UwModelOption): string {
+  const loan =
+    m.max_loan != null
+      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(m.max_loan)
+      : "unsized";
+  const parts = [loan];
+  if (m.binding_constraint) parts.push(`binding ${m.binding_constraint}`);
+  parts.push(m.stance ? (STANCE_TEXT[m.stance] ?? m.stance) : "no judgment");
+  parts.push(new Date(m.created_at).toLocaleDateString());
+  return parts.join(" · ");
 }
 
 interface Props {
@@ -33,7 +60,11 @@ export function HandoffCard({ validationId, initial }: Props) {
   const [chosenInvestorId, setChosenInvestorId] = useState(
     initial?.chosen_investor_id ?? "",
   );
+  const [chosenUwModelId, setChosenUwModelId] = useState(
+    initial?.chosen_uw_model_id ?? "",
+  );
   const [investors, setInvestors] = useState<InvestorOption[]>([]);
+  const [uwModels, setUwModels] = useState<UwModelOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +78,16 @@ export function HandoffCard({ validationId, initial }: Props) {
       )
       .catch(() => setInvestors([]));
   }, []);
+
+  // Underwriting models sized for this validation (directly or via one of
+  // its evaluations) — the lender picks which sizing scenario goes in the
+  // handoff (Item 2).
+  useEffect(() => {
+    fetch(`/api/underwrite?validation_id=${validationId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((j: UwModelOption[]) => setUwModels(j))
+      .catch(() => setUwModels([]));
+  }, [validationId]);
 
   // Client-side hint when the email field doesn't look like an email — not
   // a hard block (the server schema is loose), just a heads-up so the user
@@ -63,7 +104,8 @@ export function HandoffCard({ validationId, initial }: Props) {
     narrative.trim() !== (initial?.overall_narrative ?? "").trim() ||
     preparerName.trim() !== (initial?.preparer_name ?? "").trim() ||
     preparerEmail.trim() !== (initial?.preparer_email ?? "").trim() ||
-    (chosenInvestorId || null) !== (initial?.chosen_investor_id ?? null);
+    (chosenInvestorId || null) !== (initial?.chosen_investor_id ?? null) ||
+    (chosenUwModelId || null) !== (initial?.chosen_uw_model_id ?? null);
 
   async function save(): Promise<boolean> {
     setSaving(true);
@@ -76,6 +118,7 @@ export function HandoffCard({ validationId, initial }: Props) {
         preparer_name: preparerName.trim() || null,
         preparer_email: preparerEmail.trim() || null,
         chosen_investor_id: chosenInvestorId || null,
+        chosen_uw_model_id: chosenUwModelId || null,
       };
       const res = await fetch(`/api/handoff/${validationId}`, {
         method: "PUT",
@@ -105,6 +148,7 @@ export function HandoffCard({ validationId, initial }: Props) {
         initial.preparer_name = body.preparer_name;
         initial.preparer_email = body.preparer_email;
         initial.chosen_investor_id = body.chosen_investor_id;
+        initial.chosen_uw_model_id = body.chosen_uw_model_id;
       }
       return true;
     } catch (err) {
@@ -220,6 +264,41 @@ export function HandoffCard({ validationId, initial }: Props) {
               /dashboard/evaluate
             </a>{" "}
             first to populate the terms.
+          </p>
+        </div>
+        {/* Item 2 — chosen underwriting model. When set, the Excel + PDF
+            embed the deterministic loan sizing (constraint ladder + binding
+            constraint) and the full AI judgment for that scenario. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="chosen_uw_model">Loan sizing &amp; AI judgment (optional)</Label>
+          <select
+            id="chosen_uw_model"
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+            value={chosenUwModelId || ""}
+            onChange={(e) => setChosenUwModelId(e.target.value)}
+            disabled={uwModels.length === 0}
+          >
+            <option value="">— None —</option>
+            {uwModels.map((m) => (
+              <option key={m.id} value={m.id}>
+                {uwModelLabel(m)}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {uwModels.length === 0 ? (
+              <>
+                No underwriting models sized for this borrower yet. Size a loan in the
+                Underwriting Workbench on{" "}
+                <a href="/dashboard/evaluate" className="underline">/dashboard/evaluate</a>{" "}
+                (run an AI judgment too for the full block), then return here.
+              </>
+            ) : (
+              <>
+                When set, the handoff embeds the constraint ladder, binding constraint, and the
+                full AI underwriting judgment (stance, deal-killers, 5-dimension read, memo).
+              </>
+            )}
           </p>
         </div>
         <div className="space-y-1.5">

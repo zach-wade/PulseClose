@@ -36,6 +36,25 @@ function severityColor(severity: string, excluded: boolean): string {
   return "#475569";
 }
 
+function stanceLabel(stance: string): string {
+  if (stance === "pursue") return "Pursue";
+  if (stance === "pursue-with-conditions") return "Pursue with conditions";
+  return "Pass";
+}
+function stanceColor(stance: string): string {
+  if (stance === "pursue") return "#15803d";
+  if (stance === "pursue-with-conditions") return "#b45309";
+  return "#b91c1c";
+}
+// AI-judgment dimension severity → color (distinct vocabulary from the
+// risk-factor severities: strength/neutral/concern/dealkiller).
+function dimColor(severity: string): string {
+  if (severity === "dealkiller") return "#b91c1c";
+  if (severity === "concern") return "#b45309";
+  if (severity === "strength") return "#15803d";
+  return "#475569";
+}
+
 function HandoffBody({ doc }: { doc: HandoffDocument }) {
   return (
     <>
@@ -235,6 +254,99 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
           </tbody>
         </table>
       </section>
+
+      {/* Item 2 — Loan sizing + AI judgment. Renders before the intended
+          investor block when a uw_model was chosen on the handoff card.
+          Deterministic engine sizes; AI judges structure only. */}
+      {doc.loan_sizing && (() => {
+        const s = doc.loan_sizing.sizing;
+        const j = doc.loan_sizing.judgment;
+        const binding = s.constraints.find((c) => c.binding);
+        const subhead: React.CSSProperties = { fontSize: "0.95rem", margin: "12px 0 4px", color: "#0f172a" };
+        return (
+          <section className="hf-section">
+            <h2>Loan sizing & AI judgment</h2>
+            <p className="hf-muted">
+              Deterministic loan sizing — max loan is the minimum across LTV / LTC / LTARV / DSCR / debt-yield.
+              The engine sets the amount; the AI judges structure only.
+            </p>
+            <table className="hf-kv">
+              <tbody>
+                <tr><th>Max supportable loan</th><td><strong>{fmtMoney(s.maxLoan)}</strong></td></tr>
+                <tr>
+                  <th>Binding constraint</th>
+                  <td>{binding?.label ?? s.bindingConstraint}{binding ? ` — ${binding.basis}` : ""}</td>
+                </tr>
+                <tr><th>Equity required</th><td>{fmtMoney(s.equityRequired)}</td></tr>
+                <tr>
+                  <th>As-is value / Stabilized</th>
+                  <td>{fmtMoney(s.asIsValue)} / {s.stabilizedValue != null ? fmtMoney(s.stabilizedValue) : "—"}</td>
+                </tr>
+                <tr><th>LTV (as-is) / LTC</th><td>{fmtPct(s.ltv)} / {fmtPct(s.ltc)}</td></tr>
+                <tr><th>DSCR (in-place) / Debt yield</th><td>{s.dscrCurrent.toFixed(2)}x / {fmtPct(s.debtYieldCurrent)}</td></tr>
+              </tbody>
+            </table>
+
+            <h3 style={subhead}>Constraint ladder</h3>
+            <table className="hf-properties">
+              <thead><tr><th>Constraint</th><th>Max loan</th><th>Basis</th></tr></thead>
+              <tbody>
+                {s.constraints.map((c, i) => (
+                  <tr key={i} style={c.binding ? { fontWeight: 700 } : undefined}>
+                    <td>{c.binding ? "▶ " : ""}{c.label}</td>
+                    <td>{fmtMoney(c.maxLoan)}</td>
+                    <td>{c.basis}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {j ? (
+              <div>
+                <p style={{ marginTop: "12px" }}>
+                  <strong>AI stance:</strong>{" "}
+                  <span style={{ color: stanceColor(j.recommendation.stance), fontWeight: 700 }}>
+                    {stanceLabel(j.recommendation.stance)}
+                  </span>
+                </p>
+                <p className="hf-narrative"><strong>{j.headline}</strong></p>
+                {j.recommendation.rationale && <p className="hf-narrative">{j.recommendation.rationale}</p>}
+
+                {j.dealKillers.length > 0 && (
+                  <>
+                    <h3 style={{ ...subhead, color: "#b91c1c" }}>Deal-killers</h3>
+                    <ul className="hf-list">
+                      {j.dealKillers.map((dk, i) => <li key={i} style={{ color: "#b91c1c" }}>{dk}</li>)}
+                    </ul>
+                  </>
+                )}
+
+                <h3 style={subhead}>Framework</h3>
+                <ul className="hf-factors">
+                  {j.framework.map((d, i) => (
+                    <li key={i} style={{ color: dimColor(d.severity) }}>
+                      <strong style={{ textTransform: "capitalize" }}>{d.dimension}</strong>{" "}
+                      <span className="hf-sev">({d.severity})</span>: {d.read}
+                      {d.flags.length > 0 && <div className="hf-sub">Flags: {d.flags.join("; ")}</div>}
+                    </li>
+                  ))}
+                </ul>
+
+                {j.fiveConcept && (<><h3 style={subhead}>5-concept lens</h3><p className="hf-narrative">{j.fiveConcept}</p></>)}
+                {j.memo && (<><h3 style={subhead}>Partner memo</h3><p className="hf-narrative">{j.memo}</p></>)}
+                <p className="hf-muted" style={{ fontSize: "0.75rem", fontStyle: "italic", marginTop: "8px" }}>
+                  Judgment generated by {j.model}. Reviewed by a human underwriter. The deterministic engine sets the
+                  loan amount; the AI judges structure only.
+                </p>
+              </div>
+            ) : (
+              <p className="hf-muted">
+                AI judgment not run for this sizing. Sizing is deterministic; the judgment is an optional, explicit step.
+              </p>
+            )}
+          </section>
+        );
+      })()}
 
       {/* G6.1 — Intended investor block when one was chosen on the
           handoff card. Renders before the narrative so the audience
