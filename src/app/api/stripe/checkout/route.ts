@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { stripe, PLANS, type PlanName } from "@/lib/stripe/server";
+import { captureServer } from "@/lib/analytics/server";
 
 export async function POST(request: Request) {
   const profile = await getUserProfile();
@@ -61,6 +62,8 @@ export async function POST(request: Request) {
     interval === "annual" ? planConfig.annualPriceId : planConfig.monthlyPriceId;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.pulseclose.com";
+
+  void captureServer(profile.id, "checkout_started", { plan, interval, org_id: org.id });
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,

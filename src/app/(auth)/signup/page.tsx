@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { track } from "@/lib/analytics/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +46,15 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
+
+    // Fire-and-forget: welcome email (server) + signup funnel event. Never
+    // block the success state on these.
+    void fetch("/api/onboarding/welcome", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: fullName }),
+    }).catch(() => {});
+    track("signup_completed", { has_org: !!orgName });
 
     setSuccess(true);
     setLoading(false);

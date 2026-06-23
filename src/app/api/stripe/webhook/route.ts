@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe, getPlanFromPriceId } from "@/lib/stripe/server";
+import { captureServer } from "@/lib/analytics/server";
 
 // In-memory idempotency store for processed webhook events.
 // Prevents double-processing if Stripe retries delivery.
@@ -67,6 +68,8 @@ export async function POST(request: Request) {
             checks_used_this_period: 0,
           })
           .eq("id", orgId);
+
+        void captureServer(orgId, "subscription_activated", { plan, price_id: priceId });
       }
       break;
     }

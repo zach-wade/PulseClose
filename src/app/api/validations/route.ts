@@ -8,6 +8,7 @@ import {
   getSanctionsDataSource,
 } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
+import { captureServer } from "@/lib/analytics/server";
 import {
   getCheckLimit,
   getEffectiveCheckLimit,
@@ -129,6 +130,13 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error, code: "PLAN_LIMIT_REACHED" }, { status: 403 });
   }
+
+  // Activation event — a validation is being run (the core "aha" action).
+  void captureServer(profile.id, "validation_run", {
+    org_id: profile.org_id,
+    plan,
+    on_trial: onTrial,
+  });
 
   if (!borrower_name || !borrower_entity_name || !entity_state) {
     return NextResponse.json(

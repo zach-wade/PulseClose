@@ -326,6 +326,58 @@ Investor logins are post-launch. Schema lands pre-NPLA so data accumulates. Incl
 - **A5 — Originator scorecard** (~2 days).
 - **F3 — Investor-side deal queue.** Login + deal queue + accept/decline/comment. New role `investor_user`. ~3 days.
 
+## Cross-cutting — Interoperability & lender-stack integration (D6)
+
+**The thesis dependency nobody can skip.** The North Star calls PulseClose "a
+verification gateway between front-end CRM and the LOS." For *us* that's a
+metaphor; for a customer it's a literal integration requirement. A lender does
+not abandon their system of record — they bolt PulseClose onto it. If data can't
+flow **in** (deal + borrower from wherever they already keep it) and **out** (the
+cleared, tier'd, deed-verified record back into their LOS/CRM), PulseClose is a
+parallel silo a human re-keys into — which is exactly the manual workflow we sell
+against. Adoption past the first hand-held design partner is gated on this.
+
+**Grounded in the real stacks** (from the Insignia engagements — representative
+of the ICP). A mid-market lender runs roughly:
+- **LOS / system of record:** Nexys (ICC) or Encompass (IM). This is where the
+  funded loan lives; it has its own API surface, DocGen, and field/milestone model.
+- **CRM / intake:** Salesforce (both orgs) — where the deal enters and gets qualified.
+- **POS / borrower portal:** Simple Nexus (IM).
+- **Doc store:** Box (both).
+- Plus email as the universal connective tissue.
+The verification gateway sits **between Salesforce (intake) and Nexys/Encompass
+(LOS)** — read a qualifying deal, validate, write the cleared record forward.
+
+**This is a large, customer-gated body of work — not a pre-NPLA item.** Sequence
+cheap-and-generic before expensive-and-bespoke:
+
+1. **Generic read/write API first (extends [D5](#cross-cutting--workspace)).**
+   Per-org API tokens; `GET` validations/handoff (D5) **plus** a `POST` create-
+   validation endpoint so an external system can push a deal in. Outbound
+   `webhook` channel already exists in `notification_preferences` (X2) — wire
+   real event payloads (validation.completed, tier.changed, outcome.reported) so
+   a lender's stack can subscribe. ~3–4 days. Unblocks any technical customer to
+   self-integrate without us building a connector.
+2. **CSV / spreadsheet import-export** (deal lists in, validated records out).
+   The lowest-friction "fits my stack" answer for non-technical lenders. ~2 days.
+3. **Salesforce app/connector** — read a deal from an SF intake object, write the
+   PulseClose tier + risk flags + cleared-record link back to SF fields. The
+   highest-leverage single connector because SF is the shared intake layer across
+   the ICP. Build against the first customer who needs it. ~1–2 weeks.
+4. **Per-LOS connectors (Nexys, then Encompass).** Push the validated record +
+   conditions into the LOS; optionally pull deal context out. Each LOS API is its
+   own project (auth, field mapping, DocGen). ~2–4 weeks **each**, one paying
+   customer at a time — never speculative.
+5. **iPaaS escape hatch (Zapier / Make).** Once the generic API + webhooks exist
+   (item 1), publish a connector so the long tail of lender tools integrate
+   without bespoke work. ~1 week after item 1.
+
+**Unblocks when:** the first customer past the design-partner stage names the
+system PulseClose must talk to. Until then, ship items 1–2 (generic, reusable)
+and let real demand pick which connector in 3–4 gets built first. Pairs with the
+distribution thesis: a capital provider mandating PulseClose to its lenders makes
+"wire it into our LOS" the first question — have the generic API ready to answer it.
+
 ## Cross-cutting — Foundations
 
 **Building blocks that everything else composes on:**
