@@ -18,6 +18,9 @@ import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseDealOutcomeDataV1, type DealOutcomeDataV1 } from "@/lib/schemas/jsonb";
 import { emitActivity } from "@/lib/events/emit";
+import { dispatchWebhookEvent } from "@/lib/webhooks/deliver";
+
+const APP_BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.pulseclose.com";
 
 type OutcomeStatus = "withdrawn" | "funded" | "extended" | "repaid" | "defaulted";
 
@@ -146,6 +149,17 @@ export async function POST(request: Request) {
       ...(parsed.data?.close_date ? { close_date: parsed.data.close_date } : {}),
       ...(parsed.data?.funded_amount ? { funded_amount: parsed.data.funded_amount } : {}),
     },
+  });
+
+  // outcome.reported webhook — the loop-closing signal for downstream systems
+  // (LOS / fund reporting). Awaited so the delivery row is durably created.
+  await dispatchWebhookEvent(supabase, profile.org_id, "outcome.reported", {
+    validation_id,
+    borrower_name: validation.borrower_name,
+    status,
+    outcome_data: parsed.data ?? null,
+    detail_url: `${APP_BASE}/dashboard/validations/${validation_id}`,
+    reported_at: new Date().toISOString(),
   });
 
   return NextResponse.json({ outcome: row });

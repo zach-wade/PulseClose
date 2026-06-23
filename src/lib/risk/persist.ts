@@ -17,6 +17,9 @@ import {
   type Tier,
 } from "./factors";
 import { applyFactorOverrides, loadFactorOverrides } from "@/lib/admin/data-edits";
+import { dispatchWebhookEvent } from "@/lib/webhooks/deliver";
+
+const APP_BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.pulseclose.com";
 
 export interface RecomputeResult {
   factors: RiskFactor[];
@@ -33,6 +36,20 @@ export async function recomputeRiskFactorsForValidation(
     .eq("id", validationId)
     .single();
   if (!validation) return null;
+
+  // Capture the prior tier so we can fire the tier.changed webhook on a real
+  // transition. Tier is derived from factors (not stored), so the previous
+  // tier = deriveTier(existing rows). Only meaningful when factors already
+  // exist — the initial creation compute (no prior rows) is covered by the
+  // validation.completed event instead.
+  const { data: prevFactorRows } = await supabase
+    .from("risk_factors")
+    .select("severity, excluded")
+    .eq("validation_id", validationId);
+  const prevTier: Tier | null =
+    (prevFactorRows ?? []).length > 0
+      ? deriveTier((prevFactorRows ?? []) as unknown as RiskFactor[])
+      : null;
 
   const [entityRes, trackRes, litigationRes, sanctionsRes, gcRes] = await Promise.all([
     supabase
@@ -232,6 +249,21 @@ export async function recomputeRiskFactorsForValidation(
   });
   if (error) {
     throw new Error(`recompute_risk_factors_atomic failed for ${validationId}: ${error.message}`);
+  }
+
+  // Fire tier.changed only on an actual transition. Awaited (not fire-and-
+  // forget) so the delivery row is durably created even if the caller's
+  // request ends immediately after — guarded so the no-change common path
+  // (most recomputes) pays nothing.
+  if (prevTier && prevTier !== tier) {
+    await dispatchWebhookEvent(supabase, validation.org_id, "tier.changed", {
+      validation_id: validationId,
+      borrower_name: validation.borrower_name ?? null,
+      previous_tier: prevTier,
+      new_tier: tier,
+      detail_url: `${APP_BASE}/dashboard/validations/${validationId}`,
+      changed_at: new Date().toISOString(),
+    });
   }
 
   return { factors, tier };
