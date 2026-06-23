@@ -47,7 +47,7 @@ const navItems = [
     description: "Match deals to investor criteria",
   },
   {
-    label: "Investors",
+    label: "Manage investors",
     href: "/dashboard/evaluate/investors",
     icon: Briefcase,
     description: "Configure investor criteria",

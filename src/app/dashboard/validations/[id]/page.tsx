@@ -44,6 +44,7 @@ import { DealOutcomeCard, type DealOutcome } from "@/components/dashboard/deal-o
 import { AIMemo } from "@/components/dashboard/ai-memo";
 import { ActivityStrip } from "@/components/dashboard/activity-strip";
 import { BorrowerHistoryCard } from "@/components/dashboard/borrower-history-card";
+import { BorrowerEvaluationsCard } from "@/components/dashboard/borrower-evaluations-card";
 import { CompareToPriorButton } from "@/components/dashboard/compare-to-prior-button";
 import { RouteToInvestorButton } from "@/components/dashboard/route-to-investor-button";
 import { BorrowerUploadsCard } from "@/components/dashboard/borrower-uploads-card";
@@ -667,6 +668,9 @@ export default function ValidationDetailPage() {
       )}
 
       {/* Operational layer — produce artifacts + watch for changes */}
+
+      {/* Borrower's recent evaluations — jump to deals already run. */}
+      <BorrowerEvaluationsCard validationId={data.id} borrowerId={data.primary_borrower_id} />
 
       {/* Investor handoff — Excel + PDF export */}
       <div id="handoff" className="scroll-mt-24">

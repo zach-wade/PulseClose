@@ -309,16 +309,44 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Shield className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold">No validations yet</h3>
+            <h3 className="text-lg font-semibold">Start here</h3>
             <p className="text-muted-foreground text-sm mt-1 max-w-md text-center">
-              Start by entering a borrower&apos;s name and entity — we&apos;ll
-              run entity, track-record, litigation, and sanctions checks in
-              parallel and have a report ready in 30-60 seconds.
+              PulseClose takes a borrower from validation to a capital-ready
+              handoff in three steps.
             </p>
+            <ol className="mt-6 w-full max-w-md space-y-3">
+              {[
+                {
+                  n: 1,
+                  title: "Validate the borrower",
+                  body: "Entity, track-record, litigation, and sanctions checks run in parallel — a report in 30–60 seconds.",
+                },
+                {
+                  n: 2,
+                  title: "Evaluate against your investors",
+                  body: "Size the loan and compare best execution across every investor box you've configured.",
+                },
+                {
+                  n: 3,
+                  title: "Hand off to capital",
+                  body: "Generate the polished investor Excel + PDF and route the deal.",
+                },
+              ].map((s) => (
+                <li key={s.n} className="flex gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                    {s.n}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium">{s.title}</p>
+                    <p className="text-xs text-muted-foreground">{s.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <Button render={<Link href="/dashboard/new" />}>
                 <Plus className="mr-2 h-4 w-4" />
-                Run First Validation
+                Run your first validation
               </Button>
             </div>
           </CardContent>

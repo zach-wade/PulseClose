@@ -65,7 +65,9 @@ function severityBadge(severity: RiskSeverity) {
   const map: Record<RiskSeverity, string> = {
     critical: "bg-destructive/15 text-destructive",
     moderate: "bg-amber-500/15 text-amber-700",
-    minor: "bg-sky-500/15 text-sky-700",
+    // minor is de-emphasized, not highlighted — only critical/moderate carry
+    // color (Noah's opaque-label principle; a blue "minor" reads as a callout).
+    minor: "bg-slate-100 text-slate-600",
     informational: "bg-muted text-muted-foreground",
     none: "bg-muted text-muted-foreground",
   };
