@@ -1,4 +1,4 @@
-# PulseClose — Session Pickup (2026-05-07 start of day)
+# PulseClose — Session Pickup (2026-05-11 start of day)
 
 > **For session-resumption.** Strategic + architectural detail lives in
 > the dedicated docs — this file orients quickly and points there.
@@ -6,8 +6,8 @@
 > **Read on session start, in order:**
 > - This file (you're here)
 > - `docs/ROADMAP.md` — journey-organized backlog with cross-cutting design principles
-> - `docs/IDEAS.md` — unscoped feature ideas with "unblocks when" conditions (NEW yesterday)
-> - `docs/DATA-MODEL.md` — full schema (now through 00038)
+> - `docs/IDEAS.md` — unscoped feature ideas with "unblocks when" conditions (grew this session)
+> - `docs/DATA-MODEL.md` — full schema (now through 00039)
 > - `STRATEGY.md` — Wade Intel parent + product strategy
 > - `docs/E2E-TEST-PLAN.md` — 17-phase customer walkthrough
 > - `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`
@@ -16,341 +16,284 @@
 
 ## Where we are
 
-NPLA conference is **June 22-23, 2026 (~6.5 weeks out).**
+NPLA conference is **June 22-23, 2026 (~6 weeks out).**
 
-**Yesterday (2026-05-06) — heavy day:**
-- 4 audit-fix rounds (rounds 1-4) clearing the entire 17-item polish
-  backlog, then a 13-finding deep re-audit, then surgical fixes for the
-  3 most critical re-audit items, then Upstash + FK-script for the
-  remaining medium items. M4 (Upstash) deferred on env-var setup only.
-- **Started Test 3 walkthrough** (the override-and-rerun flow — the
-  headline NPLA capability). Tests 3a (universal factor override) and
-  3b (editable track record) passed after several UX bugs were found
-  and fixed live during testing.
-- **Test 3c (manual property add) interrupted** — user added a property
-  successfully but reported the AI memo didn't update with the new
-  data. Root cause found + shipped: three mutation surfaces
-  (UnifiedPropertyTable, LitigationCases, AddGCCard) were wired to
-  `refetch` instead of `handleSignalApplied`, so memo polling never
-  kicked in after edits. Fixed in `40cfe35` (last commit of the day).
-- **Logo + favicon shipped** — pulse-waveform mark on Navy 950 rounded
-  square, Blue 500 stroke. Wired into sidebar lockup, handoff PDF
-  header, browser favicon, apple-touch-icon. Old favicon.ico deleted.
-- **Property-table consolidation Phase 1 shipped** — single unified
-  card with provenance badges (verified / public-record / claimed-only
-  / manual) replaces the old paired Track Record + Verified Track
-  Record cards. Phase 2 (DB-layer collapse — drop verified_flips,
-  fold into track_record_entries) documented in IDEAS.md and
-  ROADMAP.md as G3.6.
-- **Independent UX audit ran end-to-end** — 25 findings across critical
-  / high / medium / low. Top 3 prioritized fixes identified. The audit
-  found a real architectural seam between `/dashboard/evaluate` and
-  the handoff "Intended investor" picker that the UI doesn't bridge.
-  Most findings still pending — see "UX audit backlog" below.
+**This session (2026-05-08 → 2026-05-11) — Noah-review loop end to end:**
+
+- **Noah Davis reviewed PulseClose live on the Truong validation.** First
+  capital-partner-credible reviewer. Validated continuous monitoring,
+  the track-record auto-validation workflow, and the handoff report as
+  a capital-partner deliverable. Pushed back hard on AI-given
+  characterization without drill-down ("anything you have, without the
+  ability to drill down, is not helpful") and immediately spotted
+  matcher false positives ("most of those are not her" — Fullerton +
+  Cypress hits for a SJ-only borrower).
+- **Saved as memory:** `feedback_drill_down_over_characterization.md`
+  and `project_noah_truong_review_open_loops.md`. Future sessions
+  inherit Noah's principles.
+- **Shipped 5 commits** addressing matcher leaks, drill-down
+  completeness, the litigation discrepancy, a full verify-tray
+  architecture that gates the AI memo behind a "Preliminary" marker
+  until pending Flow B matches are reviewed, and the workflow signal
+  end to end (banner + memo tag + handoff stamp).
+- **Wiped Truong end-to-end** via `scripts/reset-validation.ts` so the
+  verify-tray work can be tested against a clean re-run. Borrower +
+  6 stale validations + signals all gone. Reset script is durable for
+  future use.
 
 **Production health:** ✅ All commits live. Vercel auto-deploy clean
-throughout. 12 commits to main yesterday.
+throughout. 5 commits to main this session.
 
 ---
 
 ## Resume here
 
-**Step 1 — Hard-refresh the browser** (`Cmd+Shift+R`) when you open
-`app.pulseclose.com/dashboard`. The favicon work added explicit
-metadata.icons with a `?v=2` cache-buster and deleted the old
-`favicon.ico`. Browsers cache favicons aggressively — if you don't
-hard-refresh you'll still see the generic globe. Verify the **pulse
-mark** is in the browser tab.
+**Step 1 — Hard-refresh** (`Cmd+Shift+R`) on `app.pulseclose.com/dashboard`
+before testing — favicon + CSS may still be cached from last week.
 
-**Step 2 — Verify Test 3c memo regen.** Open the Truong validation:
-```
-https://app.pulseclose.com/dashboard/validations/75411344-75a0-4a60-bd7d-8340f227a672
-```
-You added a manual property yesterday but the memo was stale at the
-time. With `40cfe35` shipped, now: edit any field on any property (or
-apply/remove an override) → toast says "Tier + AI memo recomputing"
-→ within 30-60s the AI Risk Assessment card refreshes with new
-narrative. If it does, Test 3c is done.
+**Step 2 — Re-create Truong from `/dashboard/new`** with the same xlsx
+(`/Users/zachwade/Downloads/K Truong - Track Record - 12-10-25.xlsx`).
+This is the headline test for the whole week's work. Expect:
 
-**Step 3 — Continue the test walkthrough.** Next is **Test 3d** below.
+1. After ~30-60s, validation detail page renders.
+2. **Headline property table** shows only her real Santa Clara County
+   properties (verified + auto-promoted).
+3. **Verify tray** below the property table lists the Fullerton /
+   Cypress / Brea-area hits with low confidence + a "different metro"
+   reason inline. Should be roughly the same names Noah called out.
+4. **Top of page**: amber banner *"Memo is preliminary — N property
+   matches pending review"* with "Review now →" jump.
+5. **AI memo card**: amber "Preliminary · N pending" badge in the
+   header.
+6. **Litigation card** should now show **Amador v. TT Investment
+   Properties, LLC** (N.D. Cal. 2013) — the case that previously fell
+   through the materialization gap.
+7. Click any pending tray row → confirm or reject. Memo + tier
+   regenerate; banner + preliminary badges disappear when tray is empty.
+8. **Investor handoff** PDF: same "PRELIMINARY" banner stamped at the
+   top until tray cleared.
+
+If all 8 land, **send Noah the corrected report** unprompted — that
+closes his loop and earns the next review.
+
+**Step 3 — Resume the test walkthrough** at Test 3d (litigation case
+edit + add + delete) once you've confirmed Truong renders cleanly.
 
 ---
 
 ## Test walkthrough state
 
-**Tests passed:** 1 (B4 borrower-search guard), 2 (E2 borrower roll-up
-page), **3a** (universal factor override), **3b** (editable track
-record).
+**Tests passed (prior sessions):** 1 (B4 borrower-search guard),
+2 (E2 borrower roll-up page), 3a (universal factor override),
+3b (editable track record).
 
-**Test 3c — Manual property add.** Add succeeded. Memo regen pending
-verification after fix in `40cfe35`. Hard-refresh + edit any field →
-within 60s memo should update. Mark passed.
+**Tests 3c-3e were mid-flight when Noah's review redirected the
+session.** Truong was wiped to allow re-testing of the verify-tray
+architecture. Re-run them after Step 2 confirms the headline + tray
+work.
 
-### Test 3d — Litigation case edit + add + delete (next)
-1. Same Truong validation. Scroll to **Public Records / Litigation** card.
-   Truong's CourtListener returned matches so cases should be present.
-2. **Pencil any case** → edit dialog opens (now pre-fills correctly
-   thanks to `c9d1836`).
-3. Change `status` to "dismissed", `lender_notes` to "Reviewed with
-   borrower's counsel — frivolous nuisance suit". Click **Save**.
-4. Expect: case re-renders with new status. Blue "Lender note" block
-   appears below the case title. AI memo regenerates within 60s
-   (polling now wired correctly per `40cfe35`).
-5. Open dialog again, click **Delete case** in the dialog → confirm.
-   Case removed. Tier + memo recompute.
-6. Click **"Add case"** in the card header — fills in a manual case
-   (state court, etc).
+### Test 3d — Litigation case edit + add + delete
+On a freshly-re-created Truong, the Amador case should now appear (the
+fix in `f2b0d40` repaired the courtlistener/extract/materialize 3-bug
+chain). Edit pencil → change status, add lender_notes → save. AI memo
+regenerates within 60s.
 
-### Test 3e — Handoff audit trail
-1. After 2-3 edits/overrides above, scroll to **"Investor handoff"**
-   card.
-2. Click **"Open PDF view"**.
-3. Expect: new section **"Lender edits applied"** with headline counts
-   ("3 track-record edits · 1 factor override · 1 litigation removal")
-   and a chronological table.
-4. **NEW:** the "Reason" column now distinguishes `Factor exclusion: …`
-   from edit reasons (commit `2286b5f` M8 fix).
-5. **NEW:** the brand bar at top shows the pulse mark + "PulseClose"
-   wordmark (commit `79374d7`).
-6. Try **"Download Excel"** — Cover sheet has the same summary; Audit
-   Log worksheet has split `Edit reason` + `Factor exclusion reason`
-   columns.
+### Test 3e — Handoff audit trail + Preliminary marker
+With pending tray rows AND a few overrides applied, the handoff PDF
+should now show: brand bar + pulse mark, the "Lender edits applied"
+section, AND the new amber "PRELIMINARY" banner at the top until the
+tray is cleared.
 
-### Test 4 — A4 + A5 investor performance
-Requires running an evaluation first. Truong has no `deal_evaluations`
-rows yet.
-1. Click **"Evaluate against my investors"** in validation header.
-2. Fill the evaluate form (loan amount, purchase price, etc) and run.
-3. Head to `/dashboard/evaluate/investors`. Each investor card should
-   show a compact strip: "1 evaluation · pass-rate · funded count".
-4. Click **"Performance"** on an investor → detail page with verdict
-   mix + outcome mix + sparkline (if rate samples exist).
-5. **Known UX gap (audit C1, H high):** the dropdown in the handoff
-   "Intended investor" picker doesn't tag investors with their
-   eval status. If you pick an investor that wasn't in the eval, the
-   handoff PDF will show the explicit "No eligibility terms have been
-   computed for this investor — run an evaluation that includes them"
-   message (shipped `79374d7`). The dropdown-tagging fix is in the
-   pending UX backlog.
-
-### Test 5 — F1 + F2 scenarios
-1. On the evaluate results page, scroll past investor results.
-2. **F1 — "Compare leverage tiers"** button (needs purchase_price set).
-   Three-column matrix: 65/75/80% LTV × per-investor pass/conditional/fail.
-3. **F2 — Rate stress test** card. +0 / +100 / +200bps buttons.
-
-### Test 6 — D2 Slack / Teams notifications
-1. Settings → **Notifications** tab.
-2. "Add notification" → Slack channel + incoming-webhook URL +
-   `monitor_change` event_type. **NEW:** SSRF defense rejects
-   private/loopback IPs at create time (commit `c37804c` M1).
-3. Test-send icon → Slack channel receives "PulseClose channel test".
-
-### Test 7 — D5 public REST API
-1. Settings → **API Keys** tab. New API key, copy the plaintext token.
-2. `curl https://app.pulseclose.com/api/public/v1/validations -H "Authorization: Bearer pck_live_..."`
-3. Try `/api/public/v1/validations/{id}` for full detail.
-
-### Test 8 — D4 bookmarklet (NEW: should now work)
-1. Settings → API Keys → bottom card has **"Validate with PulseClose"**
-   anchor.
-2. **Drag** the link to bookmarks bar (don't click). Per `c1b94cc`,
-   React 19 was previously stripping the `javascript:` URL — fixed by
-   setting href via DOM ref after mount.
-3. Bookmark should now show **the pulse mark favicon** in the bar.
-4. Go to Zillow, highlight an address, click bookmarklet.
-5. New tab opens at `/dashboard/new` pre-filled.
-
-### Test 9 — G7.3 pause monitoring
-1. Settings → Org → "Pause monitoring (demo mode)" → 2h.
-2. Open any Truong validation → MonitorCard shows amber
-   "Org-wide pause active" banner.
-3. Settings → "Resume now" → banner disappears.
-
-### Test 10 — Merge admin UI
-1. Navigate `/dashboard/admin` directly (no sidebar link — UX audit
-   flagged this as fix #5; not yet shipped).
-2. Expect: "No duplicate groups found" — that's the correct empty state.
-3. **NEW (audit):** if duplicates DO appear and you merge, the
-   `merge_records_atomic` RPC (00036) now handles the full FK list
-   including `borrower_public_profiles.borrower_id` (was silently
-   destroying public profiles before). Run
-   `npx tsx scripts/verify-merge-fks.ts` to check FK list completeness
-   against schema.
-
-### Test 11 — Activity feed (NEW since yesterday)
-1. Sidebar → **Activity**.
-2. Apply + remove a factor override on a Truong validation.
-3. Activity feed should show TWO entries:
-   - "X overrode extended_hold on Y — '<reason snippet>'"
-   - "X removed override on extended_hold for Y"
-4. Click the **Overrides** filter pill — should match BOTH events plus
-   any signal applies (commit `057bdea` extended the API to accept
-   comma-separated verbs).
+### Tests 4-11 — unchanged from prior pickup
+F1/F2 scenarios, D2 Slack/Teams, D5 public REST, D4 bookmarklet,
+G7.3 pause, admin merge UI, activity feed. Nothing about them changed
+this session; see git log for prior pickup if needed.
 
 ---
 
-## UX audit backlog (from end-to-end audit, mostly NOT shipped)
+## This session's commits (in shipping order)
 
-The audit found 25 findings. Top-priority items not yet addressed:
+```
+05773bb  Preliminary memo marker + review-status banner
+cf913a8  Verify tray + confidence scoring for Flow B owner-name search hits
+fce599b  Factor-evidence rows hyperlink into the underlying data card
+f2b0d40  Fix litigation_cases materialization (3 bugs in one chain)
+296daa8  Noah-review fixes: matcher false-positives + drill-down evidence
+```
 
-### Critical
-- **Eval ↔ handoff seam.** `chosen_investor_id` picker doesn't know
-  which investors have been evaluated for this validation. Fix:
-  decorate dropdown options with `(evaluated · pass)` / `(not evaluated)`
-  + when an unevaluated investor is picked, inline "Run eval for this
-  investor →" link. ~30 lines.
-- **`/dashboard/evaluate` doesn't pass `validation_id`.** Form arrives
-  from validation-detail with `borrower=` query param but no
-  `validation_id`. Resulting `deal_evaluation` row has `validation_id`
-  null, so the handoff intended-investor lookup misses entirely. ~20
-  lines, removes the eval-to-handoff friction.
-- **AI memo "Generating…" can hang forever** with no error state.
-  Polling stops after 30 attempts; if Claude failed, no retry button.
-
-### High
-- Borrower-side photo upload doesn't ask which property the photo
-  belongs to (single dropdown above upload).
-- `/dashboard/admin` reachable only by typed URL (add sidebar link
-  gated on owner/internal).
-- `/investor` placeholder shows queue rows by UUID, not borrower name.
-- "Route to investor" success — investor doesn't get notified.
-- New-validation form doesn't tell user "30-60s typical."
-- Empty dashboard for new tenant has no path to onboarding investors.
-- AI privacy disable silently kills memo with no in-page indicator.
-
-### Medium / Low
-~12 more findings, mostly polish. Logged in IDEAS.md and the
-audit-tool transcript.
-
-**The 3 fixes I'd ship first** (per the audit summary):
-1. Decorate handoff investor dropdown + inline "Run eval" link
-2. Pass `validation_id` end-to-end through the eval flow
-3. Add Admin sidebar link + investor-side queue showing borrower names
-
-These three close the most painful seams (the one user just hit) and
-make the surface area outside the headline flow feel "complete around
-the edges."
+Plus: Truong wiped end-to-end (6 validations + borrower + signals) via
+`scripts/reset-validation.ts` after debug evidence was captured. Reset
+script is in-tree for future use.
 
 ---
 
-## Yesterday's commits (in shipping order)
+## What the verify-tray architecture does (new this session)
 
-```
-40cfe35  Wire mutation surfaces to handleSignalApplied (memo polls after edits)
-bcf3f85  Surface field-level Zod errors on Add property dialog
-831f092  Property-table consolidation Phase 1 + favicon force-refresh + Phase 2 docs
-057bdea  Fix override activity logging + memo regen race on remove
-c9d1836  Fix track-record + litigation edit dialogs not pre-filling values
-79374d7  Logo + favicon, intended-investor empty state, brand doc update
-c1b94cc  Fix bookmarklet — React 19 was stripping javascript: URLs
-ed69b4c  Fix 3 UX bugs surfaced by Test 3a walkthrough (memo poll restart, status badge, portfolio API)
-0f4f96a  docs/IDEAS.md — capture unscoped feature ideas with "unblocks when" conditions
-5c5980c  Audit fix round 4: M4 Upstash + C1 follow-up FK script
-c37804c  Audit fix round 3: 2H + 4M + 3L (memo regen lock, monitor cron lease, truncation defense, SSRF, dispatch parallel, etc.)
-2a405e4  Audit fix round 2: C2 regression + C1 + H4 (logEdit batch, merge FK list, share-link IDOR)
-2286b5f  Polish backlog clear-out: 4 high + 8 medium + 5 low audit items
-```
+Two parallel matching flows feed `track_record_entries`:
+
+- **Flow A — per-address verify** (`verify-core.ts`). Borrower's xlsx
+  → look up each address in Realie → walk deed chain → confirm
+  borrower/entity. High precision. Output: `verified_flips`.
+- **Flow B — statewide owner-name search** (`realie.ts:234`). Realie
+  CA-wide owner search. High recall but common-name leakage (Noah's
+  Truong issue). Output: `track_record_entries` with
+  `review_status='pending_review'`.
+
+After Flow A completes, `scoreAndPromotePendingRows` runs and computes
+a 0-100 confidence score per pending row from five signals:
+
+| Signal | Weight | Source |
+|---|---|---|
+| SOS officer/agent matches deed owner | +25 | Cobalt entity_checks |
+| Address in xlsx geo cluster (same city) | +25 | verified_flips |
+| Address in same zip-3 (metro proxy) | +12 | verified_flips |
+| Address outside cluster | **-15** | verified_flips |
+| Deed transfer history corroborates | +20 | Realie raw_response.transfers |
+| SOS entity filing ID matches | +15 | strict-equality name match |
+
+Rows clearing **80/100** auto-promote to `auto_accepted` (headline).
+Below threshold stays in `pending_review` (verify tray) with score +
+breakdown stored on the row so the UI explains WHY each match scored
+where it did.
+
+`PATCH /api/track-record/[id]/review` with `{action: "confirm" | "reject"}`
+handles the lender's decision; both actions log to `data_edits`,
+recompute risk factors, and regenerate the AI memo.
+
+**Gap 5 (APN/tax-assessor)** deferred to IDEAS.md — per-county adapter
+work is multi-week. Start with Santa Clara + LA + Orange when the
+first verify-tray false-promote slips through.
+
+**Preliminary memo workflow signal** layers on top: when
+`pending_review_count > 0`, the AI memo card gets a "Preliminary · N
+pending" badge, the top of the validation page shows an amber banner
+with a jump to the tray, and the handoff PDF + Excel cover sheet stamp
+"PRELIMINARY — Lender review incomplete" so capital partners see the
+same cue if the lender ships a handoff before finishing the tray.
+
+---
+
+## Litigation chain fix (this session, `f2b0d40`)
+
+Truong's CourtListener search found a real federal case (Amador v. TT
+Investment Properties, N.D. Cal. 2013) but the validation page showed
+nothing while the handoff PDF correctly surfaced it. Three independent
+bugs:
+
+1. **`courtlistener.ts`** declared `CLDocket` in snake_case but
+   `/search/?type=d` returns Solr-style camelCase. Fixed: read both.
+2. **`extract.ts`** had the same field-name bug. Fixed: read both.
+3. **`materialize.ts`** used Supabase upsert with `onConflict` pointing
+   at **partial** unique indexes. PostgREST rejects partial-index
+   targets — every materialization silently failed across the whole
+   product. Fixed: replaced with explicit select-then-update/insert.
+
+Verified end-to-end against Truong's stored data. The Amador case now
+materializes correctly with court / dates / category / status.
 
 ---
 
 ## Database state
 
-**Migrations applied (38 total):** 00001-00038 inclusive.
+**Migrations applied (39 total):** 00001-00039 inclusive.
 
-Recent additions:
+Latest:
 ```
-00027  monitor_pause              organizations.monitor_paused_until
-00028  api_keys                   api_keys (hashed bearer tokens)
-00029  address_canonical          USPS-style normalize_address rewrite
-00030  public_profiles            borrower_public_profiles (E4 schema)
-00031  investor_users             investor_users + investor_deal_queue
-00032  bank_statements            bank_statement_summaries (C5 substrate)
-00033  photo_verification         property_photo_verifications (C1 substrate)
-00034  lender_overrides           data_edits + factor_overrides + source/lender_notes columns
-00035  merge_atomic               merge_records_atomic RPC (initial; FK list incomplete)
-00036  merge_atomic_complete_fks  merge_records_atomic with full FK list + public_profiles unique-handling
-00037  ai_memo_version            borrower_validations.ai_analysis_version (regen lock — semantically inverted, removed in 057bdea but column kept for future token-claim use)
-00038  introspect_fks             _introspect_merge_target_fks RPC (used by scripts/verify-merge-fks.ts)
+00037  ai_memo_version            borrower_validations.ai_analysis_version (regen lock)
+00038  introspect_fks             _introspect_merge_target_fks RPC (verify-merge-fks.ts)
+00039  track_record_review        review_status + review_confidence + review_signals
+                                  + reviewed_at + reviewed_by_user_id on track_record_entries
 ```
+
+Existing rows defaulted to `review_status='auto_accepted'` so
+pre-00039 validations render unchanged. New Flow B inserts → `pending_review`.
 
 ---
 
 ## Items NOT addressed (deferred / blocked / manual)
 
-### Deferred follow-ups (from earlier audits)
-- **Property model Phase 2** — collapse `verified_flips` into
-  `track_record_entries`. Plan in IDEAS.md → "Property model
-  consolidation" + ROADMAP G3.6. Unblocks when Phase 1 proves out
-  in 1-2 weeks of usage.
-- **Token-claim AI regen concurrency control** — current regen is
-  last-write-wins (works for single-user). Documented in IDEAS.md →
-  "Multi-user / team workflow." Unblocks when multi-underwriter editing
-  surfaces a wrong-memo bug.
-- **D5 POST endpoint** — public REST is GET-only.
-- **Liquidity factor reading bank statement data** — substrate stored
-  (00032), threshold needs calibration.
-- **photo_verified signal write** — verifications stored (00033),
-  distance threshold needs calibration.
-- **F3 investor self-serve signup flow** — investor_users table exists,
-  no UI; lender INSERTs via SQL today.
-- **F1 multi-dimension scenarios** — only LTV varies. LTC / ARV / FICO
-  / loan_amount picker is v2.
+### Pre-NPLA blockers still open (from Noah review)
+- **Live-retest the litigation drill-down bug** Noah hit on 2026-05-07.
+  Static read showed the click path intact, so it may have been stale
+  or in the share/handoff surface. Verify on the fresh Truong re-run.
+- **Lender concentration evidence shows raw UUIDs** — needs lender-name
+  enrichment. Logged in IDEAS.md → "Drill-down + matcher follow-ups".
+- **"Minor" labels on non-pillar surfaces** (monitor card, activity
+  feed, property provenance badges) — pillar cards now distinguish
+  CHECK FAILED vs minor finding; sweep the rest before NPLA.
 
-### UX audit backlog
-See "UX audit backlog" section above. ~22 findings still pending.
+### Drill-down + matcher follow-ups (IDEAS.md)
+- Realie fallback usage telemetry (catch silent entity-name misses)
+- ATTOM identity match audit (same class of bug as Realie was)
+- Display-side ownership filter on `/api/validations/[id]`
+- Property row → Realie/deed source link
+- Claimed-only rows expand-and-edit
+- AI memo factor citations (pillar prose → factor IDs)
+- APN / tax-assessor (per-county; start with Santa Clara + LA + Orange)
+
+### Earlier deferred follow-ups
+- Property model Phase 2 (collapse `verified_flips` into `track_record_entries`)
+- Token-claim AI regen concurrency control (multi-user)
+- D5 POST endpoint (public REST is GET-only)
+- Liquidity factor reading bank statement data
+- photo_verified signal write (verifications stored, threshold uncalibrated)
+- F3 investor self-serve signup flow
+- F1 multi-dimension scenarios (only LTV varies today)
+
+### UX audit backlog (from 2026-05-06 audit, mostly NOT shipped)
+~22 findings still pending. Top 3 from that audit:
+1. Decorate handoff investor dropdown with eval status + inline "Run eval" link
+2. Pass `validation_id` end-to-end through the eval flow
+3. Add Admin sidebar link + investor-side queue showing borrower names
 
 ### Blocked on outside persons / vendor $
-| Item | Blocked on |
-|---|---|
-| **C2** BatchData historical deeds | Vendor $ ($200-500/mo) |
-| **C3** Reverse phone/email | Vendor $ (Hunter.io / NumVerify) |
-| **D1** Email-forward intake | Resend inbound paid feature |
-| **D3** Calendar integration | Post-NPLA per ROADMAP |
-| **E3** Anonymized cross-tenant consensus | 10+ lenders + legal review |
-| **E4 full** public profile renderer | Waits on E3 density |
-| **F3 full** investor review UI | Post-NPLA per ROADMAP |
-| **G1.2** Co-borrower modeling | Damon decision |
-| **G2.2** TransUnion address validation | Noah's logins |
-| **G2.3** Multi-state GC adapters | Per-jurisdiction research |
+Unchanged from prior pickup: C2 BatchData, C3 reverse phone/email,
+D1 email-forward intake, D3 calendar, E3 anonymized consensus,
+E4 full public profile, F3 full investor UI, G1.2 co-borrower,
+G2.2 TransUnion, G2.3 multi-state GC.
 
 ### Manual items (you)
-1. **Add WP secrets to Build-Folio Anthropic Cloud env** before
-   2026-06-01 14:08 UTC. claude.ai/code → enter session → env selector
-   → Build-Folio settings gear → paste WP_URL/WP_USER/WP_APP_PASSWORD
-   from `.env.local`.
-2. **Print physical paper test** of `/handoff/[id]` +
-   `/validations/[id]/risk-methodology`. (Hold-over from prior session.)
-3. **OpenSanctions key rotation** by 2026-05-28.
-4. **Cobalt key rotation** for demo capacity by ~2026-06-10.
-5. **Activate Upstash Redis for rate limiter** — code is shipped + falls
-   back to per-lambda in-memory until env vars exist. Steps:
-   (a) sign up at upstash.com, (b) create a Redis database (Global
-   tier free), (c) Vercel project → settings → environment variables
-   → add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`,
-   (d) redeploy. No code change; `src/lib/rate-limit.ts` auto-detects.
-6. **Hard-refresh browser** (`Cmd+Shift+R`) on first visit today to
-   bust cached old favicon.
+1. **Re-create Truong + send Noah the corrected report** once Step 2
+   in "Resume here" passes (closes Noah's loop — high priority).
+2. **Add WP secrets to Build-Folio Anthropic Cloud env** before
+   2026-06-01 14:08 UTC.
+3. **Print physical paper test** of `/handoff/[id]` +
+   `/validations/[id]/risk-methodology`.
+4. **OpenSanctions key rotation** by 2026-05-28.
+5. **Cobalt key rotation** for demo capacity by ~2026-06-10.
+6. **Activate Upstash Redis for rate limiter** — code shipped, awaiting
+   env vars (UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN).
+7. **Hard-refresh browser** on first visit today.
 
 ---
 
 ## Critical context for next session
 
-- **Test walkthrough is mid-flight.** Resume at Test 3c verification
-  (just edit any property field → confirm memo regenerates within 60s),
-  then Test 3d. Don't restart from Test 1 — those passed.
-- **Tons of UX bugs were found via testing yesterday.** The user is
-  driving testing surface-by-surface and the model is "find bug →
-  fix on the spot → ship → continue testing." Maintain that rhythm
-  rather than batching fixes.
+- **Truong is at zero state** — borrower + 6 stale validations
+  cascaded away this session. Step 2 above is to recreate her. Don't
+  try to navigate to the old URL
+  (`/dashboard/validations/75411344-…`) — it 404s now.
+- **Verify-tray architecture is new** and untested live. The 80/100
+  auto-promote threshold is a first guess; watch for false-promote
+  (legit-looking but actually-not-her rows that the score waved
+  through) and false-reject (her real properties scored low for
+  surprising reasons). Tune `AUTO_PROMOTE_THRESHOLD` in
+  `src/lib/track-record/review.ts` if either happens.
+- **Tightened tokenSetMatch** (`verify-core.ts:114`) now requires
+  strict equality after stripping noise tokens (Jr/Sr/III etc.).
+  Borrowers who typed a middle name on intake but the deed only shows
+  first+last will now register as `not_found` instead of being
+  auto-claimed. Intentional per Noah's safer-to-reject default — but
+  if it causes recall regressions on real deeds we'll see them as
+  false-negative verifications.
+- **Noah's principles** are now memory: drill-down beats AI
+  characterization; every factor/badge must click into source evidence;
+  opaque "minor" labels are worse than none. Apply to all new UI work.
 - **CHECK BUILD STATUS** in Vercel after every push (history of silent
   webhook failures).
-- **The unified property table is new.** If you see code referring to
-  `TrackRecordTable` or the old "Verified Track Record" card-with-rows
-  layout, that's stale — the page now uses
-  `<UnifiedPropertyTable>` and a slimmer `<VerifiedTrackRecord>` card
-  that only carries the workflow surface (share link + paste form).
-  See `src/components/dashboard/unified-property-table.tsx`.
+- **The unified property table is the headline surface;** verify tray
+  is below it. Pending and rejected rows are excluded from the
+  headline. Handoff PDF excludes both as well.
 - **ROADMAP cross-cutting principles 8-12** govern all new code
   (canonical token matching, dual-coded dedup, max_tokens 4096+
   stop_reason, AI privacy bundle on every Claude call, JSONB
@@ -366,6 +309,7 @@ See "UX audit backlog" section above. ~22 findings still pending.
 - **Supabase project ref:** `oazwscmgyqknwatqgtyc`
 - **GitHub:** https://github.com/zach-wade/PulseClose
 - **Truong intake xlsx:** `/Users/zachwade/Downloads/K Truong - Track Record - 12-10-25.xlsx`
-- **Truong test validation:** `/dashboard/validations/75411344-75a0-4a60-bd7d-8340f227a672`
-- **Last shipped commit:** `40cfe35` (mutation polling wiring)
-- **Demo runbook plan:** `/Users/zachwade/.claude/plans/ok-so-now-what-delightful-lark.md`
+- **Truong test validation:** wiped — recreate via `/dashboard/new`
+- **Last shipped commit:** `05773bb` (preliminary marker + banner)
+- **Reset script:** `scripts/reset-validation.ts <validation_id> [--delete] [--hard]`
+- **Memory:** `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`
