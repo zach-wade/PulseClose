@@ -31,6 +31,7 @@ export type ActivityVerb =
   | "sent_share_link"
   | "downloaded_handoff"
   | "evaluated_deal"
+  | "sized_deal"
   | "extracted_doc"
   | "extracted_investor_criteria"
   | "uploaded_photo"
@@ -54,6 +55,7 @@ export type ActivitySubjectType =
   | "monitor_run"
   | "monitor_subscription"
   | "deal_evaluation"
+  | "uw_model"
   | "document"
   | "investor"
   | "handoff";

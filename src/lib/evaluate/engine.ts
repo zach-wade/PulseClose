@@ -89,6 +89,12 @@ export type InvestorRules = {
   max_ltv?: number;
   max_ltc?: number;
   max_ltarv?: number;
+  // Coverage floors for the Underwriting Workbench loan-sizing engine
+  // (src/lib/underwriting). Eligibility itself doesn't gate on these — they
+  // feed per-investor loan sizing (how big a loan the deal's NOI supports at
+  // this investor's rate). Optional; sizing falls back to the deal-level value.
+  min_dscr?: number;
+  min_debt_yield?: number;
   rural_allowed?: boolean;
   allowed_occupancy?: string[];
   leverage_matrix?: LeverageTier[];
@@ -771,6 +777,8 @@ export function assembleRulesFromCriteria(
       case "max_ltv": rules.max_ltv = Number(v); break;
       case "max_ltc": rules.max_ltc = Number(v); break;
       case "max_ltarv": rules.max_ltarv = Number(v); break;
+      case "min_dscr": rules.min_dscr = Number(v); break;
+      case "min_debt_yield": rules.min_debt_yield = Number(v); break;
       case "rural_allowed": rules.rural_allowed = Boolean(v); break;
       case "allowed_occupancy": rules.allowed_occupancy = (v as string[]).map((s) => s.toLowerCase()); break;
       case "leverage_matrix": rules.leverage_matrix = v as LeverageTier[]; break;

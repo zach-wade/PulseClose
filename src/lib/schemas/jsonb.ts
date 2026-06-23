@@ -440,3 +440,92 @@ export const documentAiExtractionV1 = z
   })
   .catchall(z.unknown());
 export type DocumentAiExtractionV1 = z.infer<typeof documentAiExtractionV1>;
+
+// ── uw_models.inputs / .sizing / .judgment (Module 10 + 6) ─────────────────
+// Underwriting Workbench: deal-level loan-sizing inputs, the engine's sized
+// result, and the AI judgment. Shapes mirror src/lib/underwriting/{sizing,types}.ts
+// 1:1 (the engine is the source of truth — these validate what we persist).
+
+export const uwSizingInputsV1 = z.object({
+  schema_version: schemaVersion,
+  name: z.string().optional(),
+  purchasePrice: z.number(),
+  rehabBudget: z.number().optional(),
+  closingCosts: z.number().optional(),
+  currentNOI: z.number(),
+  stabilizedNOI: z.number().optional(),
+  goingInCapRate: z.number(),
+  exitCapRate: z.number().optional(),
+  rate: z.number(),
+  termMonths: z.number().optional(),
+  amortizationMonths: z.number().optional(),
+  maxLTV: z.number().optional(),
+  maxLTC: z.number().optional(),
+  maxLoanToARV: z.number().optional(),
+  minDSCR: z.number().optional(),
+  minDebtYield: z.number().optional(),
+  coverageBasis: z.enum(["current", "stabilized"]).optional(),
+  sellingCostPct: z.number().optional(),
+});
+export type UwSizingInputsV1 = z.infer<typeof uwSizingInputsV1>;
+export const parseUwSizingInputsV1Strict = strict(uwSizingInputsV1, "uw_models.inputs");
+
+const uwConstraintV1 = z.object({
+  key: z.enum(["LTV", "LTC", "LoanToARV", "DSCR", "DebtYield"]),
+  label: z.string(),
+  maxLoan: z.number(),
+  binding: z.boolean(),
+  basis: z.string(),
+});
+
+export const uwSizingResultV1 = z.object({
+  schema_version: schemaVersion,
+  asIsValue: z.number(),
+  stabilizedValue: z.number().nullable(),
+  totalProjectCost: z.number(),
+  constraints: z.array(uwConstraintV1),
+  maxLoan: z.number(),
+  bindingConstraint: z.enum(["LTV", "LTC", "LoanToARV", "DSCR", "DebtYield"]),
+  equityRequired: z.number(),
+  annualDebtService: z.number(),
+  mortgageConstant: z.number(),
+  ltv: z.number(),
+  ltc: z.number(),
+  dscrCurrent: z.number(),
+  dscrStabilized: z.number().nullable(),
+  debtYieldCurrent: z.number(),
+  debtYieldStabilized: z.number().nullable(),
+  projectProfit: z.number().nullable(),
+  equityMultiple: z.number().nullable(),
+  returnOnCost: z.number().nullable(),
+  developmentSpread: z.number().nullable(),
+});
+export type UwSizingResultV1 = z.infer<typeof uwSizingResultV1>;
+export const parseUwSizingResultV1Strict = strict(uwSizingResultV1, "uw_models.sizing");
+
+const uwDimensionReadV1 = z.object({
+  dimension: z.enum(["sponsor", "economics", "market", "structure", "exit"]),
+  severity: z.enum(["strength", "neutral", "concern", "dealkiller"]),
+  read: z.string(),
+  flags: z.array(z.string()),
+});
+
+// The shape Claude must return for the AI judgment. Validated post-parse so a
+// malformed model response can't poison the column (mirrors the ai_analysis
+// parser discipline). `model` + schema_version are stamped server-side.
+export const uwJudgmentV1 = z.object({
+  schema_version: z.literal(1).default(1),
+  headline: z.string(),
+  framework: z.array(uwDimensionReadV1),
+  dealKillers: z.array(z.string()),
+  fiveConcept: z.string(),
+  recommendation: z.object({
+    stance: z.enum(["pursue", "pursue-with-conditions", "pass"]),
+    rationale: z.string(),
+  }),
+  memo: z.string(),
+  model: z.string(),
+});
+export type UwJudgmentV1 = z.infer<typeof uwJudgmentV1>;
+export const parseUwJudgmentV1 = safe(uwJudgmentV1);
+export const parseUwJudgmentV1Strict = strict(uwJudgmentV1, "uw_models.judgment");
