@@ -3,7 +3,13 @@
 // notify should fail the run; for monitoring, no — we still want to
 // persist the run record even if email is down.
 
-const RESEND_FROM = process.env.RESEND_FROM_EMAIL ?? "PulseClose <noreply@pulseclose.com>";
+// Accept either name — the Vercel env historically used RESEND_FROM_ADDRESS
+// while newer code referenced RESEND_FROM_EMAIL. Honor both so the configured
+// sender isn't silently dropped for the default.
+const RESEND_FROM =
+  process.env.RESEND_FROM_EMAIL ??
+  process.env.RESEND_FROM_ADDRESS ??
+  "PulseClose <noreply@pulseclose.com>";
 
 export async function sendEmail(opts: {
   to: string | string[];

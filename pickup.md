@@ -39,17 +39,27 @@ is behind us. Everything below is **live on `main` and deployed**; migrations
 > `3688c0c` (item 1 cosmetic), `ebf56cd` (item 2). Item 0 is still on Zach
 > (manual Vercel env keys). Resume at Item 3.
 
-### 0. 🔴 Set Vercel env keys (manual, you — gates shipped features)
+### 0. ⚠️ Vercel env keys — MOSTLY ALREADY SET (verified 2026-06-23 via `vercel env ls`)
 
-Shipped funnel/emails/analytics are inert until these are set in the Vercel
-project (`buildfolios-projects-e8f9d80e/pulseclose`) → Settings → Environment
-Variables (Production), then redeploy:
+The earlier "shipped features are inert until these are set" claim was **wrong**.
+A `vercel env ls production` check shows the Production env already has:
+PostHog (`NEXT_PUBLIC_POSTHOG_KEY` + `_HOST`), `RESEND_API_KEY`,
+`ANTHROPIC_API_KEY`, all vendor keys (Cobalt/Realie/ATTOM/CourtListener/Regrid/
+OpenSanctions), all Stripe price IDs, Sentry, Supabase. So funnel analytics,
+emails, and AI all have their keys.
 
-- `NEXT_PUBLIC_POSTHOG_KEY` — PostHog project key (funnel analytics)
-- `NEXT_PUBLIC_POSTHOG_HOST` — `https://us.i.posthog.com` (or your region)
-- `RESEND_API_KEY` — onboarding + trial-drip emails
-- `RESEND_FROM_EMAIL` — e.g. `PulseClose <noreply@pulseclose.com>` (verified domain)
-- `CRON_SECRET` — protects `/api/cron/trial-emails` (+ existing `/api/cron/monitor`)
+**Two genuine gaps remain:**
+- `CRON_SECRET` — **NOT set.** The cron routes (`/api/cron/trial-emails`,
+  `/api/cron/monitor`, and the new `/api/cron/webhook-retry`) use the pattern
+  `if (CRON_SECRET) { require bearer }` — so without it they run **unauthenticated**
+  (anyone can trigger them). Add a random string in Vercel → Settings → Env Vars.
+- Resend sender name mismatch — env is `RESEND_FROM_ADDRESS`, code read
+  `RESEND_FROM_EMAIL`. **Fixed in code** (resend.ts now honors both); no action
+  needed. Optionally tidy by renaming the Vercel var to `RESEND_FROM_EMAIL`.
+
+Minor: `STRIPE_SECRET_KEY` / `SENTRY_AUTH_TOKEN` / `SUPABASE_SERVICE_ROLE_KEY`
+show "Needs Attention" in the Vercel UI — that's Vercel asking to re-save them as
+Sensitive; not blocking.
 
 Also confirm `claude-opus-4-8` resolves on the Anthropic key (first Opus consumer
 — the judgment layer; memo path uses Sonnet). If not, change `DEFAULT_MODEL` in
