@@ -22,6 +22,7 @@ import {
   Sparkles,
   Calculator,
   Info,
+  ChevronRight,
 } from "lucide-react";
 import {
   Tooltip,
@@ -329,6 +330,7 @@ export default function ValidationDetailPage() {
                     borrower: data.borrower_name,
                     state: data.entity_checks[0]?.state ?? "",
                     experience: data.experience_tier ?? "",
+                    validation_id: data.id,
                   },
                 }}
               />
@@ -357,6 +359,44 @@ export default function ValidationDetailPage() {
           {/* F3 — route this validation to an investor's queue. */}
           <RouteToInvestorButton validationId={data.id} />
         </div>
+      </div>
+
+      {/* Next-step progress strip — orient the lender in the
+          validate → evaluate → hand off arc so the single next action is
+          obvious without scrolling the full report (UX-PLAN §1.2). */}
+      <div className="rounded-md border border-border bg-muted/30 px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="flex items-center gap-1.5 font-medium text-foreground">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Validate
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <span className="flex items-center gap-1.5 font-medium text-info">
+            <Calculator className="h-4 w-4" /> Evaluate
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <a href="#handoff" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+            <FileDown className="h-4 w-4" /> Hand off
+          </a>
+        </div>
+        <Button
+          size="sm"
+          render={
+            <Link
+              href={{
+                pathname: "/dashboard/evaluate",
+                query: {
+                  borrower: data.borrower_name,
+                  state: data.entity_checks[0]?.state ?? "",
+                  experience: data.experience_tier ?? "",
+                  validation_id: data.id,
+                },
+              }}
+            />
+          }
+        >
+          Next: Evaluate against investors
+          <ChevronRight className="ml-1 h-4 w-4" />
+        </Button>
       </div>
 
       {/* Input warnings — surface mismatched/odd inputs at the top */}
@@ -629,7 +669,9 @@ export default function ValidationDetailPage() {
       {/* Operational layer — produce artifacts + watch for changes */}
 
       {/* Investor handoff — Excel + PDF export */}
-      <HandoffCard validationId={data.id} initial={data.handoff_data} />
+      <div id="handoff" className="scroll-mt-24">
+        <HandoffCard validationId={data.id} initial={data.handoff_data} />
+      </div>
 
       {/* Continuous monitoring */}
       <MonitorCard

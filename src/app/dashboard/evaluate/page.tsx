@@ -90,6 +90,9 @@ function EvaluatePageInner() {
   const searchParams = useSearchParams();
   const initialBorrower = searchParams.get("borrower") ?? "";
   const initialState = searchParams.get("state") ?? "";
+  // Carried through from a validation detail page so the handoff CTA can
+  // deep-link back to that validation's #handoff card (UX-PLAN §1.3).
+  const validationId = searchParams.get("validation_id");
   const initialExperienceParam = searchParams.get("experience");
   // Validation experience_tier is 1-4 where 1 = most experienced (10+
   // properties) and 4 = none visible. The evaluate form takes a "deal
@@ -168,6 +171,7 @@ function EvaluatePageInner() {
           is_rural: isRural,
           borrower_name: borrowerName || null,
           property_address: propertyAddress || null,
+          validation_id: validationId,
         }),
       });
       if (!res.ok) {
@@ -513,17 +517,19 @@ function EvaluatePageInner() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">Ready for the investor handoff?</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {borrowerName
-                  ? `Open ${borrowerName}'s validation and use the Handoff card to generate the polished Excel + PDF.`
-                  : "Open the borrower's validation and use the Handoff card to generate the polished Excel + PDF."}
+                {validationId
+                  ? `${borrowerName ? `${borrowerName}'s` : "This borrower's"} Handoff card generates the polished Excel + PDF — jump straight to it.`
+                  : borrowerName
+                    ? `Open ${borrowerName}'s validation and use the Handoff card to generate the polished Excel + PDF.`
+                    : "Open the borrower's validation and use the Handoff card to generate the polished Excel + PDF."}
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
-              render={<Link href="/dashboard" />}
+              render={<Link href={validationId ? `/dashboard/validations/${validationId}#handoff` : "/dashboard"} />}
             >
-              Open validation
+              {validationId ? "Go to handoff" : "Open validation"}
               <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
           </CardContent>

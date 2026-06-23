@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, FileText } from "lucide-react";
+import { UnderwritingPanel } from "@/components/dashboard/underwriting-panel";
+
+// Validation experience_tier (1 = most experienced … 4 = none) → the
+// evaluate engine's "deals completed" integer the sizing panel expects.
+// Mirrors the tierToExperience map on the evaluate form.
+const tierToDealCount: Record<number, number> = { 1: 10, 2: 5, 3: 2, 4: 0 };
 
 type CounterOffer =
   | {
@@ -297,6 +303,33 @@ export default function EvaluationDetailPage() {
           ))}
         </CardContent>
       </Card>
+
+      {/* Underwriting Workbench (parity with the live evaluate form) — size
+          the loan deterministically + optional AI judgment, hydrated from
+          this saved evaluation's deal params (UX-PLAN §1.1). Saves link back
+          to this evaluation via deal_evaluation_id. */}
+      <UnderwritingPanel
+        dealEvaluationId={data.id}
+        deal={{
+          loan_type: data.loan_type,
+          property_type: data.property_type,
+          property_state: data.location,
+          purchase_price: data.purchase_price,
+          loan_amount: data.loan_amount,
+          arv: data.arv,
+          rehab_budget: data.rehab_budget,
+          borrower_fico: data.fico,
+          borrower_experience:
+            data.sponsor_experience_tier != null
+              ? (tierToDealCount[data.sponsor_experience_tier] ?? 0)
+              : 0,
+          occupancy: occupancy ?? "non_owner_occupied",
+          loan_purpose: loanPurpose ?? "purchase",
+          is_rural: Boolean(data.additional_params?.is_rural),
+          borrower_name: borrowerName,
+          property_address: propertyAddress,
+        }}
+      />
     </div>
   );
 }
