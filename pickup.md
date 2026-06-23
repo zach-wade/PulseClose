@@ -33,6 +33,12 @@ is behind us. Everything below is **live on `main` and deployed**; migrations
 
 ## The plan — do these in order
 
+> **Session progress (2026-06-23 cont.):** Item 1 (UX quick-win pass, all 7
+> sub-tasks) and Item 2 (Underwriting → handoff artifact) are **shipped to
+> `main` and deployed green**. Commits `dcba0f9` (item 1 structural),
+> `3688c0c` (item 1 cosmetic), `ebf56cd` (item 2). Item 0 is still on Zach
+> (manual Vercel env keys). Resume at Item 3.
+
 ### 0. 🔴 Set Vercel env keys (manual, you — gates shipped features)
 
 Shipped funnel/emails/analytics are inert until these are set in the Vercel
@@ -49,7 +55,7 @@ Also confirm `claude-opus-4-8` resolves on the Anthropic key (first Opus consume
 — the judgment layer; memo path uses Sonnet). If not, change `DEFAULT_MODEL` in
 `src/lib/underwriting/judgment.ts` to a Sonnet id.
 
-### 1. UX quick-win pass (~2–3 days) — fixes the first-run story
+### 1. ✅ DONE — UX quick-win pass — fixes the first-run story
 
 From [docs/UX-PLAN.md](docs/UX-PLAN.md) §4. Each is small; ship as one or two PRs.
 
@@ -73,7 +79,13 @@ From [docs/UX-PLAN.md](docs/UX-PLAN.md) §4. Each is small; ship as one or two P
 6. **Borrower's recent evaluations** card on the validation detail.
 7. **Rename sidebar "Investors" → "Manage investors"** (`components/dashboard/sidebar.tsx`).
 
-### 2. Underwriting → handoff artifact (~2–3 days) — the wedge-completer
+### 2. ✅ DONE — Underwriting → handoff artifact — the wedge-completer
+(Sizing ladder + binding constraint + full AI judgment now embed in the
+investor handoff Excel + PDF, gated by a lender-chosen `chosen_uw_model_id`
+picker on the HandoffCard. Borrower one-sheet intentionally untouched. The
+§3.2 tabs refactor was kept separate — see Later.)
+
+_Original spec (now shipped), kept for reference:_
 
 Put the sizing **constraint ladder + binding constraint + AI judgment stance**
 into the investor handoff Excel + PDF and the borrower one-sheet. Builders live in
