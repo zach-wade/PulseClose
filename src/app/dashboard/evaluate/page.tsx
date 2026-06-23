@@ -471,9 +471,10 @@ function EvaluatePageInner() {
       )}
 
       {/* Underwriting Workbench — deterministic loan sizing + per-investor
-          best execution + optional AI judgment. Available once a base
-          evaluation has landed (so the deal fields + investor set are set). */}
-      {sortedResults && (
+          best execution + optional AI judgment. Always available (sizes
+          deal-level even before an eligibility run; per-investor populates
+          from the org's investors). */}
+      {(
         <UnderwritingPanel
           dealEvaluationId={evaluationId}
           deal={{
