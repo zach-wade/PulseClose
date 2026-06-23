@@ -533,3 +533,34 @@ export const uwJudgmentV1 = z.object({
 export type UwJudgmentV1 = z.infer<typeof uwJudgmentV1>;
 export const parseUwJudgmentV1 = safe(uwJudgmentV1);
 export const parseUwJudgmentV1Strict = strict(uwJudgmentV1, "uw_models.judgment");
+
+// ── investor_mandates.gates ────────────────────────────────────────────────
+// A fund's diligence standard. Every gate is optional — an empty mandate
+// passes everything; the lender opts into the constraints that matter to the
+// fund. risk-tier order is LOW < MEDIUM < HIGH; experience_tier is 1 (most
+// experienced) … 4 (none), so max_experience_tier is the WORST acceptable.
+export const mandateGatesV1 = z.object({
+  schema_version: schemaVersion,
+  max_risk_tier: z.enum(["LOW", "MEDIUM", "HIGH"]).nullable().optional(),
+  require_sos_active: z.boolean().optional(),
+  disallow_active_litigation: z.boolean().optional(),
+  disallow_sanctions_hit: z.boolean().optional(),
+  max_experience_tier: z.number().int().min(1).max(4).nullable().optional(),
+  min_confidence_score: z.number().min(0).max(100).nullable().optional(),
+  require_gc_active: z.boolean().optional(),
+  // When true, the investor's most recent deal eligibility for this validation
+  // must be pass/conditional (reuses the evaluate engine — no duplication).
+  require_eligibility_pass: z.boolean().optional(),
+});
+export type MandateGatesV1 = z.infer<typeof mandateGatesV1>;
+export const parseMandateGatesV1 = safe(mandateGatesV1);
+export const parseMandateGatesV1Strict = strict(mandateGatesV1, "investor_mandates.gates");
+
+// ── mandate_assessments.failures ───────────────────────────────────────────
+// One entry per breached gate; [] on a clean pass.
+export const mandateFailureV1 = z.object({
+  gate: z.string(),
+  message: z.string(),
+});
+export const mandateAssessmentFailuresV1 = z.array(mandateFailureV1);
+export type MandateFailureV1 = z.infer<typeof mandateFailureV1>;

@@ -297,6 +297,30 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
     }
   }
 
+  // Item 4 — capital-provider mandate stamps. The endorsement surface: which
+  // fund standards this validation meets (or fails, with reasons).
+  if (doc.mandate_assessments.length > 0) {
+    cover.addRow([]);
+    const mHeader = cover.addRow(["Capital-Provider Mandates"]);
+    mHeader.font = { size: 12, bold: true, color: { argb: ACCENT } };
+    cover.mergeCells(`A${mHeader.number}:B${mHeader.number}`);
+    for (const m of doc.mandate_assessments) {
+      const label = `${m.mandate_name ?? "Mandate"}${m.investor_name ? ` (${m.investor_name})` : ""}`;
+      const verdict =
+        m.result === "pass" ? "MEETS standard" : m.result === "conditional" ? "MEETS with conditions" : "DOES NOT meet";
+      const color = m.result === "pass" ? STRENGTH : m.result === "conditional" ? CONCERN : DANGER;
+      const r = cover.addRow([label, verdict]);
+      r.getCell(1).font = { bold: true };
+      r.getCell(2).font = { bold: true, color: { argb: color } };
+      for (const f of m.failures) {
+        const fr = cover.addRow([`  • ${f.message}`, ""]);
+        fr.getCell(1).font = { color: { argb: DANGER } };
+        fr.getCell(1).alignment = { wrapText: true, vertical: "top" };
+        cover.mergeCells(`A${fr.number}:B${fr.number}`);
+      }
+    }
+  }
+
   // G6.1 — Intended investor block. Only renders when one was chosen.
   if (doc.intended_investor) {
     cover.addRow([]);

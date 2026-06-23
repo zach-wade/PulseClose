@@ -133,6 +133,16 @@ export interface HandoffDocument {
     judgment: UwJudgmentV1 | null;
   } | null;
 
+  // Item 4 — capital-provider mandate stamps. Which fund standards this
+  // validation meets (or fails, with reasons). The endorsement surface.
+  mandate_assessments: Array<{
+    mandate_name: string | null;
+    investor_name: string | null;
+    result: "pass" | "conditional" | "fail";
+    failures: { gate: string; message: string }[];
+    assessed_at: string;
+  }>;
+
   // Lender edit + override audit trail. Aggregated counts at the top
   // for the headline; full event list for the methodology PDF.
   lender_edits: {
@@ -321,6 +331,25 @@ export async function buildHandoffDocument(
     }
   }
 
+  // Item 4 — capital-provider mandate stamps for this validation.
+  const { data: mandateRows } = await supabase
+    .from("mandate_assessments")
+    .select("result, failures, assessed_at, investor_mandates ( name ), investors ( display_name )")
+    .eq("validation_id", validationId)
+    .eq("org_id", orgId)
+    .order("assessed_at", { ascending: false });
+  const mandateAssessments = (mandateRows ?? []).map((a) => {
+    const mj = a.investor_mandates as { name: string } | { name: string }[] | null;
+    const ij = a.investors as { display_name: string } | { display_name: string }[] | null;
+    return {
+      mandate_name: Array.isArray(mj) ? mj[0]?.name ?? null : mj?.name ?? null,
+      investor_name: Array.isArray(ij) ? ij[0]?.display_name ?? null : ij?.display_name ?? null,
+      result: a.result as "pass" | "conditional" | "fail",
+      failures: (a.failures ?? []) as { gate: string; message: string }[],
+      assessed_at: a.assessed_at as string,
+    };
+  });
+
   const rawTracks = ((trackRes.data ?? []) as unknown as Array<{
     property_id: string | null;
     property_address: string;
@@ -486,6 +515,7 @@ export async function buildHandoffDocument(
     overall_narrative: handoffData.overall_narrative ?? null,
     intended_investor: intendedInvestor,
     loan_sizing: loanSizing,
+    mandate_assessments: mandateAssessments,
     lender_edits: await buildLenderEditTrail(supabase, validationId),
   };
 }

@@ -55,6 +55,17 @@ function dimColor(severity: string): string {
   return "#475569";
 }
 
+function mandateColor(result: string): string {
+  if (result === "pass") return "#15803d";
+  if (result === "conditional") return "#b45309";
+  return "#b91c1c";
+}
+function mandateVerdict(result: string): string {
+  if (result === "pass") return "Meets standard";
+  if (result === "conditional") return "Meets with conditions";
+  return "Does not meet";
+}
+
 function HandoffBody({ doc }: { doc: HandoffDocument }) {
   return (
     <>
@@ -347,6 +358,32 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
           </section>
         );
       })()}
+
+      {/* Item 4 — capital-provider mandate stamps. The endorsement surface:
+          which fund standards this validation meets. */}
+      {doc.mandate_assessments.length > 0 && (
+        <section className="hf-section">
+          <h2>Capital-provider mandates</h2>
+          {doc.mandate_assessments.map((m, i) => (
+            <div key={i} className="hf-investor" style={{ marginBottom: "8px" }}>
+              <p>
+                <strong>{m.mandate_name ?? "Mandate"}</strong>
+                {m.investor_name ? ` · ${m.investor_name}` : ""}{" "}
+                <span style={{ color: mandateColor(m.result), fontWeight: 700 }}>
+                  · {mandateVerdict(m.result)}
+                </span>
+              </p>
+              {m.failures.length > 0 && (
+                <ul className="hf-list">
+                  {m.failures.map((f, j) => (
+                    <li key={j} style={{ color: "#b91c1c" }}>{f.message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* G6.1 — Intended investor block when one was chosen on the
           handoff card. Renders before the narrative so the audience

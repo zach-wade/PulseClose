@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { InvestorPerformanceCard } from "@/components/dashboard/investor-performance-card";
+import { MandatesManager } from "@/components/dashboard/mandates-manager";
 
 // A4/A5 — Investor detail page. Pulls the criteria + performance card +
 // rate trend together in one place. The admin-list view at
@@ -89,6 +90,9 @@ export default function InvestorDetailPage() {
 
       {/* A4 + A5 — performance card with rate trend */}
       <InvestorPerformanceCard investorId={investor.id} />
+
+      {/* Item 4 — capital-provider mandates (this fund's validation standard) */}
+      <MandatesManager investorId={investor.id} />
 
       {investor.notes && (
         <Card>

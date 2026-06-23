@@ -45,6 +45,7 @@ import { AIMemo } from "@/components/dashboard/ai-memo";
 import { ActivityStrip } from "@/components/dashboard/activity-strip";
 import { BorrowerHistoryCard } from "@/components/dashboard/borrower-history-card";
 import { BorrowerEvaluationsCard } from "@/components/dashboard/borrower-evaluations-card";
+import { MandateAssessmentsCard } from "@/components/dashboard/mandate-assessments-card";
 import { CompareToPriorButton } from "@/components/dashboard/compare-to-prior-button";
 import { RouteToInvestorButton } from "@/components/dashboard/route-to-investor-button";
 import { BorrowerUploadsCard } from "@/components/dashboard/borrower-uploads-card";
@@ -668,6 +669,10 @@ export default function ValidationDetailPage() {
       )}
 
       {/* Operational layer — produce artifacts + watch for changes */}
+
+      {/* Item 4 — capital-provider mandate stamps (which fund standards this
+          validation meets). Auto-assessed on completion; re-assessable here. */}
+      <MandateAssessmentsCard validationId={data.id} />
 
       {/* Borrower's recent evaluations — jump to deals already run. */}
       <BorrowerEvaluationsCard validationId={data.id} borrowerId={data.primary_borrower_id} />

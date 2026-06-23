@@ -47,6 +47,7 @@ import { verifyAddresses, MAX_ADDRESSES } from "@/lib/track-record/verify-core";
 import { scoreAndPromotePendingRows } from "@/lib/track-record/review";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 import { dispatchWebhookEvent } from "@/lib/webhooks/deliver";
+import { assessValidationMandates } from "@/lib/mandates/assess";
 
 const APP_BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.pulseclose.com";
 
@@ -699,6 +700,17 @@ export async function runValidationPipeline(
       await withErrorLog(`pipeline.webhook[${validationId}]`, fireWebhook);
     } else {
       after(() => withErrorLog(`pipeline.webhook[${validationId}]`, fireWebhook));
+    }
+
+    // 14. Auto-assess against the org's capital-provider mandates (Item 4) —
+    // the validation arrives already stamped. Persists mandate_assessments +
+    // fires mandate.assessed webhooks. Best-effort; same defer pattern.
+    const assessMandates = () =>
+      assessValidationMandates(supabase, orgId, validationId).then(() => undefined);
+    if (background) {
+      await withErrorLog(`pipeline.mandates[${validationId}]`, assessMandates);
+    } else {
+      after(() => withErrorLog(`pipeline.mandates[${validationId}]`, assessMandates));
     }
 
     return {

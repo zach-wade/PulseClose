@@ -8,6 +8,7 @@ export const WEBHOOK_EVENT_TYPES = [
   "validation.completed",
   "tier.changed",
   "outcome.reported",
+  "mandate.assessed",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
