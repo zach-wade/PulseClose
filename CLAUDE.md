@@ -37,7 +37,14 @@ scored deterministically with an AI memo for narrative:
 
 Plus: deterministic risk-factor compute + tier rebuild, override-and-rerun via atomic RPC, Story Mode v2 AI memo, investor evaluation engine, investor handoff (Excel + PDF), continuous monitoring, deal outcome capture, activity feed.
 
-See [STRATEGY.md](STRATEGY.md) for full feature surface and roadmap.
+**Underwriting (shipped 2026-06-22/23) — the product is now a verification + underwriting gateway, not just borrower validation:**
+
+6. **Underwriting Workbench (Module 10)** — deterministic loan sizing (`src/lib/underwriting/sizing.ts`): max loan = MIN across LTV/LTC/LTARV/DSCR/debt-yield, names the binding constraint, value-add returns sketch. Per-investor best-execution overlay sizes at each investor's caps + priced rate.
+7. **AI UW Copilot (Module 6)** — `src/lib/underwriting/judgment.ts`: Opus 4.8 reads the engine's numbers through Damon's 5-dimension framework (sponsor/economics/market/structure/exit) + 5-concept lens → deal-killers + a pursue/pursue-with-conditions/pass stance, through the full AI privacy harness. **AI never sets the loan amount — the deterministic engine does** (same rule as the tier).
+
+Surfaced on `/dashboard/evaluate`; persisted in `uw_models` (00040); `/api/underwrite` + `/api/underwrite/[id]/judge`. Plus a **self-serve funnel** (public landing + `/pricing`, 14-day/50-check trial, usage meter, onboarding emails, PostHog events).
+
+See [STRATEGY.md](STRATEGY.md) for full feature surface + the 2026-06-23 reposition, [docs/UX-PLAN.md](docs/UX-PLAN.md) for the coherent-product UX plan, and [docs/ROADMAP.md](docs/ROADMAP.md) for the post-NPLA sequence.
 
 ## Tech stack
 
@@ -88,10 +95,12 @@ src/
     handoff/                  # builder + excel
     track-record/             # verify-core.ts (deed-chain matcher, parseAddressForState)
     investors/                # extract.ts (A1 Claude prompt + parse) + validator.ts
-    evaluate/                 # engine.ts (multi-investor eligibility)
+    evaluate/                 # engine.ts (multi-investor eligibility; min_dscr/min_debt_yield criteria)
+    underwriting/             # sizing.ts (loan sizing engine) + per-investor.ts + judgment.ts (AI UW copilot) + facts.ts
+    analytics/                # PostHog client + server capture (no-op without keys)
     litigation/               # extract + materialize
 supabase/
-  migrations/                 # 25 migrations (00001-00025)
+  migrations/                 # 42 migrations (00001-00042); latest: 00040 uw_models, 00041 org trial, 00042 trial-email flags
 wordpress/                    # Marketing-site content + publish scripts (separate from app)
 docs/                         # All strategic + operational docs
 scripts/                      # ETL / cleanup / verification (FDIC ingest, ZHVI refresh, cleanup-broken-validations, etc.)

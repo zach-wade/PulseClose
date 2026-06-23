@@ -10,6 +10,74 @@ specific journey/stage assignment.
 
 ---
 
+## Adjacent market: CRE bridge *lenders* (not brokers) — 2026-06-23
+
+The underwriting engine (`src/lib/underwriting`) already underwrites the
+sponsor + exit — the same logic CRE bridge lending uses. Market research
+(2026-06-23) was clear: CRE debt **brokers** buy deal-*matching* tools and
+won't pay for diligence (different buyer, different motion — **skip them**).
+But CRE **bridge lenders** ($5M–$30M value-add/recap, sponsor-credential-driven,
+fast-close) are a near-zero-GTM-change adjacency for the existing engine.
+
+- **Why:** same underwriting logic; strong 2026 tailwind (CBRE originations
+  +112% YoY Q3'25; ~$1T 2026 maturity wall; maturing debt ~4.76% vs ~6.24% new).
+- **Scope:** commercial deal-type templates on the existing sizing engine
+  (office/retail/industrial, hotel, mixed-use, land — specced in the consulting
+  `underwriting-workbench.md`); the judgment layer already generalizes.
+- **Unblocks when:** a CRE bridge lender surfaces via the capital-provider
+  network, OR the standalone "replace your Excel UW model" wedge gains traction
+  and asks for commercial templates.
+
+## Standalone underwriting wedge — "replace your Excel UW model"
+
+`uw_models` has nullable FKs to both `deal_evaluations` and `borrower_validations`
+— i.e., you can underwrite a deal *without* a full borrower validation. That
+makes the workbench a viable **standalone cold wedge** with a one-sentence pitch,
+no Elementix competition, and Insignia's 5 real Excel models as the validation
+anchor. May be a *better* opener than borrower validation (which now sits adjacent
+to Elementix's data layer).
+
+- **Unblocks when:** we want a cold/standalone entry point distinct from the
+  capital-provider wedge — e.g., a lender who won't adopt the full gateway but
+  will pay to kill their Excel UW model. Pairs with the $1,499 Underwriting tier.
+
+## Continuous title / collateral monitoring (CRE moat)
+
+Research flagged this as a genuinely *unserved* gap for CRE lenders (background
+screening is considered solved; title/lien/collateral drift is not). It fits the
+existing monitor runner (`src/lib/monitor/runner.ts`) — same cadence/diff/notify
+pattern, new adapter.
+
+- **Unblocks when:** we pursue a CRE-lender adjacency and want a differentiated
+  monitoring story, or a customer asks for post-close lien monitoring.
+
+## AVM / market-data layer
+
+The one diligence layer we don't have — turns the AI judgment's
+"market: NOT PROVIDED" into real comps + price-trend context. HouseCanary
+(best SFR API + comps) for MVP, CoreLogic for commercial/MF, ATTOM for cheap bulk.
+
+- **Why:** sharpens the underwriting judgment's "market" + "exit" dimensions; also
+  feeds the specced Module 6 property-intelligence phase.
+- **Unblocks when:** a customer's deals hinge on market reads the lender can't
+  supply, OR a vendor-cost decision frees ~$500–2,000/mo.
+
+## Capital-provider "mandate" object (the wedge's missing product surface)
+
+The distribution thesis assumes a fund can *mandate* PulseClose to its
+originators — but there's no product object for it. A thin version: a fund/investor
+defines a validation/underwriting standard (fed by the A1 PDF parser), and a
+lender's validation gets stamped "meets [Fund]'s standard." Turns A1 from an
+island into a loop and gives Damon/Insignia something concrete to *hand* a lender.
+Build toward the rep-and-warranty-relief mechanic ("run PulseClose = diligence
+reps satisfied"). *(Promoted to the post-NPLA sequence in ROADMAP.md — kept here
+for the fuller rationale.)*
+
+- **Unblocks when:** a capital provider commits to pushing PulseClose downstream
+  (post-NPLA signal).
+
+---
+
 ## APN / tax-assessor verification (canonical ground truth)
 
 Realie returns an APN (Assessor Parcel Number) on every property. The

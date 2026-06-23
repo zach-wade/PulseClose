@@ -1,7 +1,12 @@
 # PulseClose — Pricing Strategy
 
-**Current tiers, packaging gaps, and three hypotheses to test post-NPLA.**
-**Last updated:** 2026-05-05.
+**Current tiers, packaging gaps, and the post-underwriting repackaging direction.**
+**Last updated:** 2026-06-23.
+
+> **2026-06-23:** §0 (new, below) is the forward plan — underwriting shipped, so
+> add a ~$1,499 Underwriting tier + a metered Fund tier. §1+ describe what's
+> currently built. The 3-check gate referenced in older docs is now a 14-day /
+> 50-check trial (migration 00041).
 
 > **Sibling docs:**
 > - [STRATEGY.md](../STRATEGY.md) — older strategic context (April 2026; stale on tier specifics).
@@ -11,7 +16,35 @@
 
 ---
 
-## 1. Tier rationale (current)
+## 0. Repackaging direction (2026-06-23) — underwriting changed the math
+
+> **Supersedes the "three hypotheses" framing for forward planning.** The product
+> now does loan sizing + AI underwriting judgment, not just borrower checks.
+> Check-volume tiers price a lookup utility; we're undershooting the value.
+
+**Market basis (sourced):** the closest analog, KYB (Middesk), runs a **~$13.75K
+median ACV** (per-verification ~$2–5 + $10–30K annual minimums); vertical-SaaS
+median ACV ~$35K. Our top tier ($799/mo = $9.6K ACV) sits *below* both. Hybrid
+base+usage pricing rose 27%→41% in a year and matches our per-lookup COGS. Public
+LOS pricing is mostly gated/per-seat (LendingWise ~$149→$695/user/mo).
+
+**Decided direction (numbers pending Damon/NPLA validation):**
+
+| Tier | Price | What it is | Notes |
+|---|---|---|---|
+| Starter | $299/mo | Validation-led land tier | Where the warm-intro trial converts. |
+| Professional | $499/mo | Validation + higher volume | — |
+| **Underwriting (NEW)** | **~$1,499/mo** | + Workbench + AI judgment + handoff artifact | The new value + Excel-replacement switching cost. Not in code yet. |
+| **Fund / capital-provider (NEW)** | **$1,500–3,000/mo, metered** | Flat base + per-loan usage | Priced on a *different axis*: a fund mandating PulseClose across a roster buys distribution + standardization, not checks. Highest margin, most aligned with the wedge, **unvalidated → Damon conversation.** |
+
+**Principles:** move to **hybrid (base + usage)** — meter underwrites / AI-judgment
+runs (real Opus marginal cost); keep $799 as a *land* price, underwriting as the
+up-tier; **validate in person** (does $1,499 land? platform fee vs per-deal bundle?);
+don't price purely flat (leaves expansion revenue behind).
+
+---
+
+## 1. Tier rationale (current — as built)
 
 Today's tiers per `src/lib/stripe/server.ts`:
 

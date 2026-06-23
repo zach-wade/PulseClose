@@ -1,8 +1,11 @@
 # PulseClose — Product Strategy & Future Direction
 
-**Last updated 2026-05-05.** Replaces the April 2026 version, which
-predated Path B data model, AI memo Story Mode v2, sanctions screening,
-the AI privacy bundle, and Batch 2 (E1 / A1 / B1).
+**Last updated 2026-06-23.** Repositioned: the product crossed from
+"borrower validation" to a **verification + underwriting gateway** (see
+the new section below). The 2026-05-05 version predated the Underwriting
+Workbench + AI UW Copilot, the self-serve funnel, and the post-Elementix
+positioning lock. The April 2026 version additionally predated Path B,
+AI memo Story Mode v2, sanctions screening, and the AI privacy bundle.
 
 > Internal planning document. Pairs with [docs/ROADMAP.md](docs/ROADMAP.md)
 > (the journey-organized backlog), [docs/DISTRIBUTION-STRATEGY.md](docs/DISTRIBUTION-STRATEGY.md)
@@ -27,12 +30,47 @@ attracts, not by the authority itself.
 
 ---
 
-## Where we are today (2026-05-05)
+## What this product is now (2026-06-23 reposition)
 
-PulseClose is a multi-tenant SaaS borrower-validation platform for
-bridge lenders. Live at `app.pulseclose.com`, real vendor data,
-production-stable through 25 migrations. NPLA Atlantic City
-(2026-06-22/23) is the forcing function — ~7 weeks out.
+PulseClose has become a **verification + underwriting gateway** for
+bridge lenders: it turns a deal package into (1) a verified, tier'd
+borrower record, (2) a **sized loan** (deterministic engine —
+min across LTV/LTC/LTARV/DSCR/debt-yield, with the binding constraint
+named), (3) an **AI deal judgment** (sponsor/economics/market/structure/
+exit + deal-killers + a pursue / pursue-with-conditions / pass stance),
+(4) a per-investor best-execution routing, and (5) a capital-partner-ready
+handoff — orchestrating the lender's existing data and (on the roadmap)
+writing the result back to their LOS.
+
+**Three disciplines hold this together:**
+- **It's a gateway, not a data vendor.** Per the post-Elementix lock,
+  we *orchestrate* the entity-graph/diligence layer (Elementix + First
+  American own it; Insignia already pays for it), we don't replicate it.
+- **Underwriting is decision *support*, never the decision.** The
+  deterministic engine sizes and tiers; the AI narrates and flags. We
+  never make the credit call. (Market evidence: lenders want AI for
+  trustworthy inputs and velocity, and guard the credit decision as core
+  IP. This is also what keeps us out of ECOA/fair-lending territory.)
+- **Internal model ≠ buyer language.** "Verification + underwriting
+  gateway" is how *we* reason. Buyers respond to the outcome — "catch the
+  borrower problem before you fund; size the deal in minutes" — and to
+  their *named* LOS, not to "system of intelligence between CRM and LOS."
+
+**Is this a viable product for businesses beyond Insignia? Yes.** The
+build is multi-tenant, the wedge is repeatable (capital-provider
+endorsement → downstream originators), and the underwriting workbench is
+*standalone-capable* ("replace your Excel UW model" is a clean cold pitch
+with no Elementix competition). The product converged on the right thing;
+the work now is to point the positioning, pricing, and first-run UX at it
+(see [docs/UX-PLAN.md](docs/UX-PLAN.md) and the post-NPLA sequence in
+[docs/ROADMAP.md](docs/ROADMAP.md)).
+
+## Where we are today (2026-06-23)
+
+Live at `app.pulseclose.com`, multi-tenant SaaS, Stripe billing, real
+vendor data, production-stable through **42 migrations (00001–00042)**.
+NPLA Atlantic City (2026-06-22/23) just happened — the forcing function
+is now behind us; execution shifts to the post-NPLA sequence.
 
 ### What works in production
 
@@ -48,6 +86,7 @@ production-stable through 25 migrations. NPLA Atlantic City
 **Lender workflow (Stages 4-7):**
 - **Override-and-rerun** is the product, not a workaround. Lender disagrees, system recomputes atomically, memo regenerates.
 - **Investor evaluation engine** — multi-investor eligibility + leverage matrix + rate adjusters. Pre-filled deal form from validation context.
+- **Underwriting Workbench (Module 10) + AI UW Copilot (Module 6)** — *shipped 2026-06-22/23.* Deterministic loan sizing (min across LTV/LTC/LTARV/DSCR/debt-yield → binding constraint + value-add returns sketch; 24/24 regression checks vs the hand-computed deal), per-investor best-execution overlay (sizes at each investor's caps + priced rate), and an AI judgment layer (Opus 4.8 — Damon's 5-dimension framework + 5-concept lens + deal-killers + stance) through the full AI privacy harness. `uw_models` table, `/api/underwrite` + `/api/underwrite/[id]/judge`, panel on the evaluate page. AI never sets the loan amount — the deterministic engine does.
 - **Investor PDF parser (A1)** — fund manager uploads guidelines PDF, Claude extracts criteria with confidence per row, lender accepts/edits before save. Audit trail in `investor_criteria_extractions`. **NPLA hero feature.**
 - **Investor handoff** — Excel + PDF generation. `sent_handoff` activity event.
 - **Continuous monitoring** — entity SOS, federal litigation, sanctions screens re-run on cadence (daily/weekly/monthly). Per-adapter status tracking. Email on changes. **Critical-only filter** for deal-flow noise control.
@@ -105,6 +144,28 @@ demo. Therefore:
 
 Full mechanics in [docs/DISTRIBUTION-STRATEGY.md](docs/DISTRIBUTION-STRATEGY.md).
 
+**Reconciling the self-serve funnel (2026-06-23).** We shipped a public
+landing + pricing + 14-day trial + onboarding emails. This is *not* a pivot
+to cold/organic acquisition — research reconfirmed organic web won't be the
+demand engine for this ICP. It's **warm-intro landing infrastructure**: when
+Damon (or a capital partner) refers a lender, that lender needs a frictionless
+place to land, self-educate, and trial without a sales call. The funnel makes
+referred demand *convertible*; the capital-provider wedge *creates* the demand.
+(Turn PostHog on so we actually measure it.)
+
+**The wedge made mechanical (the rep-and-warranty lever).** The proven way an
+endorsement becomes a *requirement* is the Day-1-Certainty pattern: a capital
+provider relaxes back-end risk (rep & warranty relief, faster funding) only when
+the originator runs the approved tool. The path: land Insignia as the **named,
+contracted capital-provider reference** → get PulseClose written into their
+downstream-originator diligence expectations → build toward "run PulseClose =
+borrower-diligence reps satisfied," then repeat with the next fund. FinCEN's
+private-fund AML rule (source-of-wealth / PEP / sanctions — already in our stack)
+is the compliance tailwind, but it slipped to **Jan 2028** — cite it as prudence,
+don't anchor messaging to the date. The product hook this assumes — a
+fund-defined standard a validation can be stamped against — doesn't exist yet;
+it's the "capital-provider mandate object" on the post-NPLA roadmap.
+
 ### Why this niche, why now
 
 - **The category language doesn't exist yet.** No incumbent owns "borrower validation for bridge lenders" as a body of knowledge. LendingWise / Liquid Logics / Mortgage Office are LOS / fund-management / horizontal tools — none have ongoing methodology content. Wade Intel can plant the methodology flag uncontested.
@@ -128,13 +189,28 @@ Current tiers (see [docs/PRICING-STRATEGY.md](docs/PRICING-STRATEGY.md) for full
 | Enterprise | $799 | Unlimited | Mid-market lender |
 | Internal | — | Unlimited | SQL-only; founder/QA orgs |
 
-**Three packaging hypotheses to test post-NPLA:**
+**Repackaging direction (2026-06-23) — now that underwriting shipped.**
+Check-volume tiers price a *lookup utility*; the product now does
+underwriting too. Market comps say we're undershooting (closest analog,
+KYB/Middesk, runs ~$13.75K median ACV; our top tier is $9.6K ACV). The
+decided direction (numbers pending Damon validation — full detail in
+[docs/PRICING-STRATEGY.md](docs/PRICING-STRATEGY.md)):
 
-1. **Fund tier ($1,499-2,499/mo)** — bundles A1 (investor PDF parser), A2 (counter-offer calculator), A3 (borrower capital-availability PDF), B1 (borrower watchlist), A4 future (per-investor performance dashboard). Targets fund principals doing 50-200 deals/year.
-2. **Per-validation overage** — $30/check above the cap on Starter and Pro. Stripe metered billing.
-3. **Annual prepay discount** — 2 months free. Anchor for fund tier especially.
+1. **Keep $299 / $499 as validation-led *land* tiers** — where the
+   warm-intro trial converts.
+2. **Add a ~$1,499 Underwriting tier** — unlocks the workbench + AI
+   judgment + handoff artifact. Where the new value (and the
+   Excel-replacement switching cost) lives.
+3. **Design a metered Fund / capital-provider tier ($1,500-3,000/mo,
+   flat base + per-loan usage)** — priced on a different axis (a fund
+   mandating PulseClose across a roster buys distribution +
+   standardization, not checks). Highest-margin, most aligned with the
+   distribution thesis, entirely unvalidated → a Damon conversation.
+4. **Move to hybrid base + usage** — meter underwrites/judgment runs
+   separately (they carry real Opus marginal cost), matching price to COGS.
 
-Damon question at NPLA: does fund tier resonate, or do funds want to bundle it into a per-deal cost?
+Damon questions at NPLA / next sync: does a $1,499 underwriting tier land,
+and do funds want a platform fee or to bundle PulseClose into a per-deal cost?
 
 ---
 

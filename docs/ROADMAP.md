@@ -19,13 +19,48 @@
 
 **Distribution thesis:** Lenders don't refer UW tools peer-to-peer. Capital-provider endorsement is the only organic distribution path. Investor handoff Excel/PDF is the strategic artifact. NPLA serves both potential business models — SaaS customer acquisition AND fund-LP intros — without committing to either.
 
-**The product mental model that everything serves:** **a verification gateway between front-end CRM and the LOS that turns a deal package into a tier'd, override-aware, deed-verified, monitored borrower record — and routes the cleared deal to the right capital provider with one click.** Each pillar (entity, track record, litigation, sanctions, GC) is one adapter underneath; each downstream surface (handoff, evaluate, monitor, outcomes) is one consumer of that record.
+**The product mental model that everything serves:** **a verification + underwriting gateway between front-end CRM and the LOS that turns a deal package into a tier'd, override-aware, deed-verified borrower record AND a sized, judged loan — then routes the cleared deal to the right capital provider with one click and writes the result back to the lender's system of record.** Each pillar (entity, track record, litigation, sanctions, GC) is one adapter underneath; the sizing engine + AI judgment layer turn the cleared record into a loan recommendation; each downstream surface (handoff, evaluate/underwrite, monitor, outcomes) is one consumer of that record.
+
+> **Internal model, not buyer language.** "Verification + underwriting gateway"
+> is how *we* reason about it. Market research is clear that SMB lenders respond to
+> the *outcome* ("catch the borrower problem before you fund; size the deal in
+> minutes"), not to "system of intelligence between your CRM and LOS." Lead with
+> the job-to-be-done and name the buyer's actual LOS — keep the architecture phrase
+> internal. **And underwriting is decision *support*: the deterministic engine
+> sizes and tiers, the AI narrates — PulseClose never makes the credit call.**
 
 ---
 
-## Status snapshot (as of 2026-05-04)
+## Status snapshot (as of 2026-06-23)
 
-**Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor data flowing. 25 migrations applied. Batch 1 (close the journey) shipped 2026-05-02. AI privacy bundle shipped 2026-05-03. Batch 2 (capital stickiness + outcome substrate) shipped 2026-05-04.
+> **Repositioning note (2026-06-23):** the product crossed from "borrower
+> validation" to a **verification + underwriting gateway** — it now sizes the loan
+> (deterministic engine across LTV/LTC/LTARV/DSCR/debt-yield) and judges the deal
+> (AI underwriting copilot), in addition to validating the borrower and routing to
+> investors. The North Star below has been extended accordingly. See
+> [STRATEGY.md](../STRATEGY.md) for the positioning, pricing, and distribution
+> implications, and [UX-PLAN.md](./UX-PLAN.md) for the coherent-product UX plan.
+
+**Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor
+data flowing. **42 migrations applied (00001–00042).**
+
+**Shipped since the last snapshot (2026-06-22 → 06-23):**
+- **Underwriting Workbench (Module 10) + AI UW Copilot (Module 6)** — ported from
+  the validated standalone bridge-deal-evaluator. Deterministic loan sizing
+  (`src/lib/underwriting/sizing.ts`, 24/24 regression checks vs the hand-computed
+  deal), per-investor best-execution overlay, and an AI judgment layer (Opus 4.8,
+  Damon's 5-dimension framework + 5-concept lens + deal-killers + stance) wired
+  through the full AI privacy harness. `uw_models` table (00040), `/api/underwrite`
+  + `/api/underwrite/[id]/judge`, panel on the evaluate page.
+- **Self-serve funnel** — public landing (`/`) + `/pricing`, **14-day / 50-check
+  trial** replacing the 3-check gate (00041/00042), dashboard usage meter, trial
+  drip emails (Resend), PostHog funnel events (inert until env keys set). Reframed
+  as **warm-intro landing infrastructure**, not cold acquisition — see STRATEGY.
+- **D6 — Interoperability & lender-stack integration** added to this roadmap (the
+  "fits in someone's stack" dependency; generic write-back API + webhooks before
+  per-LOS connectors).
+
+**Earlier (2026-04-30 → 05-04):**
 
 **Recently shipped (2026-04-30 → 05-04, see [pickup.md](../pickup.md)):**
 - P0 — 5 PRs of critical-path fixes (FK consistency, monitor cron error handling, atomic risk recompute, JSONB schema versioning, snapshot-table `org_id`).
@@ -577,7 +612,88 @@ Every feature catalogued under the old tier system. The "Stage" column re-slots 
 
 ---
 
+## Post-NPLA sequence (2026-06-23)
+
+The pre-NPLA batch sequence is spent; NPLA happened 2026-06-22/23. This is the
+new ordered plan, synthesized from the 2026-06-23 strategy + UX + market analysis.
+Ordered by leverage. **Assume NPLA produces ≥1 capital-provider signal and 0–2
+warm lender intros — the realistic outcome under the distribution thesis.**
+
+1. **Doc reconciliation + reposition (½–1 day) — DONE 2026-06-23.** This pass:
+   promote the verification+underwriting gateway North Star, fix stale facts (42
+   migrations), add UX-PLAN, repackage pricing on paper, capture future ideas.
+   *Highest ROI hour on the board — stops the next session resuming on a false map.*
+2. **Turn PostHog on** — set `NEXT_PUBLIC_POSTHOG_KEY` (+ host) in Vercel. The
+   funnel is shipped but inert; we're flying blind until this is set. Also set
+   `RESEND_API_KEY` + `CRON_SECRET` so trial/onboarding emails fire.
+3. **UX quick-win pass (2–3 days)** — the §4 list in [UX-PLAN.md](./UX-PLAN.md):
+   workbench on the evaluate detail page (parity), "next step" CTA + progress
+   strip on validation detail, evaluate→handoff deep-link, fix the "minor"
+   severity color, borrower's recent evaluations on their detail page, first-run
+   "start here" card. Fixes the first-run story.
+4. **Underwriting → handoff artifact (2–3 days)** — put the sizing constraint
+   ladder + binding constraint + AI judgment stance into the Excel/PDF handoff +
+   the borrower one-sheet. *This is what makes underwriting demo-able to a capital
+   provider — the connective tissue that turns the shipped engine into the wedge.*
+5. **D6 item 1 — generic write-back API + real webhook payloads (3–4 days).** A
+   `POST` create-validation endpoint + per-org tokens + real
+   `notification_preferences` webhook events (validation.completed, tier.changed,
+   outcome.reported). The answer to "wire it into our LOS" — the first question a
+   mandating capital provider asks. See [§D6](#cross-cutting--interoperability--lender-stack-integration-d6).
+6. **Minimum capital-provider "mandate" object (3–5 days).** A fund/investor
+   defines a validation/underwriting standard (fed by the A1 PDF parser); a
+   lender's validation gets stamped "meets [Fund]'s standard." Connects the
+   distribution thesis to an actual product surface and turns A1 from an island
+   into a loop. Build toward the documented rep-and-warranty-relief mechanic
+   ("run PulseClose = borrower-diligence reps satisfied").
+7. **Pricing repackage (1 day code + Damon validation).** Add a **$1,499
+   Underwriting tier** (workbench + AI judgment + handoff artifact); design (don't
+   yet build) a **metered Fund tier ($1.5–3k/mo, flat base + per-loan usage)**.
+   See [PRICING-STRATEGY.md](./PRICING-STRATEGY.md). Validate the numbers with
+   Damon, not at the desk.
+8. **Validation-detail tabs + borrower-centric IA** (UX-PLAN §2–3) — bundle the
+   tabs with #4 (same page); do the borrower-centric restructure once real
+   multi-borrower volume confirms it matters.
+9. **AVM adapter** (later, customer-gated) — sharpens the AI judgment's "market"
+   dimension from "NOT PROVIDED" to real comps.
+
+**Explicitly de-prioritized (do NOT spend cycles here):**
+- **BatchData / C2 historical deeds + any data-layer deepening.** The
+  post-Elementix positioning lock is explicit: orchestrate the entity-graph layer
+  (Elementix + First American own it; Insignia already pays for it), don't
+  replicate it. De-fund C2.
+- **GEO/AEO / programmatic SEO** beyond maintaining the 15 existing guides — own
+  research killed organic web as the demand engine for this ICP.
+- **Reputation/consensus + investor-performance UI (E2/E3/E4/A4/A5)** — gated on
+  outcome-row density we won't have for months. Schema-only.
+- **Autonomous underwriting decisioning** — keeps the product advisory (the
+  "AI advises, human decides, deterministic engine sizes" spine) and out of
+  ECOA/fair-lending territory the posture doc doesn't yet cover.
+- **CRE *broker* GTM** — brokers buy deal-matching, not diligence. If expanding,
+  go to CRE *bridge lenders* (same underwriting logic) — see [IDEAS.md](./IDEAS.md).
+
+---
+
 ## Decisions log (append-only)
+
+### 2026-06-23 — Reposition to verification + underwriting gateway; reconcile docs
+The Underwriting Workbench (deterministic sizing) + AI UW Copilot shipped this
+week (commits `9c372c6`, `e9b2bda`), moving the product from "borrower validation"
+to a verification + underwriting gateway. A self-serve funnel also shipped
+(`6a093b0`, `f50445d`) — reframed as warm-intro landing infrastructure, not cold
+acquisition (organic web is not the demand engine for this ICP; capital-provider
+endorsement/mandate is). Three parallel analyses (UX audit, strategy/plan-gap,
+sourced market stress-test) converged: the build is right and converging; the
+docs, pricing, and first-run UX lagged. Actions taken: North Star extended to
+include sizing/judgment; status snapshot refreshed (42 migrations); post-NPLA
+sequence added (above); [UX-PLAN.md](./UX-PLAN.md) created; pricing repackage
+spec'd (add $1,499 underwriting tier + metered fund tier); de-prioritized
+BatchData/C2, SEO, reputation stack, autonomous decisioning, CRE-broker GTM.
+Market basis: Vendr/Middesk pricing (~$13.75K median KYB ACV), Fannie Mae lender-AI
+survey (AI valued for inputs/velocity, not the credit decision), FinCEN private-fund
+AML rule (eff. 2028 — tailwind, not deadline), Day-1-Certainty rep-and-warranty
+mechanic as the proven endorsement→requirement lever. Full synthesis lives in the
+2026-06-23 session; [STRATEGY.md](../STRATEGY.md) carries the durable version.
 
 ### 2026-05-05 — Distribution strategy rewrite (kill mass programmatic SEO)
 After Wade Intel parent brand context surfaced (parent firm at wadeintel.com, Build Buy Borrow newsletter, 5-Concept Loan Framework on GitHub) and 2026 SEO/GEO research showed organic CTR fell 58-61% on AI-Overview-present queries while AI-search hand-raisers convert 11x better, rescoped the original 300+ programmatic SEO play. KILL: 35 unwritten state guides, 100 county lien guides, 50 contractor license guides, 30 city market pages, 80 unwritten glossary terms. KEEP: 15 state guides + 20 glossary terms + 1 pillar post (now drafts on WP via new `publish-blog/glossary/guides.ts` scripts with FAQPage schema + named-expert byline + last-reviewed dates baked in). New effort split 30/20/15/15/10/10 (capital-provider authority / LinkedIn founder-led / newsletter / GEO retrofit / open framework / NPLA). Full mechanics in [DISTRIBUTION-STRATEGY.md](DISTRIBUTION-STRATEGY.md); programmatic SEO sub-doc in [seo-strategy.md](seo-strategy.md).
