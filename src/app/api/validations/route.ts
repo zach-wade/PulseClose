@@ -8,7 +8,12 @@ import {
   getSanctionsDataSource,
 } from "@/lib/adapters";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
-import { getCheckLimit, isUnlimitedPlan } from "@/lib/stripe/server";
+import {
+  getCheckLimit,
+  getEffectiveCheckLimit,
+  isOnTrial,
+  TRIAL_CHECK_CAP,
+} from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   upsertBorrower,
@@ -94,34 +99,35 @@ export async function POST(request: Request) {
   // Check plan limits
   const { data: org } = await supabase
     .from("organizations")
-    .select("plan, checks_used_this_period, stripe_subscription_id")
+    .select("plan, checks_used_this_period, stripe_subscription_id, trial_ends_at")
     .eq("id", profile.org_id)
     .single();
 
   const plan = org?.plan ?? "starter";
   const checksUsed = org?.checks_used_this_period ?? 0;
   const checkLimit = getCheckLimit(plan);
+  const billing = {
+    plan,
+    hasSubscription: !!org?.stripe_subscription_id,
+    trialEndsAt: org?.trial_ends_at ?? null,
+  };
 
-  // `internal` plan (founder / QA / demo orgs — set via SQL) bypasses both
-  // the monthly cap and the pre-subscription 3-check trial gate. Other
-  // free-tier orgs without a Stripe subscription get 3 checks; paid plans
-  // get their tier's limit.
-  const effectiveLimit = isUnlimitedPlan(plan)
-    ? Number.POSITIVE_INFINITY
-    : org?.stripe_subscription_id
-      ? checkLimit
-      : 3;
+  // `internal` (founder / QA) is unlimited; paid orgs get their plan cap;
+  // unpaid orgs get the 14-day / 50-check trial; expired trials hit the
+  // paywall. Single source of truth in stripe/server.ts.
+  const effectiveLimit = getEffectiveCheckLimit(billing);
+  const onTrial = isOnTrial(billing);
 
   if (checksUsed >= effectiveLimit) {
-    return NextResponse.json(
-      {
-        error: org?.stripe_subscription_id
-          ? `Plan limit reached (${checkLimit} checks/month). Upgrade your plan for more.`
-          : "Free trial limit reached (3 checks). Subscribe to continue.",
-        code: "PLAN_LIMIT_REACHED",
-      },
-      { status: 403 },
-    );
+    let error: string;
+    if (billing.hasSubscription) {
+      error = `Plan limit reached (${checkLimit} checks/month). Upgrade your plan for more.`;
+    } else if (onTrial) {
+      error = `Trial check limit reached (${TRIAL_CHECK_CAP}). Subscribe to continue.`;
+    } else {
+      error = "Your free trial has ended. Subscribe to continue.";
+    }
+    return NextResponse.json({ error, code: "PLAN_LIMIT_REACHED" }, { status: 403 });
   }
 
   if (!borrower_name || !borrower_entity_name || !entity_state) {

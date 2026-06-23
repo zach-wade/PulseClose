@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { GCStatusChip, type GCSummaryView } from "@/components/dashboard/gc-status-chip";
+import { UsageMeter } from "@/components/dashboard/usage-meter";
 
 interface Validation {
   id: string;
@@ -228,6 +229,9 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* Trial / usage meter */}
+      <UsageMeter />
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

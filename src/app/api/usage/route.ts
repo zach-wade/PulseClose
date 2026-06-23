@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
-import { getCheckLimit, isUnlimitedPlan } from "@/lib/stripe/server";
+import {
+  getCheckLimit,
+  isUnlimitedPlan,
+  getEffectiveCheckLimit,
+  isOnTrial,
+} from "@/lib/stripe/server";
 
 export async function GET() {
   const profile = await getUserProfile();
@@ -10,10 +15,10 @@ export async function GET() {
   }
   const supabase = createAdminClient();
 
-  // Get org info for plan
+  // Get org info for plan + billing/trial state
   const { data: org } = await supabase
     .from("organizations")
-    .select("name, plan")
+    .select("name, plan, checks_used_this_period, stripe_subscription_id, trial_ends_at")
     .eq("id", profile.org_id)
     .single();
 
@@ -67,11 +72,27 @@ export async function GET() {
   const plan = org?.plan ?? "starter";
   const planLimit = isUnlimitedPlan(plan) ? null : getCheckLimit(plan);
 
+  // Billing/trial state for the dashboard usage meter. period_checks_used is
+  // the org-level counter the gate enforces against (resets each billing
+  // period); effective_limit is what the gate actually allows right now.
+  const billing = {
+    plan,
+    hasSubscription: !!org?.stripe_subscription_id,
+    trialEndsAt: org?.trial_ends_at ?? null,
+  };
+  const effectiveLimit = getEffectiveCheckLimit(billing);
+  const onTrial = isOnTrial(billing);
+
   return NextResponse.json({
     org_name: org?.name ?? "Unknown",
     plan,
     plan_limit: planLimit,
     plan_unlimited: isUnlimitedPlan(plan),
+    on_trial: onTrial,
+    trial_ends_at: org?.trial_ends_at ?? null,
+    has_subscription: billing.hasSubscription,
+    period_checks_used: org?.checks_used_this_period ?? 0,
+    effective_limit: Number.isFinite(effectiveLimit) ? effectiveLimit : null,
     total_checks: totalChecks,
     total_cost_cents: totalCostCents,
     by_type: byType,

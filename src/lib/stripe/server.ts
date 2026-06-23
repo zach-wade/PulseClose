@@ -61,3 +61,34 @@ export function getCheckLimit(plan: string): number {
   const p = PLANS[plan as PlanName];
   return p?.checkLimit ?? 20;
 }
+
+// Self-serve trial: 14 days, capped at 50 checks (bounds vendor cost while
+// giving a referred lender enough room to run real deals before the paywall).
+// See migration 00041 — trial_ends_at is set at org creation.
+export const TRIAL_DAYS = 14;
+export const TRIAL_CHECK_CAP = 50;
+
+export interface OrgBilling {
+  plan: string;
+  hasSubscription: boolean;
+  trialEndsAt: string | null;
+}
+
+// True when the org is in its free trial window (not internal, not subscribed,
+// trial_ends_at still in the future).
+export function isOnTrial(org: OrgBilling, now: Date = new Date()): boolean {
+  if (isUnlimitedPlan(org.plan) || org.hasSubscription) return false;
+  return !!org.trialEndsAt && new Date(org.trialEndsAt) > now;
+}
+
+// The single source of truth for how many checks an org may run this period:
+//   internal           → unlimited
+//   has subscription   → its plan's cap
+//   active trial       → TRIAL_CHECK_CAP
+//   trial expired, no subscription → 0 (paywall)
+export function getEffectiveCheckLimit(org: OrgBilling, now: Date = new Date()): number {
+  if (isUnlimitedPlan(org.plan)) return Number.POSITIVE_INFINITY;
+  if (org.hasSubscription) return getCheckLimit(org.plan);
+  if (isOnTrial(org, now)) return TRIAL_CHECK_CAP;
+  return 0;
+}
