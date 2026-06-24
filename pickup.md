@@ -1,63 +1,121 @@
-# PulseClose — Session Pickup & Execution Plan (2026-06-23, rev. UX-redesign phase)
+# PulseClose — Session Pickup & Execution Plan (2026-06-24, rev. depth-&-value phase)
 
-> **Self-contained handoff.** A fresh session can work straight down §"The
-> next-session plan." Deeper rationale lives in the linked docs.
+> **Self-contained handoff.** A fresh session should start at §"The reshaped plan
+> (start here)" below. Deeper rationale lives in the linked docs.
 >
-> **Read first (in order):** this file → [docs/CUSTOMER-SCENARIOS.md](docs/CUSTOMER-SCENARIOS.md)
-> (personas — the new lens) → [docs/UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md)
-> (the end-to-end plan) → [STRATEGY.md](STRATEGY.md) (the gateway reposition) →
-> [docs/PRICING-STRATEGY.md](docs/PRICING-STRATEGY.md) §0 → memory `MEMORY.md`.
+> **Read first (in order):**
+> 1. **[docs/DEPTH-AND-VALUE-DIRECTION.md](docs/DEPTH-AND-VALUE-DIRECTION.md) — THE NORTH STAR.**
+>    Grounded in Damon's own words (consulting transcripts) + the real Insignia Excel
+>    models + public-tools research. Reframes everything. Read it fully.
+> 2. [docs/PERSONA-FLOWS.md](docs/PERSONA-FLOWS.md) — per-persona end-to-end journeys.
+> 3. [docs/CUSTOMER-SCENARIOS.md](docs/CUSTOMER-SCENARIOS.md) — the personas.
+> 4. [docs/UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md) §9 — live-review findings + the redesign.
+> 5. [docs/COMPETITIVE-RESEARCH-2026-06.md](docs/COMPETITIVE-RESEARCH-2026-06.md) — pricing/packaging comps.
+> 6. [STRATEGY.md](STRATEGY.md) (gateway reposition) → [docs/PRICING-STRATEGY.md](docs/PRICING-STRATEGY.md) §0 → memory `MEMORY.md`.
 
 ---
 
-## Where we are (headline)
+## Where we are (headline — 2026-06-24)
 
-The core product is **functionally complete** as a verification + underwriting
-gateway — all three module clusters are built and live: **① Verify** (5 pillars +
-risk/tier + monitoring), **② Underwrite** (workbench + AI copilot + sizing),
-**③ Distribute** (evaluate/route + mandates + handoff + write-back API/webhooks).
+**The pivot of this session:** the UX rebuild (below) is solid coherence work, but
+an internal critique landed hard — *"it doesn't jump out as great UX, I don't see
+what Damon values in these modules, and it's weak vs the complicated Excel models
+they use — still shallow."* We took that seriously: mined the **consulting
+transcripts + the real Insignia Excel models** (3 agents) and ran **public-tools
+deep research**. Conclusion (full detail in DEPTH-AND-VALUE-DIRECTION.md):
 
-**The gap is no longer function — it's coherence.** The IA is data-shaped, the
-analyzer is a ~30-input two-engine wall, pricing is on a check-volume axis that
-matches no persona, and the **Fund (the wedge persona) has no product home.** We
-have reframed the work around **personas** and written the redesign plan. Next
-phase is **persona-driven UX redesign**, validated against live screens +
-competitor research + deep thinking.
+- **We are at PARITY, not behind.** Blooma + RealINSIGHT (closest productized
+  competitors) use the *same* single-period constraint-min sizer we do. Only ARGUS/
+  Backshop do true multi-period DCF — off-brand to chase. The "shallow vs Excel"
+  feeling is relative to **Damon/Noah as Excel power-users**, not the product market.
+- **The wedge is the moat (all confirmed whitespace):** cross-investor best-execution
+  *pricing*, deed-chain **track-record verification** (competitors only score it as a
+  weight off self-reported docs — bigger differentiator than we thought), exit/takeout
+  sizing, mandate/rep-&-warranty verdict, portable handoff. No competitor bundles them.
+- **The fix is narrow:** 3 surgical depth adds (exit/takeout sizing → buy-box
+  pricing-grid fidelity → interest-reserve sizing) that live where Damon's real
+  judgment is — NOT a rebuild of their spreadsheet. Plus the UX pattern that reads
+  as "real": **side-by-side scenarios + human picks the driving assumption + drill-
+  down to source on every number.**
+- **The one thing only Damon can answer:** is that "enough depth" to trust it? →
+  build **Damon-shaped test data + a guided walkthrough first**, so we judge against
+  a realistic deal and can put it in front of him.
 
-Everything below is **live on `main`, deployed green**; migrations **00001–00044**
-applied to prod; `npm run build` clean; UW engine test 24/24.
-
----
-
-## Shipped this session (2026-06-23)
-
-1. **Item 1 — UX quick-win pass** (workbench on eval detail, next-step strip,
-   evaluate→handoff deep-link, muted "minor", 3-step empty state, recent-evals
-   card, sidebar rename). Commits `dcba0f9`, `3688c0c`.
-2. **Item 2 — Underwriting → handoff artifact** (sizing ladder + full AI judgment
-   in handoff Excel/PDF, lender-picked `chosen_uw_model_id`). Commit `ebf56cd`.
-3. **Item 3 — Write-back API + webhooks** (extracted `runValidationPipeline()`;
-   public `POST /api/public/v1/validations`; dedicated webhook subsystem —
-   `webhook_endpoints`/`webhook_deliveries`, HMAC, retry cron; triggers
-   validation.completed / tier.changed / outcome.reported). Migration 00043.
-   Commits `a0dde25`, `8d6cba3`.
-4. **Item 4 — Capital-provider mandates** (`investor_mandates` + `mandate_assessments`;
-   deterministic gate assessment; auto-assess in pipeline + on-demand; stamps on
-   validation detail + handoff Excel/PDF; `mandate.assessed` webhook; `MandatesManager`
-   editor). Migration 00044. Commit `00cadab`.
-5. **Item 0 closed** — env keys were already set in Vercel; fixed the
-   `RESEND_FROM_ADDRESS`→`RESEND_FROM_EMAIL` mismatch (resend.ts honors both);
-   set `CRON_SECRET`. (Only real gap was CRON_SECRET — now set.)
-6. **Strategy docs** — [CUSTOMER-SCENARIOS.md](docs/CUSTOMER-SCENARIOS.md) +
-   [UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md).
-
-**Parked/gated (intentional):** Item 5 pricing (Damon-gated; positioning decided
-= additive premium tier) · Item 6 borrower-IA (now folded into the UX redesign §1).
+Everything is **live on `main`, deployed green**; migrations **00001–00045** applied
+to prod; `npm run build` clean.
 
 ---
 
-## The next-session plan — do in order
+## Shipped this session (2026-06-24)
 
+**Phase 1 UX-coherence (all 4 items shipped + prod-smoke-tested green):**
+1. **Deal analyzer stepper** — one Deal object, 5 steps (Terms → Eligibility →
+   Sizing[opt-in] → Judgment[opt-in] → Hand off); stale-state flagging; sizing caps
+   default from matched investors. Killed the two-engine wall. `src/lib/deal/view-model.ts`
+   + `src/components/dashboard/deal/deal-stepper.tsx`; `evaluate/page.tsx` is a thin shell.
+2. **Validation detail tabs + promoted mandate stamp** — Summary/Evidence/Deal/Hand
+   off/Book; mandate lifted from 11th-of-13 to under the summary; `#handoff` deep-link
+   opens the Hand off tab.
+3. **Job-shaped IA** — sidebar = Borrowers/Deals/Capital/Book (+ Activity/Usage
+   secondary); `/dashboard`→"Borrowers", `/portfolio`→"Book".
+4. **Settings → Webhooks UI** (over the 00043 backend) + handoff "what's next" card.
+
+**4 bugs fixed** (from §9 live-review): gc-card white-screen guard · dashboard "No
+memo" terminal state · mobile header stacking · **migration 00045** slug-casing
+(APPLIED to prod + verified).
+
+**Test/research harness + docs:** `scripts/create-test-user.ts`, `seed-persona-data.ts`
+(stable IDs `1111…`/`2222…`/`3333…`), `drive-persona.ts` (Playwright; prod login
+`uw@`/`solo@`/`fund@test.pulseclose.com` pw `Test1234!`; `ux-review/` gitignored).
+New docs: **DEPTH-AND-VALUE-DIRECTION.md**, PERSONA-FLOWS.md, COMPETITIVE-RESEARCH-2026-06.md.
+
+**Commits this session:** `3d73abc` (live-review harness) · `9bf218f` (research
+synthesis) · `d38393d` (stepper + bugs) · `db80175` · `e765838` (webhooks) ·
+`4760517` (IA) · `77a4d49` + the depth-direction doc commit.
+
+---
+
+## The reshaped plan (start here)
+
+Per [DEPTH-AND-VALUE-DIRECTION.md](docs/DEPTH-AND-VALUE-DIRECTION.md) §6, in order:
+
+1. **🎯 Damon-shaped test data + guided walkthrough (DO FIRST).** Seed a realistic
+   Insignia deal set with the *real* Colchis/Oakhurst buy-boxes encoded (PDFs live in
+   `/Users/zachwade/code/clients/consulting/clients/insignia-capital/data/`) + a sponsor
+   with a verifiable track record. Script Noah's actual flow: phone intake →
+   track-record "who" → evaluate "slot where they fit" → exit story → mandate verdict
+   → one-pager. Extend `scripts/seed-persona-data.ts`. Goal: *see* whether it lands +
+   an artifact to show Damon.
+2. **Depth adds** (each deterministic + drill-down + human-reviewed): **exit/takeout
+   sizing** (terminal NOI/cap → max takeout vs bridge balance-at-exit) → **buy-box
+   pricing-grid fidelity** (FICO×experience leverage grid + ZHVI haircut + rate +bps,
+   straight from the Colchis/Oakhurst PDFs) → **stabilization-path coverage** ("years
+   to 1.20–1.25x") → **interest-reserve sizing**. Engine: `src/lib/underwriting/`.
+3. **UX-for-credibility:** side-by-side scenarios (base vs exit vs per-investor),
+   human picks the governing valuation/exit, drill-down to source on every number.
+4. **Wedge hardening:** best-execution accuracy, mandate/R&W verdict + portable
+   packet, track-record precision (ZERO false positives — Noah's trust-killer).
+5. **Stress-test** every screen against the §2 trust rules (drill-down present? AI
+   narrating not deciding? speaks their language? beats their Excel on exit/slot, or
+   just restates what Nexys shows?).
+
+**NOT building** (explicit): full pro-forma/lease-up/draw-ledger (Excel's job) · LOS/
+doc-gen (Nexys) · entity-ownership graph (Elementix) · borrower-fills-a-form intake ·
+autonomous AI decisioning · broad self-serve as primary GTM.
+
+**Load-bearing Damon question:** will a fund grant real rep-&-warranty relief on a
+PulseClose verdict? Unconfirmed; gates the Fund (Phase 2) build.
+
+---
+
+## The next-session plan — do in order  ⟪SUPERSEDED — historical record⟫
+
+> ⚠️ **This section is the COMPLETED research/design arc that led to the pivot.**
+> Steps 1–3 (live pixel-drive, public research, synthesis) are done and produced
+> [DEPTH-AND-VALUE-DIRECTION.md](docs/DEPTH-AND-VALUE-DIRECTION.md). For what to do
+> next, use **"The reshaped plan (start here)"** above — not this list. Kept for
+> the trail.
+>
 > The goal: make this **as good as it can be** — live-validated, stress-tested
 > against public alternatives, deeply reasoned. Don't jump to building; the first
 > three steps are research/design.
