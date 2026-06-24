@@ -75,22 +75,41 @@ synthesis) · `d38393d` (stepper + bugs) · `db80175` · `e765838` (webhooks) ·
 
 ---
 
+## Shipped 2026-06-24 (rev. depth phase, commit `dff0d58`, deployed)
+
+**The first depth add + the demo artifact — both done, engine-accurate, on prod:**
+- **Exit/takeout sizing** (`src/lib/underwriting/exit.ts`) — answers "does the exit
+  make sense?": permanent takeout at stabilization (MIN across perm LTV/DSCR/debt-
+  yield) tested vs the bridge balance → refinanceable? cushion/shortfall? "longer
+  term required" flag. Pure, drill-down basis on every number, regression-tested.
+  **Wired end-to-end:** jsonb schema → `/api/underwrite` (documented defaults +
+  human-overridable assumptions) → view-model → Sizing-step UI (exit panel + inputs).
+- **Real Colchis/Oakhurst buy-boxes encoded** from the lender PDFs →
+  `scripts/seed-sample-investors.ts` (replaced the "Approximate" placeholders).
+  Source-of-truth + engine-wiring status: **docs/BUYBOX-COLCHIS-OAKHURST.md**
+  (ZHVI haircut + Oakhurst >$3M cap captured but NOT yet wired — needs a
+  property-value-vs-ZHVI deal input).
+- **Damon-shaped demo deal seeded** (engine-computed, not faked) — **Westbrook
+  Capital Partners**, 8-unit Sacramento MFR value-add, deed-verified sponsor:
+  bridge **$1.8M** (LTV-bound) · takeout **$2.28M** (perm-DSCR, **1.27x**, clears
+  w/ **$485k** cushion) · best-exec **Oakhurst $1.92M > Colchis $1.68M**.
+  Walkthrough: **docs/DEMO-WALKTHROUGH-WESTBROOK.md** (login
+  `uw@test.pulseclose.com`, validation `4444…`). Underwriter org `27296b6b…`.
+
+**→ Next: show Damon the Westbrook deal** (the load-bearing "is this enough depth?"
+question), then the remaining depth adds per §6 step 2 below.
+
 ## The reshaped plan (start here)
 
 Per [DEPTH-AND-VALUE-DIRECTION.md](docs/DEPTH-AND-VALUE-DIRECTION.md) §6, in order:
 
-1. **🎯 Damon-shaped test data + guided walkthrough (DO FIRST).** Seed a realistic
-   Insignia deal set with the *real* Colchis/Oakhurst buy-boxes encoded (PDFs live in
-   `/Users/zachwade/code/clients/consulting/clients/insignia-capital/data/`) + a sponsor
-   with a verifiable track record. Script Noah's actual flow: phone intake →
-   track-record "who" → evaluate "slot where they fit" → exit story → mandate verdict
-   → one-pager. Extend `scripts/seed-persona-data.ts`. Goal: *see* whether it lands +
-   an artifact to show Damon.
-2. **Depth adds** (each deterministic + drill-down + human-reviewed): **exit/takeout
-   sizing** (terminal NOI/cap → max takeout vs bridge balance-at-exit) → **buy-box
-   pricing-grid fidelity** (FICO×experience leverage grid + ZHVI haircut + rate +bps,
-   straight from the Colchis/Oakhurst PDFs) → **stabilization-path coverage** ("years
-   to 1.20–1.25x") → **interest-reserve sizing**. Engine: `src/lib/underwriting/`.
+1. ✅ **DONE (2026-06-24).** Damon-shaped test data + guided walkthrough — Westbrook
+   seeded engine-accurate against the real boxes; `docs/DEMO-WALKTHROUGH-WESTBROOK.md`.
+2. **Depth adds** (each deterministic + drill-down + human-reviewed): ✅ **exit/takeout
+   sizing** (DONE) → ◐ **buy-box pricing-grid fidelity** (leverage grid + rate bps
+   DONE; **ZHVI haircut + >$3M cap still need engine wiring** — a property-value-vs-
+   ZHVI input) → **stabilization-path coverage** ("years to 1.20–1.25x") →
+   **interest-reserve sizing**. Engine: `src/lib/underwriting/`.
 3. **UX-for-credibility:** side-by-side scenarios (base vs exit vs per-investor),
    human picks the governing valuation/exit, drill-down to source on every number.
 4. **Wedge hardening:** best-execution accuracy, mandate/R&W verdict + portable
