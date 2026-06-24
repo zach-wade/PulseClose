@@ -1,0 +1,242 @@
+# PulseClose — End-to-End UX Redesign Plan
+
+**Persona-driven coherence pass for the whole product.** Written 2026-06-23,
+grounded in: [CUSTOMER-SCENARIOS.md](./CUSTOMER-SCENARIOS.md) (personas), the
+live public funnel (landing + pricing), and a source-level read of the
+analyzer / detail / evaluate components.
+
+> **Supersedes** the tactical [UX-PLAN.md](./UX-PLAN.md) for forward planning
+> (its §4 quick-wins shipped 2026-06-23). This plan is structural and
+> persona-shaped, and it makes the **Fund a first-class citizen** (the chosen
+> central direction).
+
+---
+
+## 0. The five principles
+
+1. **Job-shaped, not data-shaped.** Today's IA exposes the *data model*
+   (Validations, Evaluate, Investors). Personas don't think in those nouns. The
+   IA should expose the *jobs*: vet a borrower, size/route a deal, set a
+   standard, watch the book.
+2. **One canonical Deal object.** The eligibility form and the underwriting
+   workbench are two engines reading two copies of the same inputs. Collapse to
+   **one Deal** that both read; editing a term invalidates downstream results
+   explicitly (no silent stale state).
+3. **Progressive disclosure by persona.** The Spreadsheet Refugee never sees a
+   DSCR input; the Underwriter gets the full workbench. Same page, different
+   depth, revealed on demand.
+4. **The stamp is the point.** For the wedge personas, "✓ meets [Fund]'s
+   standard" is the headline outcome — promote it, don't bury it.
+5. **AI stays a labeled, gated step.** Never auto-runs, always says who/what,
+   never sets the number. (Already true; keep it.)
+
+---
+
+## 1. Information architecture — the job-shaped restructure
+
+**Today (data-shaped):** Dashboard · Validations · Evaluate · Investors · Usage.
+
+**Proposed (job-shaped), lender tenant:**
+
+| Nav | Job | Replaces / absorbs |
+|---|---|---|
+| **Borrowers** | "Who am I lending to?" — the durable spine; validations + deals + outcomes + monitoring hang off a borrower | Validations list (becomes a borrower's history) |
+| **Deals** | "Size + route this loan" — the analyzer lives here, one Deal at a time | Evaluate (form) + workbench |
+| **Capital** | "Who funds these + what standards must I meet?" | Investors + Mandates (assessment view) |
+| **Book** | "Watch the live loans" | Monitoring + outcomes roll-up |
+| Settings | Org / team / API / **Webhooks** / billing | (+ the missing Webhooks UI) |
+
+**Borrower spine (UX-PLAN §2, now committed):** dedup on `primary_borrower_id`;
+a Borrower detail page composes their validations, deals, mandate stamps,
+outcomes, monitoring into one coherent view. This is the single highest-leverage
+legibility fix — it makes the product tell its own story.
+
+*Interim already shipped:* recent-evaluations card on validation detail,
+next-step strip, sidebar rename. Those carry until the full restructure.
+
+---
+
+## 2. The Deal analyzer redesign  *(the centerpiece — the acute pain)*
+
+### The problem, concretely
+On `/dashboard/evaluate` today a user meets, top to bottom:
+- ~14 deal fields (loan type, property type, state, purchase price, loan amount,
+  ARV, rehab, FICO, experience, occupancy, loan purpose, rural, address, name)
+- → eligibility results
+- → scenario comparison
+- → the **UnderwritingPanel** with its *own* ~12 sizing inputs (NOI, stabilized
+  NOI, going-in cap, exit cap, rate, amort, closing costs, coverage basis, max
+  LTV/LTC/LTARV, min DSCR, min debt-yield)
+- → 4 AI-context boxes (sponsor, market, business plan, notes)
+
+≈ **30 inputs across two engines that don't share state.** Editing the loan
+amount up top silently stales the workbench. It reads as a wall, and a
+verify-only lender sees underwriting inputs they'll never use.
+
+### The redesign: a Deal stepper over one Deal object
+
+A **Deal** belongs to a borrower and moves through steps; each step shows only
+what it needs, and every step reads the *same* Deal state.
+
+```
+ ┌─ Deal: [Borrower] · $X bridge · CA ──────────────────────────────┐
+ │  ①  Terms      ②  Eligibility   ③  Sizing      ④  Judgment   ⑤ Hand off │
+ │  ●━━━━━━━━━━━━━●━━━━━━━━━━━━━━━○ (optional) ─ ○ (optional) ─ ○            │
+ └──────────────────────────────────────────────────────────────────┘
+```
+
+- **① Terms** — the shared deal params, entered **once**. Pre-filled from the
+  borrower's validation (name, state, experience). This is the only place these
+  live; ② and ③ read them.
+- **② Eligibility** — "Which investors accept this?" Runs the evaluate engine on
+  the Terms. Output: the per-investor pass/conditional/fail + best-execution
+  list (already good). **No new inputs.** A verify-only lender can stop here.
+- **③ Sizing** *(opt-in)* — "How big, and what binds it?" *Only here* do the
+  income/value/rate inputs appear (NOI, caps, rate, amort). House constraints
+  **default from the matched investor tiers** in ② (don't re-ask LTV/LTC/DSCR
+  unless the lender overrides). Output: the constraint ladder + binding
+  constraint + per-investor sizing.
+- **④ Judgment** *(opt-in)* — the AI copilot. The 4 context boxes stay collapsed
+  until "Run AI judgment" is pressed. One clear gated action.
+- **⑤ Hand off** — assemble the artifact (sizing + judgment + mandate stamp).
+
+**What this kills:**
+- *Duplication* — Terms entered once; ② and ③ share them.
+- *Stale state* — changing a Term marks ②/③ "stale — re-run," never silently
+  wrong.
+- *Bloat for the wrong persona* — ③/④ are opt-in; verify-only users never see
+  sizing inputs.
+- *The "two engines" feel* — one Deal, one progress spine.
+
+**Data:** the Deal maps to the existing `deal_evaluations` (② ) + `uw_models`
+(③ ④ ) rows we already link via `validation_id` — the UI just stops treating
+them as separate surfaces. No new tables; this is a front-end + state
+consolidation with a thin "Deal" view model.
+
+**Sizing input reduction:** going-in cap and rate can default from
+property-type/loan-type norms (editable); closing costs default to a %; coverage
+basis defaults to current. The lender confirms 3–4 numbers (NOI, ARV/stabilized,
+rate), not 12.
+
+---
+
+## 3. Borrower / validation detail redesign
+
+The ~16-section, ~650-line scroll (UX-PLAN §3.1) → progressive disclosure:
+
+- **Top:** borrower identity + risk tier + **the next-step strip** (shipped) +
+  **mandate stamps promoted here** ("✓ meets Insignia's standard") — the
+  Downstream Adopter's headline outcome, currently buried.
+- **Tabs / accordion:** `Summary` (+ AI memo, expanded) · `Evidence` (the 5
+  pillars + property table + verify tray) · `Deal` (analyzer entry) · `Hand off`
+  · `Book` (monitor + outcome). Summary expanded; the rest collapsed.
+- Mobile falls out of this for free (collapsed sections instead of a wide scroll).
+
+---
+
+## 4. The Fund as a first-class citizen  *(central direction)*
+
+The wedge persona has no product home. Make the Fund a real tenant.
+
+### 4.1 Fund tenant + role
+- An org `type` of `fund` (or a `fund` role). A fund tenant's home is **not** the
+  lender dashboard — it's a **Mandate console**.
+- The fund **authors mandates directly** (reuse `investor_mandates`, owned by the
+  fund tenant rather than nested inside a lender's investor row). The A1 PDF
+  parser feeds the gates.
+
+### 4.2 The cross-originator mandate view  *(the wedge mechanic)*
+- An originator **joins a fund's program** (a consent link). From then on, their
+  completed validations are auto-assessed against that fund's mandate (the engine
+  already does this) and the **verdict + deal metadata** are shared back to the
+  fund — **not** the raw diligence dataset.
+- The fund sees, across all originators in its program: *which deals meet the
+  standard, which fail and why, throughput, exception rate.*
+- **Privacy boundary (must hold):** share the **assessment verdict + minimal deal
+  facts**, not the borrower's full diligence record, unless the originator
+  explicitly forwards the handoff. This keeps it "sharing a stamp," not
+  "replicating an entity graph" (honors the post-Elementix constraint).
+
+### 4.3 Originator-side surface
+- A **Programs** area (under "Capital"): "You're in Insignia's program. Your
+  deals are assessed against their standard. 7 of your last 10 met it." Joining a
+  program is the moment the wedge converts a referred originator.
+
+### 4.4 What this arms
+This closes the wedge loop's missing middle: the fund can **operate** the loop it
+drives — set the standard once, push it to a roster, see compliance — and the
+originator gets a concrete reason to be on PulseClose (capital access). It's the
+product encoding of capital-provider endorsement → rep-and-warranty relief.
+
+*Scope honesty:* this is the most ambitious piece (multi-tenant sharing + consent
+model + a second tenant UX). Sequence it after the lender-flow redesign (§2–3),
+but design the data/consent model now so the mandate work we shipped extends
+cleanly into it.
+
+---
+
+## 5. Pricing + packaging, re-shaped to the modules
+
+Move off the single check-volume axis to **module-shaped tiers** (matches
+[PRICING-STRATEGY.md](./PRICING-STRATEGY.md) §0):
+
+| Tier | Persona | Anchored on | Axis |
+|---|---|---|---|
+| Starter / Pro | Spreadsheet Refugee | ① Verify (+ light ③) | per-seat, check volume |
+| **Underwriting $1,499** | Underwriter | + ② Underwrite | per-seat premium (additive — decided) |
+| **Fund (metered)** | Mandator | ③ Distribute / mandate console | flat base + per-loan |
+
+- Public pricing page: add the Underwriting card (additive, per the decision) and
+  a **"For capital providers"** path for the Fund tier (today's vestigial
+  "fund-level discussions" becomes a real surface).
+- Landing page: add a **Mandator-facing strip** ("Fund a roster of originators?
+  Standardize their diligence.") — the wedge persona is currently invisible in
+  positioning.
+- *Numbers stay Damon-gated;* this is the structure, not the final prices.
+
+---
+
+## 6. Per-persona: does it flow now? (before → after)
+
+| Persona | Before | After |
+|---|---|---|
+| Spreadsheet Refugee | Sees a 30-input analyzer wall incl. DSCR | Stops at ② Eligibility; never sees sizing inputs |
+| Underwriter | Two engines, stale state, 30 scattered inputs | One Deal stepper, shared Terms, ~4 sizing numbers |
+| Downstream Adopter | Mandate stamp buried in a 16-section scroll | Stamp promoted to top of borrower detail; Programs surface |
+| Mandator (fund) | No product home; "investor" row in a lender's account | Fund tenant + mandate console + cross-originator view + tier |
+
+---
+
+## 7. Sequencing (build order, with sizing)
+
+**Phase 1 — Lender flow coherence (highest leverage, no multi-tenancy):**
+1. **Deal analyzer stepper** over one Deal object (§2). *~3–4 days.* The acute fix.
+2. **Validation/borrower detail tabs + promoted mandate stamp** (§3). *~1.5 days.*
+3. **Borrower-spine IA** (§1: Borrowers/Deals/Capital/Book nav + borrower detail).
+   *~2–3 days.*
+4. Small completion: **Settings → Webhooks UI**, empty/error states, "what's next"
+   on handoff. *~1–1.5 days.*
+
+**Phase 2 — Arm the wedge (Fund as first-class):**
+5. **Fund tenant + mandate console** (§4.1). *~3–4 days.*
+6. **Program consent link + cross-originator view** (§4.2–4.3), privacy boundary
+   enforced. *~4–5 days.*
+
+**Phase 3 — Packaging (Damon-gated):**
+7. Underwriting + Fund pricing tiers + landing/pricing repositioning (§5).
+   *~1–2 days code, after Damon validates numbers.*
+
+**Recommended first build:** Phase 1 item 1 (the analyzer stepper) — it's the
+pain you named, it's self-contained, and it establishes the "one Deal" model the
+rest builds on.
+
+---
+
+## 8. Open questions to resolve before Phase 2
+
+- Fund tenant: separate org type vs. a role on an existing org? (Affects auth +
+  RLS.)
+- Program consent: per-originator opt-in to a named fund, or fund-initiated
+  invite? (Affects the sharing model.)
+- Exactly what deal metadata crosses the tenant boundary with a verdict (the
+  privacy line). Draft this with Damon — it's also a trust-selling point.
