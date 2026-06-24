@@ -123,24 +123,48 @@ Shipped 2026-06-23 (commits `a0dde25` foundation, `8d6cba3` endpoint+triggers).
 **Not yet built:** a Settings → Webhooks UI (endpoints are managed via the
 `/api/webhooks` API only). Add when a customer needs self-serve config.
 
-### 4. Capital-provider "mandate" object (~3–5 days)
+### 4. ✅ DONE — Capital-provider "mandate" object
 
-A fund/investor defines a validation/underwriting standard (fed by the A1 PDF
-parser); a lender's validation gets stamped "meets [Fund]'s standard." Connects
-the distribution thesis to a product surface; turns A1 into a loop. Build toward
-the rep-and-warranty mechanic. (Detail in [IDEAS.md](docs/IDEAS.md).)
+Shipped 2026-06-23 (commit `00cadab`, migration 00044 applied).
+- `investor_mandates` (investor-owned diligence gates) + `mandate_assessments`
+  (per-validation stamp). `src/lib/mandates/assess.ts` deterministic gate eval.
+- Auto-assessed in the validation pipeline; on-demand re-assess endpoint.
+  `mandate.assessed` webhook. `/api/mandates` CRUD.
+- Stamps: validation detail card + handoff Excel/PDF block + investor-page
+  `MandatesManager` editor.
+- v1 = assessment + stamp (no lender-attestation layer yet — that's the next
+  step toward the rep-and-warranty mechanic).
 
-### 5. Pricing repackage (~1 day code + Damon validation)
+### 5. ⏸ PARKED (Damon-gated) — Pricing repackage
 
-Add a **$1,499 Underwriting tier** to `src/lib/stripe/server.ts` PLANS + Stripe
-price IDs + the pricing page. Design (don't build) the metered Fund tier. Validate
-numbers with Damon. (Detail in [docs/PRICING-STRATEGY.md](docs/PRICING-STRATEGY.md) §0.)
+Decision 2026-06-23: **positioning = additive premium tier** (sits above
+Enterprise: highest volume + underwriting suite as the headline value + priority
+support; workbench stays in all tiers, so NO app feature-gating needed — lowest
+risk). **Not building yet** — the $1,499 number + the public pricing-page change
+are outward-facing and explicitly pending the in-person Damon/NPLA validation.
+When validated: add an `underwriting` plan to `src/lib/stripe/server.ts` PLANS
+(`STRIPE_PRICE_UNDERWRITING_MONTHLY/_ANNUAL` env vars, created in Stripe first)
++ a 4th card on `src/app/pricing/page.tsx`. Metered Fund tier stays design-only.
 
-### 6. Borrower-centric IA restructure (~1–2 days, when volume justifies)
+### 6. ⏸ GATED (volume) — Borrower-centric IA restructure
 
 UX-PLAN §2 — surface **Borrowers** as the durable object; validations/evaluations
-hang off a borrower. Do once real multi-borrower volume confirms it matters; the
-interim mitigations (§1.6, §1.7) carry it until then.
+hang off a borrower. Explicitly deferred until real multi-borrower volume confirms
+it matters; the interim mitigations (item 1.6 recent-evaluations card, etc.) carry
+it. Not a "build now."
+
+---
+
+## Session close (2026-06-23) — backlog state
+
+**Shipped this session:** Items 1, 2, 3, 4 (all live on `main`, deploys green,
+migrations 00043–00044 applied). Item 0 closed (env keys were already set; fixed
+the RESEND_FROM_ADDRESS mismatch + set CRON_SECRET).
+
+**Remaining are both intentionally gated, not skipped:** Item 5 (pricing) is
+Damon/number-gated; Item 6 (IA restructure) is volume-gated. The buildable
+backlog from this plan is complete — next real work is either of those when their
+gate clears, or the "Later / gated" items below.
 
 ### Later / gated
 - **AVM adapter** (HouseCanary) — sharpens the judgment's market dimension.
