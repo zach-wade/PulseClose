@@ -14,7 +14,7 @@ export async function GET(
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = createAdminClient();
-  const [evalRes, resultsRes] = await Promise.all([
+  const [evalRes, resultsRes, uwRes] = await Promise.all([
     supabase
       .from("deal_evaluations")
       .select("*")
@@ -25,6 +25,17 @@ export async function GET(
       .from("deal_eligibility_results")
       .select("*, investors ( display_name, type )")
       .eq("deal_evaluation_id", id),
+    // Latest underwriting model for this evaluation — lets the result page
+    // resume the Deal stepper with the saved sizing (incl. exit/takeout),
+    // per-investor best-execution, and AI judgment, instead of re-running.
+    supabase
+      .from("uw_models")
+      .select("id, inputs, sizing, per_investor, judgment")
+      .eq("deal_evaluation_id", id)
+      .eq("org_id", profile.org_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (evalRes.error || !evalRes.data) {
@@ -34,5 +45,6 @@ export async function GET(
   return NextResponse.json({
     ...evalRes.data,
     results: resultsRes.data ?? [],
+    uw_model: uwRes.data ?? null,
   });
 }

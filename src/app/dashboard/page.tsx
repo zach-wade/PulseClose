@@ -35,6 +35,7 @@ import { UsageMeter } from "@/components/dashboard/usage-meter";
 
 interface Validation {
   id: string;
+  primary_borrower_id: string | null;
   borrower_name: string;
   borrower_entity_name: string;
   overall_status: string;
@@ -177,6 +178,31 @@ export default function DashboardPage() {
     }
     return true;
   });
+
+  // Borrower-organized: one row per borrower (the spine is the borrower, not the
+  // check). Dedup by primary_borrower_id, falling back to a canonical name key
+  // when the validation predates borrower linkage. Each row surfaces the latest
+  // validation + how many checks that borrower has — the name links to the
+  // borrower's history (borrowers/[id]) when linked, else the latest check.
+  const borrowerRows = (() => {
+    const groups = new Map<string, { latest: Validation; count: number }>();
+    for (const v of filteredValidations) {
+      const key = v.primary_borrower_id ?? `name:${v.borrower_name.trim().toLowerCase()}`;
+      const g = groups.get(key);
+      if (!g) {
+        groups.set(key, { latest: v, count: 1 });
+      } else {
+        g.count += 1;
+        const t = (x: Validation) => new Date(x.validation_date ?? x.created_at).getTime();
+        if (t(v) > t(g.latest)) g.latest = v;
+      }
+    }
+    return Array.from(groups.values()).sort(
+      (a, b) =>
+        new Date(b.latest.validation_date ?? b.latest.created_at).getTime() -
+        new Date(a.latest.validation_date ?? a.latest.created_at).getTime(),
+    );
+  })();
 
   const filtersActive = search.trim() !== "" || statusFilter !== "all" || tierFilter !== "all";
 
@@ -414,7 +440,7 @@ export default function DashboardPage() {
               </Button>
             )}
             <p className="text-xs text-muted-foreground ml-auto">
-              {filteredValidations.length} of {validations.length}
+              {borrowerRows.length} {borrowerRows.length === 1 ? "borrower" : "borrowers"} · {filteredValidations.length} of {validations.length} checks
             </p>
           </div>
 
@@ -477,7 +503,7 @@ export default function DashboardPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {filteredValidations.map((v) => (
+                {borrowerRows.map(({ latest: v, count }) => (
                   <TableRow key={v.id} className={selected.includes(v.id) ? "bg-muted/50" : ""}>
                     <TableCell>
                       <input
@@ -491,11 +517,16 @@ export default function DashboardPage() {
                     <TableCell>
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
-                          href={`/dashboard/validations/${v.id}`}
+                          href={v.primary_borrower_id ? `/dashboard/borrowers/${v.primary_borrower_id}` : `/dashboard/validations/${v.id}`}
                           className="font-medium hover:underline"
                         >
                           {v.borrower_name}
                         </Link>
+                        {count > 1 && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
+                            {count} checks
+                          </Badge>
+                        )}
                         {/* Mobile-only GC chip — desktop has its own column. */}
                         <span className="md:hidden">
                           <GCStatusChip summary={v.gc_summary} />

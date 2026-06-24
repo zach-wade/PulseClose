@@ -316,3 +316,154 @@ export const loosePct = (v: number | null) =>
 export const rate2 = (v: number | null) => (v == null ? "—" : `${v.toFixed(2)}%`);
 
 export const numOrNull = (s: string) => (s.trim() === "" ? null : Number(s));
+
+// ── Resume: hydrate a full Deal from a saved evaluation + uw_model ──────────
+// Lets evaluate/[id] mount the stepper "done" instead of empty — the saved
+// eligibility, sizing (incl. exit/takeout), best-execution, and judgment all
+// re-render, and editing a field correctly re-stales the downstream step.
+
+export interface EvaluationResumeData {
+  id: string;
+  validation_id: string | null;
+  loan_type: string;
+  property_type: string;
+  location: string | null;
+  purchase_price: number | null;
+  loan_amount: number;
+  arv: number | null;
+  rehab_budget: number | null;
+  fico: number | null;
+  sponsor_experience_tier: number | null;
+  additional_params: Record<string, unknown> | null;
+  results: Array<{
+    investor_id: string;
+    result: "pass" | "conditional" | "fail";
+    reasoning: string;
+    investors: { display_name: string } | null;
+    computed_terms: {
+      max_ltv: number | null; max_ltc: number | null; max_ltarv: number | null;
+      estimated_rate_pct: number | null; estimated_points: number | null;
+      applied_adjusters: { name: string; rate_bps: number; points_bps: number }[];
+      matched_tier_index: number | null;
+      boundary_warnings: { field: string; message: string }[];
+      failure_reasons: FailureReason[];
+    } | null;
+  }>;
+  uw_model: {
+    id: string;
+    inputs: Record<string, unknown> | null;
+    sizing: SizingResult | null;
+    per_investor: PerInvestorSizing[] | null;
+    judgment: (Judgment & { schema_version?: number }) | null;
+  } | null;
+}
+
+// decimal (0.078) or percent (78) → percent string for the form ("78").
+const toPctStr = (v: unknown, fallback = ""): string => {
+  if (v == null || typeof v !== "number" || Number.isNaN(v)) return fallback;
+  return String(v <= 1 ? +(v * 100).toFixed(3) : v);
+};
+const toNumStr = (v: unknown, fallback = ""): string =>
+  v == null || typeof v !== "number" || Number.isNaN(v) ? fallback : String(v);
+
+// 2-letter state from "Seed — Sacramento, CA" style location, else default.
+function stateFromLocation(loc: string | null, fallback = "CA"): string {
+  const m = (loc ?? "").match(/,\s*([A-Za-z]{2})\s*$/);
+  return m ? m[1].toUpperCase() : fallback;
+}
+
+export function dealFromEvaluation(d: EvaluationResumeData): Deal {
+  const ap = d.additional_params ?? {};
+  const inp = d.uw_model?.inputs ?? null;
+  const exp =
+    d.sponsor_experience_tier != null && TIER_TO_EXPERIENCE[String(d.sponsor_experience_tier)]
+      ? TIER_TO_EXPERIENCE[String(d.sponsor_experience_tier)]
+      : "5";
+
+  const terms: DealTerms = {
+    loan_type: d.loan_type,
+    property_type: d.property_type,
+    property_state: (ap.property_state as string) || stateFromLocation(d.location),
+    purchase_price: toNumStr(d.purchase_price),
+    loan_amount: toNumStr(d.loan_amount),
+    arv: toNumStr(d.arv),
+    rehab_budget: toNumStr(d.rehab_budget),
+    borrower_fico: toNumStr(d.fico, "720"),
+    borrower_experience: exp,
+    occupancy: (ap.occupancy as string) || "non_owner_occupied",
+    loan_purpose: (ap.loan_purpose as string) || "purchase",
+    is_rural: Boolean(ap.is_rural),
+    borrower_name: (ap.borrower_name as string) || "",
+    property_address: (ap.property_address as string) || "",
+  };
+
+  const blank = emptyDeal().sizing;
+  const sizing: SizingTerms = inp
+    ? {
+        current_noi: toNumStr(inp.currentNOI),
+        stabilized_noi: toNumStr(inp.stabilizedNOI),
+        going_in_cap: toPctStr(inp.goingInCapRate, blank.going_in_cap),
+        exit_cap: toPctStr(inp.exitCapRate, blank.exit_cap),
+        rate: toPctStr(inp.rate, blank.rate),
+        amort_months: toNumStr(inp.amortizationMonths),
+        closing_costs: toNumStr(inp.closingCosts),
+        max_ltv: toPctStr(inp.maxLTV, blank.max_ltv),
+        max_ltc: toPctStr(inp.maxLTC, blank.max_ltc),
+        max_ltarv: toPctStr(inp.maxLoanToARV, blank.max_ltarv),
+        min_dscr: toNumStr(inp.minDSCR),
+        min_debt_yield: toPctStr(inp.minDebtYield, blank.min_debt_yield),
+        coverage_basis: (inp.coverageBasis as "current" | "stabilized") ?? "current",
+        term_months: toNumStr(inp.termMonths, "24"),
+        takeout_max_ltv: blank.takeout_max_ltv,
+        takeout_min_dscr: blank.takeout_min_dscr,
+        takeout_rate: blank.takeout_rate,
+        months_to_stabilize: blank.months_to_stabilize,
+      }
+    : blank;
+
+  const eligibilityResults: EligibilityResult[] = d.results.map((r) => ({
+    investor_id: r.investor_id,
+    investor_name: r.investors?.display_name ?? r.investor_id.slice(0, 8),
+    result: r.result,
+    failure_reasons: r.computed_terms?.failure_reasons ?? [],
+    boundary_warnings: r.computed_terms?.boundary_warnings ?? [],
+    max_ltv: r.computed_terms?.max_ltv ?? null,
+    max_ltc: r.computed_terms?.max_ltc ?? null,
+    max_ltarv: r.computed_terms?.max_ltarv ?? null,
+    estimated_rate_pct: r.computed_terms?.estimated_rate_pct ?? null,
+    estimated_points: r.computed_terms?.estimated_points ?? null,
+    applied_adjusters: r.computed_terms?.applied_adjusters ?? [],
+    matched_tier_index: r.computed_terms?.matched_tier_index ?? null,
+    reasoning: r.reasoning,
+  }));
+
+  const sizingResult = d.uw_model?.sizing ?? null;
+  const judgmentResult = d.uw_model?.judgment ?? null;
+  const hasEligibility = eligibilityResults.length > 0;
+  const termsHash = hashTerms(terms);
+
+  return {
+    validation_id: d.validation_id,
+    evaluation_id: d.id,
+    uw_model_id: d.uw_model?.id ?? null,
+    terms,
+    sizing,
+    judgmentCtx: { sponsor: "", market: "", businessPlan: "", notes: "" },
+    eligibilityResults: hasEligibility ? eligibilityResults : null,
+    sizingResult,
+    perInvestor: d.uw_model?.per_investor ?? null,
+    judgmentResult,
+    computedFrom: {
+      eligibility: hasEligibility ? termsHash : null,
+      sizing: sizingResult ? `${termsHash}|${hashSizing(sizing)}` : null,
+    },
+    steps: {
+      eligibility: hasEligibility ? "done" : "untouched",
+      sizing: sizingResult ? "done" : "untouched",
+      judgment: judgmentResult ? "done" : "untouched",
+    },
+    optedInSizing: sizingResult != null,
+    optedInJudgment: judgmentResult != null,
+    error: null,
+  };
+}

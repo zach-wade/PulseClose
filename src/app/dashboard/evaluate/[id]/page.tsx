@@ -1,110 +1,42 @@
 "use client";
 
+// Saved deal evaluation — resumes the Deal analyzer stepper hydrated from the
+// persisted evaluation + its latest uw_model (sizing incl. exit/takeout,
+// per-investor best-execution, AI judgment). One surface, same as a live deal;
+// editing a field re-stales the downstream step. Replaces the old
+// UnderwritingPanel + bespoke result cards (retired).
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, FileText } from "lucide-react";
-import { UnderwritingPanel } from "@/components/dashboard/underwriting-panel";
-
-// Validation experience_tier (1 = most experienced … 4 = none) → the
-// evaluate engine's "deals completed" integer the sizing panel expects.
-// Mirrors the tierToExperience map on the evaluate form.
-const tierToDealCount: Record<number, number> = { 1: 10, 2: 5, 3: 2, 4: 0 };
-
-type CounterOffer =
-  | {
-      kind: "loan_amount";
-      new_loan_amount: number;
-      delta_amount: number;
-      reason: string;
-      predicted_result: "pass" | "conditional";
-      predicted_rate_pct: number | null;
-      predicted_points: number | null;
-    }
-  | {
-      kind: "borrower_change";
-      field: "borrower_fico" | "borrower_experience";
-      target: number;
-      delta: number;
-      reason: string;
-    }
-  | {
-      kind: "structural";
-      field: string;
-      reason: string;
-    };
-
-interface ComputedTerms {
-  max_ltv: number | null;
-  max_ltc: number | null;
-  max_ltarv: number | null;
-  estimated_rate_pct: number | null;
-  estimated_points: number | null;
-  applied_adjusters: { name: string; rate_bps: number; points_bps: number }[];
-  matched_tier_index: number | null;
-  boundary_warnings: { field: string; message: string }[];
-  failure_reasons: { field: string; rule: string; expected: unknown; actual: unknown }[];
-  counter_offers?: CounterOffer[];
-}
-
-interface EvaluationResultRow {
-  id: string;
-  investor_id: string;
-  result: "pass" | "conditional" | "fail";
-  computed_terms: ComputedTerms;
-  reasoning: string;
-  investors: { display_name: string; type: string | null } | null;
-}
-
-interface EvaluationDetail {
-  id: string;
-  loan_amount: number;
-  loan_type: string;
-  property_type: string;
-  location: string;
-  purchase_price: number | null;
-  arv: number | null;
-  rehab_budget: number | null;
-  fico: number | null;
-  sponsor_experience_tier: number | null;
-  evaluated_at: string;
-  additional_params: Record<string, unknown> | null;
-  results: EvaluationResultRow[];
-}
-
-function fmtPct(v: number | null) {
-  if (v == null) return "—";
-  const pct = v <= 1 ? v * 100 : v;
-  return `${pct.toFixed(1)}%`;
-}
-function fmtRate(v: number | null) {
-  if (v == null) return "—";
-  return `${v.toFixed(2)}%`;
-}
-function fmtCurrency(v: number | null | undefined) {
-  if (v == null) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v);
-}
-
-function ResultBadge({ result }: { result: "pass" | "conditional" | "fail" }) {
-  if (result === "pass") return <Badge className="bg-emerald-500/90 text-white hover:bg-emerald-500">Eligible</Badge>;
-  if (result === "conditional") return <Badge className="bg-amber-500/90 text-white hover:bg-amber-500">Conditional</Badge>;
-  return <Badge variant="destructive">Ineligible</Badge>;
-}
+import { ArrowLeft } from "lucide-react";
+import { DealStepper } from "@/components/dashboard/deal/deal-stepper";
+import { dealFromEvaluation, type Deal, type EvaluationResumeData, usd } from "@/lib/deal/view-model";
 
 export default function EvaluationDetailPage() {
   const params = useParams();
-  const [data, setData] = useState<EvaluationDetail | null>(null);
+  const [resume, setResume] = useState<Deal | null>(null);
+  const [raw, setRaw] = useState<EvaluationResumeData | null>(null);
+  const [investorCount, setInvestorCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const res = await fetch(`/api/evaluate/${params.id}`);
-      if (res.ok) setData(await res.json());
+      const [evalRes, invsRes] = await Promise.all([
+        fetch(`/api/evaluate/${params.id}`),
+        fetch("/api/investors"),
+      ]);
+      if (evalRes.ok) {
+        const data = (await evalRes.json()) as EvaluationResumeData;
+        setRaw(data);
+        setResume(dealFromEvaluation(data));
+      }
+      if (invsRes.ok) {
+        const invs = await invsRes.json();
+        setInvestorCount(Array.isArray(invs) ? invs.length : (invs?.investors?.length ?? null));
+      }
       setLoading(false);
     })();
   }, [params.id]);
@@ -119,7 +51,7 @@ export default function EvaluationDetailPage() {
     );
   }
 
-  if (!data) {
+  if (!resume || !raw) {
     return (
       <div className="space-y-4">
         <Button variant="ghost" size="icon" render={<Link href="/dashboard/evaluate" />}>
@@ -130,24 +62,7 @@ export default function EvaluationDetailPage() {
     );
   }
 
-  const sortedResults = [...data.results].sort((a, b) => {
-    const order: Record<string, number> = { pass: 0, conditional: 1, fail: 2 };
-    if (order[a.result] !== order[b.result]) return order[a.result] - order[b.result];
-    const ra = a.computed_terms?.estimated_rate_pct ?? Infinity;
-    const rb = b.computed_terms?.estimated_rate_pct ?? Infinity;
-    return ra - rb;
-  });
-
-  const eligibleCount = data.results.filter(
-    (r) => r.result === "pass" || r.result === "conditional",
-  ).length;
-
-  const borrowerName = (data.additional_params?.borrower_name as string | undefined) ?? null;
-  const propertyAddress = (data.additional_params?.property_address as string | undefined) ?? null;
-  const occupancy = (data.additional_params?.occupancy as string | undefined) ?? null;
-  const isRural = data.additional_params?.is_rural ? "Yes" : "No";
-  const loanPurpose = (data.additional_params?.loan_purpose as string | undefined) ?? null;
-  const constructionBudget = data.additional_params?.construction_budget as number | null | undefined;
+  const borrowerName = resume.terms.borrower_name || "Deal evaluation";
 
   return (
     <div className="space-y-6">
@@ -156,180 +71,16 @@ export default function EvaluationDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {borrowerName ?? "Deal evaluation"}
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">{borrowerName}</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {fmtCurrency(data.loan_amount)} {data.loan_type} • {data.property_type} • {data.location}
-            {propertyAddress && ` • ${propertyAddress}`}
+            {usd(raw.loan_amount)} {raw.loan_type} • {raw.property_type}
+            {raw.location ? ` • ${raw.location}` : ""}
+            {resume.terms.property_address ? ` • ${resume.terms.property_address}` : ""}
           </p>
         </div>
-        {eligibleCount > 0 && (
-          <Button variant="outline" size="sm" render={<Link href={`/borrower-summary/${data.id}`} target="_blank" />}>
-            <FileText className="h-4 w-4 mr-2" />
-            Borrower summary
-          </Button>
-        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Deal parameters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div><p className="text-xs text-muted-foreground">Purchase price</p><p className="font-medium">{fmtCurrency(data.purchase_price)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Loan amount</p><p className="font-medium">{fmtCurrency(data.loan_amount)}</p></div>
-            <div><p className="text-xs text-muted-foreground">ARV</p><p className="font-medium">{fmtCurrency(data.arv)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Rehab budget</p><p className="font-medium">{fmtCurrency(data.rehab_budget)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Construction budget</p><p className="font-medium">{fmtCurrency(constructionBudget ?? null)}</p></div>
-            <div><p className="text-xs text-muted-foreground">FICO</p><p className="font-medium">{data.fico ?? "—"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Experience tier</p><p className="font-medium">Tier {data.sponsor_experience_tier ?? "—"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Occupancy</p><p className="font-medium">{occupancy ?? "—"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Loan purpose</p><p className="font-medium">{loanPurpose ?? "—"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Rural</p><p className="font-medium">{isRural}</p></div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Investor results</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {sortedResults.map((r) => (
-            <div
-              key={r.id}
-              className={`rounded-md border p-3 ${
-                r.result === "pass"
-                  ? "border-emerald-200 bg-emerald-50/30"
-                  : r.result === "conditional"
-                    ? "border-amber-200 bg-amber-50/30"
-                    : "border-destructive/30 bg-destructive/5"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <p className="font-medium">{r.investors?.display_name ?? r.investor_id.slice(0, 8)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{r.reasoning}</p>
-                </div>
-                <ResultBadge result={r.result} />
-              </div>
-              {(r.result === "pass" || r.result === "conditional") && r.computed_terms && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm pt-2 border-t border-border/50">
-                  <div><p className="text-xs text-muted-foreground">Max LTV</p><p className="font-semibold">{fmtPct(r.computed_terms.max_ltv)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Max LTC</p><p className="font-semibold">{fmtPct(r.computed_terms.max_ltc)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Max LTARV</p><p className="font-semibold">{fmtPct(r.computed_terms.max_ltarv)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Rate</p><p className="font-semibold">{fmtRate(r.computed_terms.estimated_rate_pct)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Points</p><p className="font-semibold">{r.computed_terms.estimated_points != null ? r.computed_terms.estimated_points.toFixed(2) : "—"}</p></div>
-                </div>
-              )}
-              {r.computed_terms?.applied_adjusters && r.computed_terms.applied_adjusters.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-border/50">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Rate adjusters applied</p>
-                  <ul className="text-xs space-y-0.5">
-                    {r.computed_terms.applied_adjusters.map((a, i) => (
-                      <li key={i}>{a.name}: {a.rate_bps > 0 ? `+${a.rate_bps}` : a.rate_bps}bps rate{a.points_bps !== 0 ? `, ${a.points_bps > 0 ? "+" : ""}${a.points_bps}bps points` : ""}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {r.computed_terms?.boundary_warnings && r.computed_terms.boundary_warnings.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-border/50">
-                  <p className="text-xs uppercase tracking-wide text-amber-700 mb-1">Boundary warnings</p>
-                  <ul className="text-xs space-y-0.5 text-amber-900">
-                    {r.computed_terms.boundary_warnings.map((w, i) => <li key={i}>{w.message}</li>)}
-                  </ul>
-                </div>
-              )}
-              {r.computed_terms?.failure_reasons && r.computed_terms.failure_reasons.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-border/50">
-                  <p className="text-xs uppercase tracking-wide text-destructive mb-1">Why ineligible</p>
-                  <ul className="text-xs space-y-0.5">
-                    {r.computed_terms.failure_reasons.map((f, i) => (
-                      <li key={i}>
-                        <span className="font-medium">{f.field}</span>: {f.rule}
-                        {f.expected != null && (
-                          <span className="text-muted-foreground"> (expected {Array.isArray(f.expected) ? (f.expected as unknown[]).join(", ") : String(f.expected)}, got {String(f.actual)})</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {r.computed_terms?.counter_offers && r.computed_terms.counter_offers.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-border/50">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Counter-offer suggestions</p>
-                  <ul className="text-xs space-y-1">
-                    {r.computed_terms.counter_offers.map((offer, i) => {
-                      if (offer.kind === "loan_amount") {
-                        return (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                            <span>
-                              <span className="font-medium">Drop loan to {fmtCurrency(offer.new_loan_amount)}</span>
-                              {" "}({fmtCurrency(offer.delta_amount)} reduction) →{" "}
-                              {offer.predicted_result === "pass" ? "passes" : "conditional"}
-                              {offer.predicted_rate_pct != null && ` at ${fmtRate(offer.predicted_rate_pct)}`}
-                              {offer.predicted_points != null && `, ${offer.predicted_points.toFixed(2)} pts`}
-                              <span className="text-muted-foreground"> — {offer.reason}</span>
-                            </span>
-                          </li>
-                        );
-                      }
-                      if (offer.kind === "borrower_change") {
-                        return (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                            <span>
-                              <span className="font-medium">Borrower-side:</span> {offer.reason}
-                            </span>
-                          </li>
-                        );
-                      }
-                      return (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground">
-                            <span className="font-medium text-foreground">Structural:</span> {offer.reason}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Underwriting Workbench (parity with the live evaluate form) — size
-          the loan deterministically + optional AI judgment, hydrated from
-          this saved evaluation's deal params (UX-PLAN §1.1). Saves link back
-          to this evaluation via deal_evaluation_id. */}
-      <UnderwritingPanel
-        dealEvaluationId={data.id}
-        deal={{
-          loan_type: data.loan_type,
-          property_type: data.property_type,
-          property_state: data.location,
-          purchase_price: data.purchase_price,
-          loan_amount: data.loan_amount,
-          arv: data.arv,
-          rehab_budget: data.rehab_budget,
-          borrower_fico: data.fico,
-          borrower_experience:
-            data.sponsor_experience_tier != null
-              ? (tierToDealCount[data.sponsor_experience_tier] ?? 0)
-              : 0,
-          occupancy: occupancy ?? "non_owner_occupied",
-          loan_purpose: loanPurpose ?? "purchase",
-          is_rural: Boolean(data.additional_params?.is_rural),
-          borrower_name: borrowerName,
-          property_address: propertyAddress,
-        }}
-      />
+      <DealStepper prefill={{}} investorCount={investorCount} resume={resume} />
     </div>
   );
 }

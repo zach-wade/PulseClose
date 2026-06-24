@@ -156,13 +156,19 @@ export function DealStepper({
   prefill,
   investorCount,
   onEvaluated,
+  resume,
 }: {
   prefill: DealPrefill;
   investorCount: number | null;
   onEvaluated?: () => void;
+  // When present, the stepper resumes a saved evaluation (eligibility + sizing
+  // + judgment already done) rather than starting empty (evaluate/[id]).
+  resume?: Deal;
 }) {
-  const [deal, dispatch] = useReducer(reducer, prefill, emptyDeal);
-  const [active, setActive] = useState<StepId>("terms");
+  const [deal, dispatch] = useReducer(reducer, null as unknown as Deal, () => resume ?? emptyDeal(prefill));
+  const [active, setActive] = useState<StepId>(
+    resume?.steps.sizing === "done" ? "sizing" : resume?.steps.eligibility === "done" ? "eligibility" : "terms",
+  );
 
   async function runEligibility() {
     dispatch({ type: "runStart", step: "eligibility" });
