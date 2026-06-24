@@ -72,7 +72,16 @@ export interface FactorSanctionsView {
     list_name?: string;
     confidence?: "confirmed" | "probable" | "possible" | "weak";
     review_required?: boolean;
+    category?: "sanction" | "pep" | "exclusion" | "other";
   }>;
+}
+
+// OFAC FAQ #5 Step 1: only an actual sanctions/PEP hit may drive risk. Debarment
+// / regulatory-exclusion entries (SAM, FINRA, medical boards, disqualified
+// directors) are informational for a property borrower and must not move the
+// tier. null category = legacy row / OFAC-direct → treat as sanction (recall-safe).
+function isScreeningRelevant(m: { category?: string }): boolean {
+  return m.category == null || m.category === "sanction" || m.category === "pep";
 }
 
 type MatchConfidence = "confirmed" | "probable" | "possible" | "weak";
@@ -232,7 +241,9 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
 
   // ── Sanctions ────────────────────────────────────────────────────────
   if (input.sanctions && input.sanctions.result === "potential_match") {
-    const sm = input.sanctions.matches;
+    // Only true sanctions/PEP hits drive risk; debarment/exclusion lists are
+    // informational (surfaced in the UI, never tier-affecting). OFAC FAQ #5 §1.
+    const sm = input.sanctions.matches.filter(isScreeningRelevant);
     const lists = [...new Set(sm.map((m) => m.list_name).filter(Boolean))];
     // Only a match corroborated by a second identifier is asserted as this
     // party → critical. Everything else is a name-only possible match that

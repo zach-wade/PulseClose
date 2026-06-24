@@ -153,6 +153,7 @@ function screenName(
       schema: expectedType === "individual" ? "Person" : "Company",
       score,
       source_url: `https://sanctionssearch.ofac.treas.gov/Details.aspx?id=${entry.entNum}`,
+      category: "sanction", // OFAC SDN is, by definition, a sanctions list
     });
   }
 

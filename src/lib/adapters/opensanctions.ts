@@ -9,6 +9,7 @@ import type {
   SanctionsScreenResult,
   SanctionsMatch,
   SanctionsIdentifiers,
+  SanctionsCategory,
 } from "./types";
 import {
   scoreMatchGroup,
@@ -134,6 +135,33 @@ function extractIdentifiers(
   return Object.values(ids).some(Boolean) ? ids : undefined;
 }
 
+// Classify a match by OFAC FAQ #5 Step 1: is this an actual sanctions/PEP hit,
+// or "some other reason" (a debarment / regulatory-exclusion list)? Driven by
+// OpenSanctions `topics` first, then dataset IDs as a fallback. Topic taxonomy:
+// https://www.opensanctions.org/docs/topics/
+const EXCLUSION_DATASETS = [
+  "us_sam_exclusions", "us_ny_med_exclusions", "us_oig_exclusions",
+  "us_finra_actions", "gb_coh_disqualified", "debarment",
+];
+function classifyMatch(
+  topics: string[],
+  datasets: string[],
+): SanctionsCategory {
+  const t = topics.map((x) => x.toLowerCase());
+  if (t.some((x) => x === "sanction" || x.startsWith("sanction"))) return "sanction";
+  if (t.some((x) => x === "role.pep" || x === "role.rca" || x.startsWith("role.pep"))) return "pep";
+  if (
+    t.some((x) => x === "debarment" || x.startsWith("reg.")) ||
+    datasets.some((d) => EXCLUSION_DATASETS.some((e) => d.includes(e)))
+  ) {
+    return "exclusion";
+  }
+  // No topic signal + a sanctions-list dataset → treat as sanction (recall-safe).
+  const SANCTION_DATASETS = ["ofac", "eu_fsf", "hmt", "un_sc", "sema", "_sanctions"];
+  if (datasets.some((d) => SANCTION_DATASETS.some((s) => d.includes(s)))) return "sanction";
+  return "other";
+}
+
 function mapEntity(
   entity: OpenSanctionsMatchEntity,
   queryName: string,
@@ -145,6 +173,7 @@ function mapEntity(
   const sourceUrls = Array.isArray(props.sourceUrl)
     ? (props.sourceUrl as string[])
     : [];
+  const topics = Array.isArray(props.topics) ? (props.topics as string[]) : [];
 
   const schemaRaw = entity.schema ?? "Other";
   const schema: SanctionsMatch["schema"] =
@@ -161,6 +190,8 @@ function mapEntity(
     score: entity.score ?? 0,
     source_url: sourceUrls[0] ?? null,
     identifiers: extractIdentifiers(props as Record<string, unknown>),
+    topics,
+    category: classifyMatch(topics, entity.datasets ?? []),
   };
 }
 
@@ -291,6 +322,20 @@ export async function screenSanctionsOpenSanctions(
       });
     }
 
+    // Split true sanctions/PEP hits from regulatory-exclusion noise (OFAC FAQ
+    // #5 §1) so the summary is honest about what actually matched.
+    const screening = matches.filter(
+      (m) => m.category === "sanction" || m.category === "pep" || m.category == null,
+    );
+    const exclusions = matches.length - screening.length;
+    const screeningReview = screening.filter((m) => m.review_required !== false).length;
+    let reviewSummary: string | undefined;
+    if (screeningReview > 0) {
+      reviewSummary = `${screeningReview} possible sanctions/PEP ${screeningReview === 1 ? "match" : "matches"} — review${commonNameLikely ? " (name appears common)" : ""}.`;
+    } else if (exclusions > 0) {
+      reviewSummary = `No sanctions/PEP matches; ${exclusions} regulatory-exclusion ${exclusions === 1 ? "entry" : "entries"} (informational).`;
+    }
+
     return {
       result: matches.length > 0 ? "potential_match" : "clear",
       sources_searched: [
@@ -305,13 +350,8 @@ export async function screenSanctionsOpenSanctions(
       source: "OpenSanctions",
       raw_response: data as unknown as Record<string, unknown>,
       common_name_likely: commonNameLikely,
-      highest_confidence: matches.length > 0 ? highest : undefined,
-      review_summary:
-        matches.length > 0
-          ? `${matches.filter((m) => m.review_required !== false).length} possible sanctions/PEP ${
-              matches.filter((m) => m.review_required !== false).length === 1 ? "match" : "matches"
-            } — review${commonNameLikely ? " (name appears common)" : ""}.`
-          : undefined,
+      highest_confidence: screening.length > 0 ? highest : undefined,
+      review_summary: reviewSummary,
     };
   } catch (err) {
     if (err instanceof OpenSanctionsError) throw err;

@@ -88,6 +88,8 @@ export interface SanctionsMatch {
   name_match?: "exact" | "strong" | "partial" | "none";
   review_required?: boolean;
   match_reasons?: string[];
+  category?: "sanction" | "pep" | "exclusion" | "other";
+  topics?: string[];
   identifiers?: {
     dob?: string[];
     birth_place?: string[];

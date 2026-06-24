@@ -77,15 +77,16 @@
 
 ## New findings (2026-06-24, disambiguation v2 run)
 
-7. **The "sanctions" screen surfaces non-OFAC exclusion lists — noisy for a
-   real-estate borrower.** Live on 10228, "Mark Morrison" matched
-   `us_sam_exclusions` (federal contractor debarment) and `us_ny_med_exclusions`
-   (NY medical license exclusions) at 85–92%, not OFAC/sanctions. For a property
-   investor these lists are mostly false-positive surface area. *Consider:*
-   list-type weighting (OFAC/PEP = high signal; SAM/medical exclusions =
-   contextual) and/or separating "sanctions" from "exclusions" in the UI.
-   (Disambiguation already caps them at "possible" — this is about relevance,
-   not safety.)
+7. **✅ FIXED (2026-06-24) — The "sanctions" screen surfaces non-OFAC exclusion
+   lists.** Live on the 6-loan set, EVERY "potential match" was a non-OFAC
+   exclusion entry — `us_sam_exclusions`, `us_ny_med_exclusions`,
+   `us_hhs_exclusions`, `us_finra_actions`, `gb_coh_disqualified`. Not one real
+   sanctions hit. **Resolution:** classify each match by OFAC FAQ #5 Step 1
+   (`sanction | pep | exclusion | other`) from its OpenSanctions `topics` +
+   dataset. Only `sanction`/`pep` feed the risk factor; exclusions render in a
+   collapsed "regulatory exclusions — informational" UI section and never move
+   the tier. Validated by the deep-research run (OFAC FAQ #5 §1, FFIEC) — see
+   [RESEARCH-DISAMBIGUATION.md](RESEARCH-DISAMBIGUATION.md).
 8. **Identifier surfacing works — but most exclusion lists publish no DOB.**
    OpenSanctions hands back DOB/POB/nationality/role where the source carries it
    (e.g. a fuzzy "MARK J MORRONE": DOB 1961, role DENTIST → trivially clearable),

@@ -69,6 +69,53 @@ function IdentifierFacts({
   );
 }
 
+function MatchRow({ m, muted }: { m: SanctionsMatch; muted?: boolean }) {
+  const unconfirmed = m.confidence !== "confirmed";
+  const amber = unconfirmed || muted;
+  return (
+    <div className={`rounded-md border p-3 ${muted ? "border-border bg-muted/30" : amber ? "border-amber-200 bg-amber-50/40" : "border-destructive/30 bg-destructive/5"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-medium text-sm">{m.matched_name}</p>
+            {!muted && (
+              <Badge
+                variant="outline"
+                className={`text-[10px] uppercase ${unconfirmed ? "border-amber-300 text-amber-700 bg-amber-50/60" : "border-destructive/40 text-destructive"}`}
+              >
+                {m.confidence === "confirmed" ? "Confirmed" : m.confidence === "probable" ? "Probable — review" : "Possible — review"}
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Searched as: {m.query_name}</p>
+          {m.programs.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {m.programs.map((p, j) => (
+                <Badge key={j} variant="outline" className="text-xs">{p}</Badge>
+              ))}
+            </div>
+          )}
+          <IdentifierFacts identifiers={m.identifiers} />
+        </div>
+        <div className="text-right shrink-0">
+          <Badge variant="secondary" className="text-xs">{m.list_name}</Badge>
+          <p className="text-xs text-muted-foreground mt-1">{Math.round(m.score * 100)}% name similarity</p>
+        </div>
+      </div>
+      {m.source_url && (
+        <a
+          href={m.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 mt-2 text-xs text-blue-500 hover:text-blue-700"
+        >
+          View source <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function SanctionsCard({ data }: { data: SanctionsCheck }) {
   const isClear = data.result === "clear";
   const isHit = data.result === "potential_match";
@@ -81,12 +128,26 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
     common_name_likely?: boolean;
     highest_confidence?: string;
   };
+  // OFAC FAQ #5 Step 1: split actual sanctions/PEP hits from "some other reason"
+  // (debarment / regulatory-exclusion lists like SAM, FINRA, medical boards,
+  // disqualified directors). Only the former is a screening concern; the latter
+  // is informational for a property borrower. null category = legacy/OFAC-direct.
+  const allMatches = data.matches ?? [];
+  const isExclusion = (m: SanctionsMatch) => m.category === "exclusion" || m.category === "other";
+  const screeningMatches = allMatches.filter((m) => !isExclusion(m));
+  const exclusionMatches = allMatches.filter(isExclusion);
+  const hasScreeningHit = screeningMatches.length > 0;
+
   const hasConfirmed =
     data.highest_confidence === "confirmed" ||
     rollup.highest_confidence === "confirmed" ||
-    (data.matches ?? []).some((m) => m.confidence === "confirmed");
+    screeningMatches.some((m) => m.confidence === "confirmed");
   const commonNameLikely = data.common_name_likely ?? rollup.common_name_likely ?? false;
-  const reviewCount = (data.matches ?? []).filter((m) => m.review_required !== false).length || data.match_count;
+  const reviewCount = screeningMatches.filter((m) => m.review_required !== false).length || screeningMatches.length;
+  // The header badge reflects sanctions/PEP only. Exclusion-only results read as
+  // "clear" for sanctions, with the exclusions noted below as informational.
+  const badgeIsHit = isHit && hasScreeningHit;
+  const badgeIsClear = isClear || (isHit && !hasScreeningHit);
 
   return (
     <Card id="sanctions-card" className="scroll-mt-20">
@@ -95,17 +156,17 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
           <Shield className="h-4 w-4" />
           Sanctions / PEP Screening
           <Badge
-            variant={isHit && hasConfirmed ? "destructive" : isClear ? "default" : "secondary"}
-            className={`ml-auto ${isHit && !hasConfirmed ? "border-amber-300 text-amber-700 bg-amber-50" : ""}`}
+            variant={badgeIsHit && hasConfirmed ? "destructive" : badgeIsClear ? "default" : "secondary"}
+            className={`ml-auto ${badgeIsHit && !hasConfirmed ? "border-amber-300 text-amber-700 bg-amber-50" : ""}`}
           >
-            {isHit && <AlertTriangle className="mr-1 h-3 w-3" />}
-            {isClear && <CheckCircle2 className="mr-1 h-3 w-3" />}
+            {badgeIsHit && <AlertTriangle className="mr-1 h-3 w-3" />}
+            {badgeIsClear && <CheckCircle2 className="mr-1 h-3 w-3" />}
             {notRun && <MinusCircle className="mr-1 h-3 w-3" />}
-            {isHit
+            {badgeIsHit
               ? hasConfirmed
                 ? `${reviewCount} CONFIRMED MATCH${reviewCount === 1 ? "" : "ES"}`
                 : `${reviewCount} POSSIBLE — REVIEW`
-              : isClear
+              : badgeIsClear
                 ? "CLEAR"
                 : "NOT RUN"}
           </Badge>
@@ -151,10 +212,10 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
           </div>
         )}
 
-        {isHit && data.matches.length > 0 && (
+        {isHit && hasScreeningHit && (
           <div className="space-y-2 pt-2 border-t">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              {hasConfirmed ? "Matches — Manual Review Required" : "Possible Matches — Review (Not Confirmed)"}
+              {hasConfirmed ? "Sanctions / PEP Matches — Manual Review Required" : "Possible Sanctions / PEP Matches — Review (Not Confirmed)"}
             </p>
             {commonNameLikely && (
               <p className="text-xs rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-amber-900">
@@ -163,67 +224,41 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
                 Verify identity (DOB / address) before acting — a common name produces false positives.
               </p>
             )}
-            {data.matches.map((m, i) => {
-              const unconfirmed = m.confidence !== "confirmed";
-              return (
-              <div key={i} className={`rounded-md border p-3 ${unconfirmed ? "border-amber-200 bg-amber-50/40" : "border-destructive/30 bg-destructive/5"}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{m.matched_name}</p>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] uppercase ${unconfirmed ? "border-amber-300 text-amber-700 bg-amber-50/60" : "border-destructive/40 text-destructive"}`}
-                      >
-                        {m.confidence === "confirmed" ? "Confirmed" : m.confidence === "probable" ? "Probable — review" : "Possible — review"}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Searched as: {m.query_name}
-                    </p>
-                    {m.programs.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {m.programs.map((p, j) => (
-                          <Badge key={j} variant="outline" className="text-xs">
-                            {p}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <IdentifierFacts identifiers={m.identifiers} />
-                  </div>
-                  <div className="text-right shrink-0">
-                    <Badge variant="secondary" className="text-xs">
-                      {m.list_name}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {Math.round(m.score * 100)}% name similarity
-                    </p>
-                  </div>
-                </div>
-                {m.source_url && (
-                  <a
-                    href={m.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-2 text-xs text-blue-500 hover:text-blue-700"
-                  >
-                    View source <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-              );
-            })}
+            {screeningMatches.map((m, i) => (
+              <MatchRow key={i} m={m} />
+            ))}
             <p className="text-xs text-muted-foreground italic">
-              Note: matches above the {Math.round(0.7 * 100)}% threshold are surfaced for review.
-              Common names may produce false positives — verify identity before acting.
+              Matches are surfaced for review, not confirmed. Per OFAC guidance, verify
+              the listed entry&apos;s identifiers (DOB / nationality / address) against the
+              borrower before acting — common names produce false positives.
             </p>
           </div>
         )}
 
-        {isClear && (
+        {/* Non-sanctions exclusion lists (SAM debarment, FINRA, medical boards,
+            disqualified directors). Informational for a property borrower — not a
+            sanctions concern and never tier-affecting. OFAC FAQ #5 Step 1. */}
+        {isHit && exclusionMatches.length > 0 && (
+          <details className="pt-2 border-t group">
+            <summary className="text-xs text-muted-foreground uppercase tracking-wide cursor-pointer select-none">
+              {exclusionMatches.length} other regulatory-exclusion {exclusionMatches.length === 1 ? "entry" : "entries"} (informational)
+            </summary>
+            <p className="text-xs text-muted-foreground mt-1 mb-2">
+              These are debarment / regulatory-action / professional-exclusion lists, not
+              sanctions. Surfaced for completeness; they do not affect the risk rating.
+            </p>
+            <div className="space-y-2">
+              {exclusionMatches.map((m, i) => (
+                <MatchRow key={i} m={m} muted />
+              ))}
+            </div>
+          </details>
+        )}
+
+        {badgeIsClear && !hasScreeningHit && (
           <p className="text-sm text-muted-foreground">
-            No matches found across {data.sources_searched.length} sanctions and PEP lists.
+            No sanctions or PEP matches across {data.sources_searched.length} lists.
+            {exclusionMatches.length > 0 && " (See regulatory exclusions below — informational.)"}
           </p>
         )}
       </CardContent>

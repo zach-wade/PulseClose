@@ -115,6 +115,13 @@ export interface SanctionsMatch {
   name_match?: "exact" | "strong" | "partial" | "none";
   review_required?: boolean;
   match_reasons?: string[];
+  // OFAC FAQ #5 Step 1: a hit must first be classified as an actual sanctions
+  // (or PEP) hit vs "some other reason" (a debarment / regulatory-action /
+  // exclusion list). OpenSanctions /match/default bundles SAM debarment, FINRA
+  // actions, medical exclusions, and disqualified-directors alongside OFAC —
+  // for a property borrower those are noise and must NOT drive the risk tier.
+  category?: SanctionsCategory;
+  topics?: string[];        // raw OpenSanctions topics that drove the category
   // Distinguishing identifiers the list publishes about THIS entry — the
   // facts a reviewer uses to clear a common-name false positive ("the SDN
   // 'Mark Morrison' was born 1962 in Tehran; our borrower is a CA flipper").
@@ -123,6 +130,14 @@ export interface SanctionsMatch {
   // possible hit against the listed DOB / POB / nationality / address.)
   identifiers?: SanctionsIdentifiers;
 }
+
+// sanction = on a sanctions list (OFAC SDN/cons, EU, UN, UK) — the real signal.
+// pep = politically exposed person / relative-or-associate.
+// exclusion = debarment / regulatory action / professional exclusion (SAM,
+//   FINRA, medical boards, disqualified directors) — informational for a
+//   property borrower, never a risk-tier driver.
+// other = anything else (crime, wanted, etc.).
+export type SanctionsCategory = "sanction" | "pep" | "exclusion" | "other";
 
 export interface SanctionsIdentifiers {
   dob?: string[];           // birth dates the list carries (often several)

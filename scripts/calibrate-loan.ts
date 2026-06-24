@@ -253,7 +253,7 @@ async function calibrate(g: GoldenCase) {
           id.positions?.length ? `role ${id.positions[0]}` : null,
         ].filter(Boolean).join(" · ")
       : "no published identifiers";
-    console.log(`             · ${m.matched_name} [${m.list_name}] ${Math.round(m.score * 100)}% — ${facts || "name-only entry"} (${m.confidence})`);
+    console.log(`             · ${m.matched_name} [${m.list_name}] ${Math.round(m.score * 100)}% · ${(m.category ?? "—").toUpperCase()} — ${facts || "name-only entry"} (${m.confidence})`);
   }
 
   // ── Underwriting inputs (NOT vendor-pullable) ──
