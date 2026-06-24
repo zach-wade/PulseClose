@@ -131,12 +131,24 @@ async function calibrate(g: GoldenCase) {
   }
 
   // ── ⑤ Sanctions (OpenSanctions → OFAC) ──
-  const sanc = await adapter.screenSanctions({ borrower_name: g.borrower_name, entity_name: g.entity_name ?? g.borrower_name, guarantor_name: g.guarantor_name ?? undefined });
+  const sanc = await adapter.screenSanctions({ borrower_name: g.borrower_name, entity_name: g.entity_name ?? g.borrower_name, guarantor_name: g.guarantor_name ?? undefined, known_states: [g.property_state].filter(Boolean) as string[] });
   const sancReview = sanc.matches.filter((m) => m.review_required !== false).length;
   console.log(
     `⑤ SANCTIONS  ${sanc.result} (${sanc.matches.length} raw match(es); ${sancReview} to review · ${sanc.highest_confidence ?? "n/a"} · ${sanc.common_name_likely ? "COMMON NAME" : "name ok"}) · source: ${sanc.source}`,
   );
   if (sanc.review_summary) console.log(`             → ${sanc.review_summary}`);
+  for (const m of sanc.matches.slice(0, 3)) {
+    const id = m.identifiers;
+    const facts = id
+      ? [
+          id.dob?.length ? `DOB ${id.dob.slice(0, 2).join("/")}` : null,
+          id.nationality?.length ? `nat ${id.nationality.slice(0, 2).join("/")}` : null,
+          id.birth_place?.length ? `POB ${id.birth_place[0]}` : null,
+          id.positions?.length ? `role ${id.positions[0]}` : null,
+        ].filter(Boolean).join(" · ")
+      : "no published identifiers";
+    console.log(`             · ${m.matched_name} [${m.list_name}] ${Math.round(m.score * 100)}% — ${facts || "name-only entry"} (${m.confidence})`);
+  }
 
   // ── Underwriting inputs (NOT vendor-pullable) ──
   console.log(`⑥ UW INPUTS  ${GAP} as-is/ARV/rehab/NOI come from the appraisal + loan package, never an API`);

@@ -6,7 +6,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Shield, AlertTriangle, CheckCircle2, ExternalLink, MinusCircle } from "lucide-react";
-import type { SanctionsCheck } from "./shared-types";
+import type { SanctionsCheck, SanctionsMatch } from "./shared-types";
 
 // Pull officer/agent names that were screened by reading the matches'
 // query_name field. Those names came from `additional_persons` in the
@@ -32,6 +32,41 @@ function extraScreenedNames(data: SanctionsCheck): string[] {
     out.push(q);
   }
   return out;
+}
+
+// The distinguishing facts the list publishes about the matched entry. These
+// are what a reviewer uses to clear a common-name false positive — a DOB or
+// nationality that obviously isn't the borrower's clears it in seconds.
+function IdentifierFacts({
+  identifiers,
+}: {
+  identifiers?: SanctionsMatch["identifiers"];
+}) {
+  if (!identifiers) return null;
+  const rows: Array<[string, string[] | undefined]> = [
+    ["DOB", identifiers.dob],
+    ["Born in", identifiers.birth_place],
+    ["Nationality", identifiers.nationality],
+    ["Country", identifiers.countries],
+    ["Role", identifiers.positions],
+    ["Address", identifiers.addresses],
+    ["ID", identifiers.id_numbers],
+  ];
+  const present = rows.filter(([, v]) => v && v.length > 0);
+  if (present.length === 0) return null;
+  return (
+    <dl className="mt-2 grid grid-cols-[84px_1fr] gap-x-2 gap-y-0.5 text-xs">
+      {present.map(([label, vals]) => (
+        <div key={label} className="contents">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="font-mono text-[11px] break-words">
+            {(vals ?? []).slice(0, 4).join(" · ")}
+            {(vals ?? []).length > 4 ? ` +${(vals ?? []).length - 4}` : ""}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 export function SanctionsCard({ data }: { data: SanctionsCheck }) {
@@ -155,6 +190,7 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
                         ))}
                       </div>
                     )}
+                    <IdentifierFacts identifiers={m.identifiers} />
                   </div>
                   <div className="text-right shrink-0">
                     <Badge variant="secondary" className="text-xs">

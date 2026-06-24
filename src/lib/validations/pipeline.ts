@@ -211,13 +211,28 @@ export async function runValidationPipeline(
 
   const adapter = getAdapter();
 
+  // Borrower's known states — entity + GC state plus any 2-letter state token
+  // trailing a supplied property address ("…, Santa Rosa, CA 95404"). Passed
+  // to litigation + sanctions disambiguation as weak jurisdiction
+  // corroboration. Best-effort; absent states just mean no jurisdiction boost.
+  const US_STATE = /\b([A-Z]{2})\b(?:\s+\d{5}(?:-\d{4})?)?\s*$/;
+  const knownStates = [
+    ...new Set(
+      [
+        entity_state,
+        gc_state,
+        ...addressesToVerify.map((a) => US_STATE.exec(a.trim())?.[1] ?? null),
+      ].filter((s): s is string => Boolean(s) && /^[A-Za-z]{2}$/.test(s as string)),
+    ),
+  ].map((s) => s.toUpperCase());
+
   try {
     // First wave: entity, properties, litigation, GC in parallel; sanctions
     // after so officers/agent from the entity filing are included.
     const [entityResult, properties, litigationResults, gcResult] = await Promise.all([
       adapter.lookupEntity({ entity_name: borrower_entity_name, state: entity_state }),
       adapter.searchProperties({ borrower_name, entity_name: borrower_entity_name, state: entity_state }),
-      adapter.searchLitigation({ entity_name: borrower_entity_name, borrower_name }),
+      adapter.searchLitigation({ entity_name: borrower_entity_name, borrower_name, known_states: knownStates }),
       gc_name
         ? adapter.lookupGC({ gc_name, license_number: gc_license_number ?? undefined, state: gc_state || entity_state })
         : Promise.resolve(null),
@@ -239,6 +254,7 @@ export async function runValidationPipeline(
       entity_name: borrower_entity_name,
       guarantor_name: guarantor_name || undefined,
       additional_persons: additionalPersons,
+      known_states: knownStates,
     });
 
     // 3. Entity check + refresh cached SOS state.

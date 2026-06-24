@@ -8,6 +8,7 @@ import type {
   SanctionsScreenRequest,
   SanctionsScreenResult,
   SanctionsMatch,
+  SanctionsIdentifiers,
 } from "./types";
 import {
   scoreMatchGroup,
@@ -108,6 +109,31 @@ function readableListName(id: string): string {
   return map[id] ?? id;
 }
 
+// Pull the distinguishing identifiers OpenSanctions carries for an entry so a
+// reviewer can clear (or confirm) a common-name match against facts, not just
+// a name. FollowTheMoney property names: birthDate, birthPlace, nationality,
+// country, address, idNumber, position.
+function extractIdentifiers(
+  props: Record<string, unknown>,
+): SanctionsIdentifiers | undefined {
+  const arr = (key: string): string[] | undefined => {
+    const v = props[key];
+    if (!Array.isArray(v)) return undefined;
+    const out = v.filter((x): x is string => typeof x === "string" && x.length > 0);
+    return out.length > 0 ? [...new Set(out)] : undefined;
+  };
+  const ids: SanctionsIdentifiers = {
+    dob: arr("birthDate"),
+    birth_place: arr("birthPlace"),
+    nationality: arr("nationality"),
+    countries: arr("country"),
+    addresses: arr("address"),
+    id_numbers: arr("idNumber"),
+    positions: arr("position"),
+  };
+  return Object.values(ids).some(Boolean) ? ids : undefined;
+}
+
 function mapEntity(
   entity: OpenSanctionsMatchEntity,
   queryName: string,
@@ -134,6 +160,7 @@ function mapEntity(
     schema,
     score: entity.score ?? 0,
     source_url: sourceUrls[0] ?? null,
+    identifiers: extractIdentifiers(props as Record<string, unknown>),
   };
 }
 
@@ -244,7 +271,7 @@ export async function screenSanctionsOpenSanctions(
 
       const candidates = entities.map(entityToCandidate);
       const group = scoreMatchGroup(
-        { fullName: queryName },
+        { fullName: queryName, knownStates: req.known_states },
         candidates,
         { entity: isEntity, kind: "match" },
       );

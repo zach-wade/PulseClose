@@ -94,6 +94,10 @@ export interface SanctionsScreenRequest {
   // screened as a Person against PEP + sanctions lists so we don't miss
   // a hit on a controlling-but-not-named-borrower party.
   additional_persons?: string[];
+  // Borrower's known operating/property states — weak jurisdiction
+  // corroboration in disambiguation (a US-listed entry vs a US borrower is
+  // marginally more relevant; an obviously-foreign listing helps clear).
+  known_states?: string[];
 }
 
 export interface SanctionsMatch {
@@ -111,6 +115,23 @@ export interface SanctionsMatch {
   name_match?: "exact" | "strong" | "partial" | "none";
   review_required?: boolean;
   match_reasons?: string[];
+  // Distinguishing identifiers the list publishes about THIS entry — the
+  // facts a reviewer uses to clear a common-name false positive ("the SDN
+  // 'Mark Morrison' was born 1962 in Tehran; our borrower is a CA flipper").
+  // Surfacing them is the disambiguation aid, even before we hold the
+  // borrower's own DOB/address to auto-corroborate. (OFAC FAQ: evaluate a
+  // possible hit against the listed DOB / POB / nationality / address.)
+  identifiers?: SanctionsIdentifiers;
+}
+
+export interface SanctionsIdentifiers {
+  dob?: string[];           // birth dates the list carries (often several)
+  birth_place?: string[];
+  nationality?: string[];
+  countries?: string[];
+  addresses?: string[];
+  id_numbers?: string[];
+  positions?: string[];     // for PEPs — role/office held
 }
 
 export interface SanctionsScreenResult {

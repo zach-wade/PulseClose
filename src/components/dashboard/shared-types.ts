@@ -88,6 +88,15 @@ export interface SanctionsMatch {
   name_match?: "exact" | "strong" | "partial" | "none";
   review_required?: boolean;
   match_reasons?: string[];
+  identifiers?: {
+    dob?: string[];
+    birth_place?: string[];
+    nationality?: string[];
+    countries?: string[];
+    addresses?: string[];
+    id_numbers?: string[];
+    positions?: string[];
+  };
 }
 
 export interface VerifiedFlip {
