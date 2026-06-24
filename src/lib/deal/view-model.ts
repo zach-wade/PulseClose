@@ -37,6 +37,27 @@ export interface EligibilityResult {
 
 export type ConstraintKey = "LTV" | "LTC" | "LoanToARV" | "DSCR" | "DebtYield";
 
+export type TakeoutConstraintKey = "PermLTV" | "PermDSCR" | "PermDebtYield";
+
+// Exit / takeout sizing — the permanent loan that repays the bridge at
+// stabilization. Mirrors src/lib/underwriting/exit.ts (TakeoutResult).
+export interface TakeoutResult {
+  stabilizedValue: number;
+  bridgeBalanceAtExit: number;
+  constraints: { key: TakeoutConstraintKey; label: string; maxLoan: number; binding: boolean; basis: string }[];
+  maxTakeout: number;
+  bindingConstraint: TakeoutConstraintKey;
+  permMortgageConstant: number;
+  takeoutCoverage: number;
+  refinanceable: boolean;
+  cushion: number;
+  shortfall: number;
+  takeoutDSCR: number;
+  takeoutDebtYield: number;
+  termSufficient: boolean | null;
+  flags: string[];
+}
+
 export interface SizingResult {
   asIsValue: number;
   stabilizedValue: number | null;
@@ -57,6 +78,7 @@ export interface SizingResult {
   equityMultiple: number | null;
   returnOnCost: number | null;
   developmentSpread: number | null;
+  takeout?: TakeoutResult;
 }
 
 export interface PerInvestorSizing {
@@ -118,6 +140,12 @@ export interface SizingTerms {
   min_dscr: string;
   min_debt_yield: string;
   coverage_basis: "current" | "stabilized";
+  // exit / takeout assumptions — the human governs the exit story
+  term_months: string;
+  takeout_max_ltv: string;
+  takeout_min_dscr: string;
+  takeout_rate: string;
+  months_to_stabilize: string;
 }
 
 export interface JudgmentContext {
@@ -212,6 +240,11 @@ export function emptyDeal(prefill: DealPrefill = {}): Deal {
       min_dscr: "1.0",
       min_debt_yield: "8",
       coverage_basis: "current",
+      term_months: "24",
+      takeout_max_ltv: "70",
+      takeout_min_dscr: "1.25",
+      takeout_rate: "",
+      months_to_stabilize: "",
     },
     judgmentCtx: { sponsor: "", market: "", businessPlan: "", notes: "" },
     eligibilityResults: null,

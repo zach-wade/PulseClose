@@ -482,6 +482,33 @@ const uwConstraintV1 = z.object({
   basis: z.string(),
 });
 
+// Exit / takeout sizing (src/lib/underwriting/exit.ts) — the permanent-loan
+// takeout at stabilization tested against the bridge balance. Optional: only
+// present when the deal carries stabilized economics (stabilizedNOI + exit cap).
+const uwTakeoutConstraintV1 = z.object({
+  key: z.enum(["PermLTV", "PermDSCR", "PermDebtYield"]),
+  label: z.string(),
+  maxLoan: z.number(),
+  binding: z.boolean(),
+  basis: z.string(),
+});
+export const uwTakeoutResultV1 = z.object({
+  stabilizedValue: z.number(),
+  bridgeBalanceAtExit: z.number(),
+  constraints: z.array(uwTakeoutConstraintV1),
+  maxTakeout: z.number(),
+  bindingConstraint: z.enum(["PermLTV", "PermDSCR", "PermDebtYield"]),
+  permMortgageConstant: z.number(),
+  takeoutCoverage: z.number(),
+  refinanceable: z.boolean(),
+  cushion: z.number(),
+  shortfall: z.number(),
+  takeoutDSCR: z.number(),
+  takeoutDebtYield: z.number(),
+  termSufficient: z.boolean().nullable(),
+  flags: z.array(z.string()),
+});
+
 export const uwSizingResultV1 = z.object({
   schema_version: schemaVersion,
   asIsValue: z.number(),
@@ -503,6 +530,7 @@ export const uwSizingResultV1 = z.object({
   equityMultiple: z.number().nullable(),
   returnOnCost: z.number().nullable(),
   developmentSpread: z.number().nullable(),
+  takeout: uwTakeoutResultV1.optional(),
 });
 export type UwSizingResultV1 = z.infer<typeof uwSizingResultV1>;
 export const parseUwSizingResultV1Strict = strict(uwSizingResultV1, "uw_models.sizing");

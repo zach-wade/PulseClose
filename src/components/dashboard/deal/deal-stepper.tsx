@@ -210,6 +210,11 @@ export function DealStepper({
           min_dscr: numOrNull(s.min_dscr),
           min_debt_yield: numOrNull(s.min_debt_yield),
           coverage_basis: s.coverage_basis,
+          term_months: numOrNull(s.term_months),
+          takeout_max_ltv: numOrNull(s.takeout_max_ltv),
+          takeout_min_dscr: numOrNull(s.takeout_min_dscr),
+          takeout_rate: numOrNull(s.takeout_rate),
+          months_to_stabilize: numOrNull(s.months_to_stabilize),
           deal_evaluation_id: deal.evaluation_id,
           validation_id: deal.validation_id,
         }),
@@ -693,6 +698,16 @@ function StepSizing({
             <NumField id="uw_dy" label="Min debt yield %" step="0.1" value={s.min_debt_yield} onChange={(v) => set("min_debt_yield", v)} />
           </div>
         </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Exit / takeout assumptions (the permanent loan that repays the bridge — you govern the exit)</p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <NumField id="uw_term" label="Bridge term (mo)" value={s.term_months} onChange={(v) => set("term_months", v)} placeholder="24" />
+            <NumField id="uw_tltv" label="Perm max LTV %" value={s.takeout_max_ltv} onChange={(v) => set("takeout_max_ltv", v)} placeholder="70" />
+            <NumField id="uw_tdscr" label="Perm min DSCR" step="0.05" value={s.takeout_min_dscr} onChange={(v) => set("takeout_min_dscr", v)} placeholder="1.25" />
+            <NumField id="uw_trate" label="Perm rate % (blank = est.)" step="0.05" value={s.takeout_rate} onChange={(v) => set("takeout_rate", v)} placeholder="auto" />
+            <NumField id="uw_stab" label="Months to stabilize" value={s.months_to_stabilize} onChange={(v) => set("months_to_stabilize", v)} placeholder="18" />
+          </div>
+        </div>
 
         <div className="flex justify-end">
           <Button onClick={onSize} disabled={running}>{running ? "Sizing…" : "Size loan"}</Button>
@@ -762,6 +777,56 @@ function StepSizing({
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {sizing.takeout && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    Exit / takeout — does the permanent loan repay the bridge?
+                  </p>
+                  <Badge className={sizing.takeout.refinanceable ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
+                    {sizing.takeout.refinanceable ? "Takeout clears the bridge" : "Takeout shorts the bridge"}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Max permanent takeout</p>
+                    <p className="text-lg font-bold">{usd(sizing.takeout.maxTakeout)}</p>
+                    <p className="text-xs text-muted-foreground">bound by {sizing.takeout.bindingConstraint}</p>
+                  </div>
+                  <Field label="Bridge balance at exit" value={usd(sizing.takeout.bridgeBalanceAtExit)} big />
+                  <Field label="Takeout coverage" value={`${sizing.takeout.takeoutCoverage.toFixed(2)}x`} big />
+                  <Field
+                    label={sizing.takeout.refinanceable ? "Cushion" : "Shortfall"}
+                    value={usd(sizing.takeout.refinanceable ? sizing.takeout.cushion : sizing.takeout.shortfall)}
+                    big
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  {sizing.takeout.constraints.map((c) => (
+                    <div key={c.key} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="w-44 shrink-0">
+                        <span className={c.binding ? "font-semibold" : ""}>{c.label}</span>
+                        {c.binding && <Badge className="ml-2 bg-foreground text-background text-[10px] px-1.5 py-0">binding</Badge>}
+                      </div>
+                      <div className="text-right">
+                        <span className="font-medium">{usd(c.maxLoan)}</span>
+                        <span className="block text-[11px] text-muted-foreground">{c.basis}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {sizing.takeout.flags.length > 0 && (
+                  <ul className="space-y-1 pt-1 border-t border-border/50">
+                    {sizing.takeout.flags.map((f, i) => (
+                      <li key={i} className="text-xs text-warning-foreground flex gap-1.5">
+                        <span aria-hidden>⚠</span>
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
             <div className="flex flex-wrap items-center justify-end gap-2 pt-1">

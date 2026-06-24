@@ -19,6 +19,7 @@ import {
   type InvestorRules,
 } from "@/lib/evaluate/engine";
 import { underwrite, type SizingInputs } from "@/lib/underwriting/sizing";
+import { sizeTakeout } from "@/lib/underwriting/exit";
 import { sizeAllInvestors } from "@/lib/underwriting/per-investor";
 import {
   parseUwSizingInputsV1Strict,
@@ -102,6 +103,15 @@ type UnderwriteBody = Partial<DealParams> & {
   min_debt_yield?: number | null; // decimal or percent
   coverage_basis?: "current" | "stabilized" | null;
   selling_cost_pct?: number | null;
+  // exit / takeout sizing assumptions (the permanent loan that repays the
+  // bridge). Optional — sensible defaults applied when the deal has stabilized
+  // economics so the exit story always surfaces.
+  takeout_max_ltv?: number | null;
+  takeout_min_dscr?: number | null;
+  takeout_min_debt_yield?: number | null;
+  takeout_rate?: number | null;
+  takeout_amort_months?: number | null;
+  months_to_stabilize?: number | null;
   // links
   deal_evaluation_id?: string | null;
   validation_id?: string | null;
@@ -190,6 +200,33 @@ export async function POST(request: Request) {
       { error: err instanceof Error ? err.message : "Could not size the deal." },
       { status: 400 },
     );
+  }
+
+  // Exit / takeout sizing — "does the exit make sense?" Size the permanent
+  // takeout at stabilization and test whether it repays the bridge balance.
+  // Only when the deal carries stabilized economics (stabilizedNOI + exit cap).
+  // Perm terms come from the lender's takeout assumptions, with documented
+  // defaults (70% LTV / 1.25x DSCR / 30yr amort, perm rate ~250bps inside the
+  // bridge rate floored at 6%) so the exit story always surfaces.
+  if (sizing.stabilizedValue != null && sizingInputs.stabilizedNOI != null) {
+    try {
+      const takeout = sizeTakeout({
+        stabilizedValue: sizing.stabilizedValue,
+        stabilizedNOI: sizingInputs.stabilizedNOI,
+        bridgeBalanceAtExit: sizing.maxLoan, // interest-only bridge => balance = loan
+        takeoutMaxLTV: asRatio(body.takeout_max_ltv) ?? 0.7,
+        takeoutMinDSCR: num(body.takeout_min_dscr) ?? 1.25,
+        takeoutMinDebtYield:
+          asRatio(body.takeout_min_debt_yield) ?? sizingInputs.minDebtYield,
+        takeoutRate: asRatio(body.takeout_rate) ?? Math.max(0.06, rate - 0.025),
+        takeoutAmortizationMonths: num(body.takeout_amort_months) ?? 360,
+        bridgeTermMonths: sizingInputs.termMonths,
+        monthsToStabilize: num(body.months_to_stabilize),
+      });
+      sizing = { ...sizing, takeout };
+    } catch {
+      // Takeout is additive depth — never block sizing if it can't resolve.
+    }
   }
 
   const supabase = createAdminClient();
