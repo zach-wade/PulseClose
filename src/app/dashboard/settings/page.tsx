@@ -34,9 +34,11 @@ import {
   Check,
   Shield,
   Bell,
+  Webhook,
 } from "lucide-react";
 import { NotificationsTab } from "./notifications-tab";
 import { ApiKeysTab } from "./api-keys-tab";
+import { WebhooksTab } from "./webhooks-tab";
 import { toast } from "sonner";
 
 interface SettingsData {
@@ -246,6 +248,10 @@ export default function SettingsPage() {
           <TabsTrigger value="api">
             <Key className="mr-2 h-4 w-4" />
             API Keys
+          </TabsTrigger>
+          <TabsTrigger value="webhooks">
+            <Webhook className="mr-2 h-4 w-4" />
+            Webhooks
           </TabsTrigger>
         </TabsList>
 
@@ -624,6 +630,10 @@ export default function SettingsPage() {
         {/* API Keys tab */}
         <TabsContent value="api" className="space-y-6 mt-6">
           <ApiKeysTab />
+        </TabsContent>
+
+        <TabsContent value="webhooks" className="space-y-6 mt-6">
+          <WebhooksTab />
         </TabsContent>
       </Tabs>
     </div>

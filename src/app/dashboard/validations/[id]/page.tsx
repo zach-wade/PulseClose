@@ -702,6 +702,25 @@ export default function ValidationDetailPage() {
           <div id="handoff" className="scroll-mt-24">
             <HandoffCard validationId={data.id} initial={data.handoff_data} />
           </div>
+          {/* What's next — keep the lender moving after they export the packet. */}
+          <Card className="border-info/30 bg-info/5">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-sm font-medium">What&apos;s next</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <RouteToInvestorButton validationId={data.id} />
+                <Button variant="outline" size="sm" onClick={() => setTab("book")}>
+                  Watch it in Book
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setTab("book")}>
+                  Record the outcome
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Route the packet to a capital partner&apos;s queue, then track funding + outcomes from Book so the deal&apos;s result flows back into the borrower&apos;s record.
+              </p>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="book" className="space-y-6 pt-4">

@@ -167,8 +167,12 @@ establishes the "one Deal" model the rest builds on. No new tables (consolidates
    `validations/[id]/page.tsx` now tabs into Summary/Evidence/Deal/Hand off/Book
    with the mandate card lifted to directly under the summary cards. `#handoff`
    deep-link opens the Hand off tab (verified). Smoke-tested green on prod.
-3. Borrower-spine IA (Borrowers/Deals/Capital/Book nav + borrower detail) — *~2–3d*
-4. Settings→Webhooks UI + empty/error states + handoff "what's next" — *~1–1.5d*
+3. ✅ **SHIPPED (2026-06-24)** Borrower-spine IA — sidebar restructured to the
+   job-shaped spine (Borrowers/Deals/Capital/Book + Activity/Usage secondary);
+   `/dashboard`→"Borrowers", `/dashboard/portfolio`→"Book". Borrower detail
+   (`borrowers/[id]`) already existed; nav now wires the spine around it.
+   Remaining polish: borrower-organized/deduped list + row→borrower-detail links.
+4. Settings→Webhooks UI + empty/error states + handoff "what's next" — *~1–1.5d* (in progress)
 
 **Bugs fixed (2026-06-24, from §9 live-review):** gc-result-card white-screen
 guard · dashboard "No memo" terminal state · mobile header stacking · migration
