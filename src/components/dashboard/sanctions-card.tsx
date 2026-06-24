@@ -39,6 +39,20 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
   const isHit = data.result === "potential_match";
   const notRun = data.result === "not_run" || data.result === "pending";
 
+  // A match is only a confirmed concern when corroborated by a second
+  // identifier. Otherwise every "potential match" is a name-only result to
+  // review — a common name returns false positives. Drives badge tone + copy.
+  const rollup = (data.raw_response?._disambiguation ?? {}) as {
+    common_name_likely?: boolean;
+    highest_confidence?: string;
+  };
+  const hasConfirmed =
+    data.highest_confidence === "confirmed" ||
+    rollup.highest_confidence === "confirmed" ||
+    (data.matches ?? []).some((m) => m.confidence === "confirmed");
+  const commonNameLikely = data.common_name_likely ?? rollup.common_name_likely ?? false;
+  const reviewCount = (data.matches ?? []).filter((m) => m.review_required !== false).length || data.match_count;
+
   return (
     <Card id="sanctions-card" className="scroll-mt-20">
       <CardHeader>
@@ -46,14 +60,16 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
           <Shield className="h-4 w-4" />
           Sanctions / PEP Screening
           <Badge
-            variant={isHit ? "destructive" : isClear ? "default" : "secondary"}
-            className="ml-auto"
+            variant={isHit && hasConfirmed ? "destructive" : isClear ? "default" : "secondary"}
+            className={`ml-auto ${isHit && !hasConfirmed ? "border-amber-300 text-amber-700 bg-amber-50" : ""}`}
           >
             {isHit && <AlertTriangle className="mr-1 h-3 w-3" />}
             {isClear && <CheckCircle2 className="mr-1 h-3 w-3" />}
             {notRun && <MinusCircle className="mr-1 h-3 w-3" />}
             {isHit
-              ? `${data.match_count} POTENTIAL MATCH${data.match_count === 1 ? "" : "ES"}`
+              ? hasConfirmed
+                ? `${reviewCount} CONFIRMED MATCH${reviewCount === 1 ? "" : "ES"}`
+                : `${reviewCount} POSSIBLE — REVIEW`
               : isClear
                 ? "CLEAR"
                 : "NOT RUN"}
@@ -103,13 +119,30 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
         {isHit && data.matches.length > 0 && (
           <div className="space-y-2 pt-2 border-t">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Potential Matches — Manual Review Required
+              {hasConfirmed ? "Matches — Manual Review Required" : "Possible Matches — Review (Not Confirmed)"}
             </p>
-            {data.matches.map((m, i) => (
-              <div key={i} className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            {commonNameLikely && (
+              <p className="text-xs rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-amber-900">
+                <span className="font-medium">Name appears common.</span> These are name-only
+                matches and are <span className="font-medium">not confirmed as this party</span>.
+                Verify identity (DOB / address) before acting — a common name produces false positives.
+              </p>
+            )}
+            {data.matches.map((m, i) => {
+              const unconfirmed = m.confidence !== "confirmed";
+              return (
+              <div key={i} className={`rounded-md border p-3 ${unconfirmed ? "border-amber-200 bg-amber-50/40" : "border-destructive/30 bg-destructive/5"}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-sm">{m.matched_name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm">{m.matched_name}</p>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] uppercase ${unconfirmed ? "border-amber-300 text-amber-700 bg-amber-50/60" : "border-destructive/40 text-destructive"}`}
+                      >
+                        {m.confidence === "confirmed" ? "Confirmed" : m.confidence === "probable" ? "Probable — review" : "Possible — review"}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Searched as: {m.query_name}
                     </p>
@@ -128,7 +161,7 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
                       {m.list_name}
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {Math.round(m.score * 100)}% match
+                      {Math.round(m.score * 100)}% name similarity
                     </p>
                   </div>
                 </div>
@@ -143,7 +176,8 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
                   </a>
                 )}
               </div>
-            ))}
+              );
+            })}
             <p className="text-xs text-muted-foreground italic">
               Note: matches above the {Math.round(0.7 * 100)}% threshold are surfaced for review.
               Common names may produce false positives — verify identity before acting.

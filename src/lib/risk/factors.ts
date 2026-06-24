@@ -67,7 +67,33 @@ export interface FactorLitigationView {
 
 export interface FactorSanctionsView {
   result: string;
-  matches: Array<{ matched_name?: string; list_name?: string }>;
+  matches: Array<{
+    matched_name?: string;
+    list_name?: string;
+    confidence?: "confirmed" | "probable" | "possible" | "weak";
+    review_required?: boolean;
+  }>;
+}
+
+type MatchConfidence = "confirmed" | "probable" | "possible" | "weak";
+
+// Read the disambiguation confidence a screening adapter attached. Litigation
+// stows it under raw_response._disambiguation; absent on legacy rows, which we
+// treat as "possible" (unverified) — the honest default, never an auto-hit.
+function litigationConfidence(l: FactorLitigationView): MatchConfidence {
+  const dis = (l.raw_response as Record<string, unknown> | null)?._disambiguation as
+    | { confidence?: MatchConfidence }
+    | undefined;
+  return dis?.confidence ?? "possible";
+}
+
+// Severity for an unconfirmed (name-only) screening match. Probable matches —
+// distinctive name or jurisdiction corroboration — warrant a moderate flag;
+// bare "possible" common-name matches are review items that must NOT auto-set
+// the tier (Noah's rule: a false positive can't drive the score). Confirmed
+// matches are handled separately as critical.
+function reviewSeverity(confidences: MatchConfidence[]): FactorSeverity {
+  return confidences.includes("probable") ? "moderate" : "minor";
 }
 
 export interface FactorGCView {
@@ -147,20 +173,46 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
   const activeCases = input.litigation.filter(isActive);
   const dismissedCases = input.litigation.filter((l) => isFound(l) && !isActive(l));
 
-  if (activeCases.length > 0) {
+  // Split by disambiguation confidence. Only a match corroborated by a second
+  // identifier (DOB/address) is asserted as the borrower → critical. Name-only
+  // matches — the common-name false-positive class (loan 10228's 20 dockets) —
+  // are surfaced as review items that don't auto-drive the tier.
+  const confirmedActive = activeCases.filter((c) => litigationConfidence(c) === "confirmed");
+  const reviewActive = activeCases.filter((c) => litigationConfidence(c) !== "confirmed");
+
+  if (confirmedActive.length > 0) {
     factors.push({
       factor_key: "active_fed_litigation",
       severity: "critical",
       excluded: false,
       exclusion_reason: null,
       contributing_data: {
-        count: activeCases.length,
-        cases: activeCases.map((c) => ({
+        count: confirmedActive.length,
+        cases: confirmedActive.map((c) => ({
           case_number: c.case_number,
           search_type: (c.raw_response as Record<string, unknown> | null)?.search_type ?? null,
         })),
       },
-      explanation: `${activeCases.length} active federal case${activeCases.length === 1 ? "" : "s"} found via CourtListener — review before extending credit.`,
+      explanation: `${confirmedActive.length} active federal case${confirmedActive.length === 1 ? "" : "s"} confirmed to this borrower (matched by a second identifier) — review before extending credit.`,
+    });
+  }
+
+  if (reviewActive.length > 0) {
+    const confidences = reviewActive.map(litigationConfidence);
+    factors.push({
+      factor_key: "litigation_review",
+      severity: reviewSeverity(confidences),
+      excluded: false,
+      exclusion_reason: null,
+      contributing_data: {
+        count: reviewActive.length,
+        confidences,
+        cases: reviewActive.map((c) => ({
+          case_number: c.case_number,
+          confidence: litigationConfidence(c),
+        })),
+      },
+      explanation: `${reviewActive.length} possible federal litigation match${reviewActive.length === 1 ? "" : "es"} on a name-only basis — not confirmed as this borrower (common-name false positives are likely). Manual review required; not a verified hit.`,
     });
   }
 
@@ -180,17 +232,37 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
 
   // ── Sanctions ────────────────────────────────────────────────────────
   if (input.sanctions && input.sanctions.result === "potential_match") {
-    factors.push({
-      factor_key: "sanctions_hit",
-      severity: "critical",
-      excluded: false,
-      exclusion_reason: null,
-      contributing_data: {
-        match_count: input.sanctions.matches.length,
-        lists: [...new Set(input.sanctions.matches.map((m) => m.list_name).filter(Boolean))],
-      },
-      explanation: `Sanctions/PEP screen returned a potential match (${input.sanctions.matches.length} hit${input.sanctions.matches.length === 1 ? "" : "s"}) — manual review required.`,
-    });
+    const sm = input.sanctions.matches;
+    const lists = [...new Set(sm.map((m) => m.list_name).filter(Boolean))];
+    // Only a match corroborated by a second identifier is asserted as this
+    // party → critical. Everything else is a name-only possible match that
+    // must be reviewed but must not auto-set the tier (loan 10228's "Mark
+    // Morrison" OFAC potential_match was a common-name false positive).
+    const confirmed = sm.filter((m) => m.confidence === "confirmed");
+    const review = sm.filter((m) => m.confidence !== "confirmed");
+
+    if (confirmed.length > 0) {
+      factors.push({
+        factor_key: "sanctions_hit",
+        severity: "critical",
+        excluded: false,
+        exclusion_reason: null,
+        contributing_data: { match_count: confirmed.length, lists },
+        explanation: `Sanctions/PEP screen returned ${confirmed.length} confirmed match${confirmed.length === 1 ? "" : "es"} (corroborated by a second identifier) — manual review required.`,
+      });
+    }
+
+    if (review.length > 0) {
+      const confidences = review.map((m) => m.confidence ?? "possible");
+      factors.push({
+        factor_key: "sanctions_review",
+        severity: reviewSeverity(confidences as MatchConfidence[]),
+        excluded: false,
+        exclusion_reason: null,
+        contributing_data: { match_count: review.length, lists, confidences },
+        explanation: `Sanctions/PEP screen returned ${review.length} possible match${review.length === 1 ? "" : "es"} on a name-only basis — not confirmed as this party (common-name false positives are likely). Manual review required; not a verified hit.`,
+      });
+    }
   }
 
   // ── GC license ───────────────────────────────────────────────────────
@@ -444,8 +516,10 @@ export function humanizeFactorKey(key: string): string {
   const map: Record<string, string> = {
     entity_status: "Entity status",
     active_fed_litigation: "Active federal litigation",
+    litigation_review: "Possible litigation match (review)",
     dismissed_litigation: "Dismissed/terminated litigation",
     sanctions_hit: "Sanctions / PEP screen",
+    sanctions_review: "Possible sanctions match (review)",
     gc_license_issue: "GC license issue",
     extended_hold: "Extended hold period",
     lender_concentration: "Lender concentration",

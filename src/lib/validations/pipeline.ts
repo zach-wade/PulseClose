@@ -423,7 +423,16 @@ export async function runValidationPipeline(
         matches: sanctionsResult.matches,
         sources_searched: sanctionsResult.sources_searched,
         source: sanctionsResult.source,
-        raw_response: sanctionsResult.raw_response,
+        // Fold the group-level disambiguation roll-up into raw_response so the
+        // UI can render the "name appears common" banner without a new column.
+        raw_response: {
+          ...(sanctionsResult.raw_response ?? {}),
+          _disambiguation: {
+            common_name_likely: sanctionsResult.common_name_likely ?? false,
+            highest_confidence: sanctionsResult.highest_confidence ?? null,
+            review_summary: sanctionsResult.review_summary ?? null,
+          },
+        },
         primary_borrower_id: primaryBorrowerId,
         primary_entity_id: primaryEntityId,
       }),

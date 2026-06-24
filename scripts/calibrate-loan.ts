@@ -113,9 +113,12 @@ async function calibrate(g: GoldenCase) {
   console.log(`     subject ${g.property_address}: last acquisition ${usd(s.acquisition_price)} (${s.acquisition_date ?? "—"}) [truth as-is ${usd(g.truth.as_is_value)}]`);
 
   // ── ③ Litigation (CourtListener — FEDERAL ONLY) ──
-  const lit = await adapter.searchLitigation({ entity_name: g.entity_name ?? g.borrower_name, borrower_name: g.borrower_name });
-  const hits = lit.filter((l) => l.result === "found").length;
-  console.log(`③ LITIGATION  ${hits} federal hit(s) for "${g.borrower_name}" (CourtListener = FEDERAL courts only)`);
+  const lit = await adapter.searchLitigation({ entity_name: g.entity_name ?? g.borrower_name, borrower_name: g.borrower_name, known_states: [g.property_state].filter(Boolean) as string[] });
+  const found = lit.filter((l) => l.result === "found");
+  const confirmed = found.filter((l) => l.confidence === "confirmed").length;
+  const toReview = found.filter((l) => l.review_required !== false).length;
+  console.log(`③ LITIGATION  ${found.length} federal record(s) for "${g.borrower_name}" — ${confirmed} confirmed, ${toReview} possible/review (CourtListener = FEDERAL only)`);
+  if (toReview > 0 && confirmed === 0) console.log(`             → ${toReview} possible ${toReview === 1 ? "match" : "matches"} — review; NOT confirmed as this borrower (disambiguation layer working).`);
   gaps.push("Litigation: CourtListener is federal-only — NO state-court judgments/liens (TLOxp/LexisNexis would fill, FCRA-gated).");
 
   // ── ④ GC (CSLB / Cobalt contractor) ──
@@ -129,7 +132,11 @@ async function calibrate(g: GoldenCase) {
 
   // ── ⑤ Sanctions (OpenSanctions → OFAC) ──
   const sanc = await adapter.screenSanctions({ borrower_name: g.borrower_name, entity_name: g.entity_name ?? g.borrower_name, guarantor_name: g.guarantor_name ?? undefined });
-  console.log(`⑤ SANCTIONS  ${sanc.result} (${sanc.match_count} match) · source: ${sanc.source}`);
+  const sancReview = sanc.matches.filter((m) => m.review_required !== false).length;
+  console.log(
+    `⑤ SANCTIONS  ${sanc.result} (${sanc.matches.length} raw match(es); ${sancReview} to review · ${sanc.highest_confidence ?? "n/a"} · ${sanc.common_name_likely ? "COMMON NAME" : "name ok"}) · source: ${sanc.source}`,
+  );
+  if (sanc.review_summary) console.log(`             → ${sanc.review_summary}`);
 
   // ── Underwriting inputs (NOT vendor-pullable) ──
   console.log(`⑥ UW INPUTS  ${GAP} as-is/ARV/rehab/NOI come from the appraisal + loan package, never an API`);

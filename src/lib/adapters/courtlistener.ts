@@ -4,6 +4,25 @@
 // Does NOT cover: foreclosure, lis pendens (county-level records).
 
 import type { LitigationSearchRequest, LitigationRecord } from "./types";
+import { scoreMatchGroup, type CandidateIdentity } from "../screening/disambiguation";
+
+// Two-letter state inferred from a CourtListener court_id. Federal district /
+// bankruptcy court IDs embed the state (e.g. "cand" = CA Northern, "nysb" =
+// NY Southern Bankruptcy, "txwd" = TX Western). The leading two letters are
+// the state postal code for the vast majority of district/bankruptcy courts.
+// Best-effort: returns null for appellate / specialty courts that don't.
+function courtState(courtId?: string | null): string | null {
+  if (!courtId) return null;
+  const m = courtId.toLowerCase().match(/^([a-z]{2})[a-z]*$/);
+  const STATES = new Set([
+    "al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia",
+    "ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj",
+    "nm","ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt",
+    "va","wa","wv","wi","wy",
+  ]);
+  if (m && STATES.has(m[1])) return m[1].toUpperCase();
+  return null;
+}
 
 const BASE_URL = "https://www.courtlistener.com/api/rest/v4";
 
@@ -134,16 +153,49 @@ export async function searchLitigationCourtListener(
   for (const name of searchNames) {
     try {
       const dockets = await searchDockets(name, token);
+      if (dockets.length === 0) continue;
 
-      for (const docket of dockets) {
-        if (isBankruptcyCourt(docket.court_id)) {
-          bankruptcyResults.push(
-            mapDocketToRecord(docket, "bankruptcy", name),
-          );
-        } else {
-          lawsuitResults.push(mapDocketToRecord(docket, "lawsuit", name));
-        }
-      }
+      // Score this name's dockets as one group so a common name returning many
+      // dispersed dockets is capped at "possible — review" and flagged common,
+      // instead of each docket reading as a confirmed hit on the borrower.
+      const isEntityName = name === req.entity_name && name !== req.borrower_name;
+      const candidates: CandidateIdentity[] = dockets.map((d) => ({
+        name: pickDocketField(d, "caseName", "case_name", "case_name_short") ?? name,
+        jurisdictionState: courtState(d.court_id),
+      }));
+      const group = scoreMatchGroup(
+        { fullName: name, knownStates: req.known_states },
+        candidates,
+        { entity: isEntityName, kind: "case" },
+      );
+
+      dockets.forEach((docket, i) => {
+        const d = group.results[i];
+        const bucket = isBankruptcyCourt(docket.court_id)
+          ? bankruptcyResults
+          : lawsuitResults;
+        const rec = mapDocketToRecord(
+          docket,
+          isBankruptcyCourt(docket.court_id) ? "bankruptcy" : "lawsuit",
+          name,
+        );
+        rec.confidence = d.confidence;
+        rec.name_match = d.nameMatch;
+        rec.review_required = d.reviewRequired;
+        // Persist confidence into raw_response so it survives the
+        // litigation_checks round-trip and reaches extract.ts + factors.
+        rec.raw_response = {
+          ...(rec.raw_response ?? {}),
+          _disambiguation: {
+            confidence: d.confidence,
+            name_match: d.nameMatch,
+            review_required: d.reviewRequired,
+            name_is_common: d.nameIsCommon,
+            common_name_likely: group.commonNameLikely,
+          },
+        };
+        bucket.push(rec);
+      });
     } catch (err) {
       console.error(`CourtListener search failed for "${name}":`, err);
       // Don't throw — return what we have and let other search types run

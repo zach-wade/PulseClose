@@ -61,6 +61,10 @@ export interface GCLookupResult {
 export interface LitigationSearchRequest {
   entity_name: string;
   borrower_name: string;
+  // States the borrower is known to operate in (operating state + property
+  // states). Used as weak jurisdiction corroboration in disambiguation — a
+  // docket in the borrower's state is slightly more likely to be theirs.
+  known_states?: string[];
 }
 
 export interface LitigationRecord {
@@ -71,6 +75,12 @@ export interface LitigationRecord {
   case_number: string | null;
   source: string;
   raw_response: Record<string, unknown> | null;
+  // Disambiguation (src/lib/screening/disambiguation.ts). CourtListener is a
+  // name search; a common name returns many unrelated dockets. A name-only
+  // match is capped at "possible — review" and never asserted as the borrower.
+  confidence?: "confirmed" | "probable" | "possible" | "weak";
+  name_match?: "exact" | "strong" | "partial" | "none";
+  review_required?: boolean;
 }
 
 // Sanctions / PEP screening — borrower + entity names against OFAC SDN,
@@ -92,8 +102,15 @@ export interface SanctionsMatch {
   list_name: string;         // e.g. "OFAC SDN", "EU Consolidated", "UK HMT"
   programs: string[];        // Sanctions programs (e.g. ["SDGT", "IRAN"])
   schema: "Person" | "Company" | "LegalEntity" | "Other";
-  score: number;             // 0..1 match confidence
+  score: number;             // 0..1 vendor fuzzy similarity
   source_url: string | null;
+  // Disambiguation layer (src/lib/screening/disambiguation.ts). A name-only
+  // match on a common name can never exceed "possible" — never asserted as a
+  // confirmed hit. Optional so historical rows and other producers still type.
+  confidence?: "confirmed" | "probable" | "possible" | "weak";
+  name_match?: "exact" | "strong" | "partial" | "none";
+  review_required?: boolean;
+  match_reasons?: string[];
 }
 
 export interface SanctionsScreenResult {
@@ -102,6 +119,12 @@ export interface SanctionsScreenResult {
   matches: SanctionsMatch[];
   source: string;               // Adapter that produced this result
   raw_response: Record<string, unknown> | null;
+  // Group-level disambiguation roll-up across all screened names. When a name
+  // returns many dispersed matches we say "name appears common" rather than
+  // implying a hit. Drives the UI badge tone + copy.
+  common_name_likely?: boolean;
+  review_summary?: string;
+  highest_confidence?: "confirmed" | "probable" | "possible" | "weak";
 }
 
 // Adapter interface — each vendor implements this

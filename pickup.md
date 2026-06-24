@@ -45,13 +45,21 @@ Everything below is **live on `main`, deployed green**; migrations 00001–00045
 
 ## The plan (start here) — calibration-driven, in priority order
 
-1. **🔴 #1 — Common-name false-positive disambiguation (the trust-killer).**
-   Loan 10228 (common name "Mark Morrison") returned **20 federal litigation hits +
-   a sanctions potential_match with zero disambiguation.** This is *exactly* what
-   Noah killed the auto-score over. Build an **entity/DOB/address match-scoring
-   layer** before anything is flagged; UI must say "N possible matches — review,"
-   never "hit." Litigation (`courtlistener.ts` + `litigation/`) + sanctions
-   (`opensanctions.ts`/`ofac.ts`). **Also fix the sanctions `match_count` undefined bug.**
+1. **✅ #1 SHIPPED (2026-06-24) — Common-name false-positive disambiguation (the trust-killer).**
+   Built `src/lib/screening/disambiguation.ts` — a shared match-scoring layer both
+   screening pillars route through. Rule: *a name match with no corroborating
+   second identifier (DOB/address/distinctive name) is capped at "possible —
+   review," never asserted as a hit;* many dispersed matches → "name appears
+   common." Wired through OpenSanctions + OFAC + CourtListener adapters, the
+   deterministic risk factors (name-only common-name → `litigation_review` /
+   `sanctions_review` at minor/moderate, NOT a tier-dropping `critical`), and the
+   UI (sanctions card, litigation card, Flags tile). `match_count` undefined bug
+   fixed. **Verified live on loan 10228:** litigation `0 confirmed, 20
+   possible/review`; sanctions `5 to review · possible · COMMON NAME`. Test:
+   `npx tsx scripts/test-disambiguation.ts` (22 assertions, all green).
+   *Next on this thread:* once doc-ingest (item #3) brings DOB/address into intake,
+   matches can finally be promoted to "confirmed" — wire those identifiers into
+   `SubjectIdentity`.
 2. **Entity-anchored + address-list track record.** Owner-NAME search is too fragile
    (Realie 404'd on the common name; borrower holds via LLCs). Collect the **property
    address list at intake** and deed-verify each (the `verifyAddresses` path already

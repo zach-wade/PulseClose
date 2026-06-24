@@ -9,6 +9,11 @@ import type {
   SanctionsScreenResult,
   SanctionsMatch,
 } from "./types";
+import {
+  scoreMatchGroup,
+  type CandidateIdentity,
+  type MatchConfidence,
+} from "../screening/disambiguation";
 
 const OPENSANCTIONS_BASE_URL = "https://api.opensanctions.org";
 // Score threshold below which we treat a result as noise.
@@ -132,6 +137,24 @@ function mapEntity(
   };
 }
 
+function entityToCandidate(
+  entity: OpenSanctionsMatchEntity,
+): CandidateIdentity {
+  const props = entity.properties ?? {};
+  const birthDate = Array.isArray((props as Record<string, unknown>).birthDate)
+    ? ((props as Record<string, unknown>).birthDate as string[])[0]
+    : null;
+  const country = Array.isArray((props as Record<string, unknown>).country)
+    ? ((props as Record<string, unknown>).country as string[])[0]
+    : null;
+  return {
+    name: entity.caption ?? props.name?.[0] ?? "Unknown",
+    dob: birthDate ?? null,
+    jurisdictionState: country ?? null,
+    vendorScore: entity.score ?? null,
+  };
+}
+
 export async function screenSanctionsOpenSanctions(
   req: SanctionsScreenRequest,
   apiKey: string,
@@ -203,15 +226,42 @@ export async function screenSanctionsOpenSanctions(
     const data: OpenSanctionsMatchResponse = await res.json();
     const responses = data.responses ?? {};
 
+    // Build matches per query name, then run each name's matches through the
+    // disambiguation layer so a common-name false positive ("Mark Morrison")
+    // is capped at "possible — review" instead of asserted as a hit.
     const matches: SanctionsMatch[] = [];
+    let commonNameLikely = false;
+    const order: MatchConfidence[] = ["confirmed", "probable", "possible", "weak"];
+    let highest: MatchConfidence = "weak";
+
     for (const [qid, response] of Object.entries(responses)) {
       const queryName = queryNameMap[qid] ?? qid;
-      const results = response.results ?? [];
-      for (const entity of results) {
-        if ((entity.score ?? 0) >= MATCH_THRESHOLD) {
-          matches.push(mapEntity(entity, queryName));
-        }
+      const isEntity = qid === "entity";
+      const entities = (response.results ?? []).filter(
+        (e) => (e.score ?? 0) >= MATCH_THRESHOLD,
+      );
+      if (entities.length === 0) continue;
+
+      const candidates = entities.map(entityToCandidate);
+      const group = scoreMatchGroup(
+        { fullName: queryName },
+        candidates,
+        { entity: isEntity, kind: "match" },
+      );
+      if (group.commonNameLikely) commonNameLikely = true;
+      if (order.indexOf(group.highestConfidence) < order.indexOf(highest)) {
+        highest = group.highestConfidence;
       }
+
+      entities.forEach((entity, i) => {
+        const m = mapEntity(entity, queryName);
+        const d = group.results[i];
+        m.confidence = d.confidence;
+        m.name_match = d.nameMatch;
+        m.review_required = d.reviewRequired;
+        m.match_reasons = d.reasons;
+        matches.push(m);
+      });
     }
 
     return {
@@ -227,6 +277,14 @@ export async function screenSanctionsOpenSanctions(
       matches,
       source: "OpenSanctions",
       raw_response: data as unknown as Record<string, unknown>,
+      common_name_likely: commonNameLikely,
+      highest_confidence: matches.length > 0 ? highest : undefined,
+      review_summary:
+        matches.length > 0
+          ? `${matches.filter((m) => m.review_required !== false).length} possible sanctions/PEP ${
+              matches.filter((m) => m.review_required !== false).length === 1 ? "match" : "matches"
+            } — review${commonNameLikely ? " (name appears common)" : ""}.`
+          : undefined,
     };
   } catch (err) {
     if (err instanceof OpenSanctionsError) throw err;

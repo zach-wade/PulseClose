@@ -22,11 +22,24 @@
 
 ## The gaps, ranked by severity
 
-1. **🔴 Common-name false positives (litigation + sanctions) — the trust-killer.**
+1. **✅ FIXED (2026-06-24) — Common-name false positives (litigation + sanctions) — the trust-killer.**
    20 litigation hits + a sanctions "potential_match" on "Mark Morrison" with no
-   disambiguation. **This is the exact thing Noah killed the auto-score over.** We
-   need entity/DOB/address disambiguation before *anything* is flagged, and the UI
-   must show these as "N possible matches — review," never "hit."
+   disambiguation. **This is the exact thing Noah killed the auto-score over.**
+   **Resolution:** built `src/lib/screening/disambiguation.ts` — a shared
+   match-scoring layer both screening pillars route through. The honest rule it
+   enforces: *a name match with no corroborating second identifier (DOB / address /
+   distinctive name) can never exceed "possible — review."* When one name yields
+   many dispersed matches it's flagged "name appears common." Wired through both
+   sanctions adapters (OpenSanctions + OFAC), the CourtListener adapter, the
+   deterministic risk factors (name-only common-name matches now fire a
+   `litigation_review` / `sanctions_review` factor at minor/moderate — they no
+   longer auto-fire a `critical` tier-dropping flag), and the UI (sanctions card,
+   litigation card, "Flags" tile all say "N possible — review," never "hit").
+   **Verified live on loan 10228:** litigation now reports `0 confirmed, 20
+   possible/review`; sanctions reports `5 to review · possible · COMMON NAME`.
+   Test: `npx tsx scripts/test-disambiguation.ts` (22 assertions).
+   *Still open:* DOB/address corroboration needs those identifiers at intake
+   (gap #4, doc-ingest) to ever promote a match to "confirmed."
 
 2. **🔴 Owner-name property search is fragile.** Realie 404'd; the borrower holds
    via LLCs and/or the name didn't match. Track record from a borrower *name* alone
@@ -43,8 +56,11 @@
    loan needs these ingested from the package (Noah: "the less you ask the borrower,
    the better" → parse their Excel/PDF, don't re-key).
 
-5. **🟡 `match_count` undefined bug** on the OpenSanctions potential_match path —
-   fix so the count + matched names render.
+5. **✅ FIXED (2026-06-24) — `match_count` undefined bug.** The harness read
+   `sanc.match_count` (a persistence-layer field) off the adapter result, which
+   only carries `matches[]`. Harness now reads `matches.length` + the new
+   disambiguation roll-up (`highest_confidence`, `common_name_likely`,
+   `review_summary`).
 
 6. **🟢 Confirmed hard boundary:** as-is/ARV/rehab/NOI + rehab spend are
    package-ingest, not API. The architecture is right; intake/doc-ingest is the work.

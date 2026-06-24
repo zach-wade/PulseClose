@@ -8,6 +8,10 @@ import type {
   SanctionsScreenResult,
   SanctionsMatch,
 } from "./types";
+import {
+  scoreMatchGroup as disambiguateGroup,
+  type MatchConfidence,
+} from "../screening/disambiguation";
 
 const SDN_CSV_URL = "https://www.treasury.gov/ofac/downloads/sdn.csv";
 // Cache the parsed list at module scope. Vercel serverless re-uses warm
@@ -162,6 +166,30 @@ function screenName(
   return { matches: [...dedup.values()].sort((a, b) => b.score - a.score) };
 }
 
+// Run one name's raw OFAC matches through the disambiguation layer so a
+// common-name false positive is capped at "possible — review" rather than
+// asserted as a hit. Mutates each match with its confidence in place.
+function disambiguateMatches(
+  name: string,
+  matches: SanctionsMatch[],
+  isEntity: boolean,
+): { commonNameLikely: boolean; highest: MatchConfidence } {
+  if (matches.length === 0) return { commonNameLikely: false, highest: "weak" };
+  const group = disambiguateGroup(
+    { fullName: name },
+    matches.map((m) => ({ name: m.matched_name, vendorScore: m.score })),
+    { entity: isEntity, kind: "match" },
+  );
+  matches.forEach((m, i) => {
+    const d = group.results[i];
+    m.confidence = d.confidence;
+    m.name_match = d.nameMatch;
+    m.review_required = d.reviewRequired;
+    m.match_reasons = d.reasons;
+  });
+  return { commonNameLikely: group.commonNameLikely, highest: group.highestConfidence };
+}
+
 export async function screenSanctionsOFAC(
   req: SanctionsScreenRequest,
 ): Promise<SanctionsScreenResult> {
@@ -170,22 +198,35 @@ export async function screenSanctionsOFAC(
 
     const allMatches: SanctionsMatch[] = [];
     const seen = new Set<string>();
+    const order: MatchConfidence[] = ["confirmed", "probable", "possible", "weak"];
+    let commonNameLikely = false;
+    let highest: MatchConfidence = "weak";
+    const rollup = (r: { commonNameLikely: boolean; highest: MatchConfidence }) => {
+      if (r.commonNameLikely) commonNameLikely = true;
+      if (order.indexOf(r.highest) < order.indexOf(highest)) highest = r.highest;
+    };
+
     const screenIndividual = (name: string) => {
       const norm = name.toLowerCase().replace(/\s+/g, " ").trim();
       if (!norm || seen.has(norm)) return;
       seen.add(norm);
-      allMatches.push(...screenName(list, name, "individual").matches);
+      const m = screenName(list, name, "individual").matches;
+      rollup(disambiguateMatches(name, m, false));
+      allMatches.push(...m);
     };
 
     if (req.borrower_name) screenIndividual(req.borrower_name);
     if (req.entity_name) {
-      allMatches.push(...screenName(list, req.entity_name, "entity").matches);
+      const m = screenName(list, req.entity_name, "entity").matches;
+      rollup(disambiguateMatches(req.entity_name, m, true));
+      allMatches.push(...m);
     }
     if (req.guarantor_name) screenIndividual(req.guarantor_name);
     for (const name of req.additional_persons ?? []) {
       screenIndividual(name);
     }
 
+    const reviewCount = allMatches.filter((m) => m.review_required !== false).length;
     return {
       result: allMatches.length > 0 ? "potential_match" : "clear",
       sources_searched: ["OFAC SDN"],
@@ -196,6 +237,12 @@ export async function screenSanctionsOFAC(
         _list_size: list.length,
         _matches: allMatches.length,
       },
+      common_name_likely: commonNameLikely,
+      highest_confidence: allMatches.length > 0 ? highest : undefined,
+      review_summary:
+        allMatches.length > 0
+          ? `${reviewCount} possible sanctions ${reviewCount === 1 ? "match" : "matches"} — review${commonNameLikely ? " (name appears common)" : ""}.`
+          : undefined,
     };
   } catch (err) {
     return {

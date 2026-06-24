@@ -23,8 +23,10 @@ export const dynamic = "force-dynamic";
 const FACTOR_ORDER = [
   "entity_status",
   "active_fed_litigation",
+  "litigation_review",
   "dismissed_litigation",
   "sanctions_hit",
+  "sanctions_review",
   "gc_license_issue",
   "extended_hold",
   "lender_concentration",

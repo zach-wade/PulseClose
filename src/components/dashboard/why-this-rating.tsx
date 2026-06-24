@@ -52,11 +52,18 @@ function FactorEvidence({ factor }: { factor: RiskFactor }) {
 
   switch (factor.factor_key) {
     case "active_fed_litigation":
+    case "litigation_review":
     case "dismissed_litigation":
       if (!cases || cases.length === 0) return null;
       return (
         <Evidence
-          label={factor.factor_key === "active_fed_litigation" ? "Cases" : "Dismissed cases"}
+          label={
+            factor.factor_key === "active_fed_litigation"
+              ? "Cases"
+              : factor.factor_key === "litigation_review"
+                ? "Possible matches (unverified)"
+                : "Dismissed cases"
+          }
           jumpLabel="View on litigation card →"
           jumpHref="#litigation-card"
         >
@@ -76,10 +83,11 @@ function FactorEvidence({ factor }: { factor: RiskFactor }) {
         </Evidence>
       );
     case "sanctions_hit":
+    case "sanctions_review":
       if (!lists || lists.length === 0) return null;
       return (
         <Evidence
-          label="Lists with potential matches"
+          label={factor.factor_key === "sanctions_review" ? "Lists with possible (unverified) matches" : "Lists with potential matches"}
           jumpLabel="View on sanctions card →"
           jumpHref="#sanctions-card"
         >
@@ -235,8 +243,10 @@ interface Props {
 const FACTOR_LABELS: Record<string, string> = {
   entity_status: "Entity status",
   active_fed_litigation: "Active federal litigation",
+  litigation_review: "Possible litigation match (review)",
   dismissed_litigation: "Dismissed/terminated litigation",
   sanctions_hit: "Sanctions / PEP screen",
+  sanctions_review: "Possible sanctions match (review)",
   gc_license_issue: "GC license issue",
   extended_hold: "Extended hold period",
   lender_concentration: "Lender concentration",

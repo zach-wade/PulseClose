@@ -301,9 +301,19 @@ export default function ValidationDetailPage() {
   const completedProjects = data.track_record.filter(
     (t) => t.outcome === "completed",
   );
+  // Only count a litigation record toward the headline "Flags" tile when it's
+  // confirmed to this borrower — name-only common-name matches are review
+  // items, not flags, and must not inflate the scary number (the 10228
+  // trust-killer). Legacy rows without disambiguation default to unconfirmed.
+  const litigationConfidence = (l: LitigationCheck) =>
+    ((l as unknown as { raw_response?: { _disambiguation?: { confidence?: string } } })
+      .raw_response?._disambiguation?.confidence) ?? "possible";
   const flaggedLitigation = data.litigation_checks.filter(
-    (l) => l.result === "found",
+    (l) => l.result === "found" && litigationConfidence(l) === "confirmed",
   );
+  const confirmedSanctions = (data.sanctions_checks?.[0]?.matches ?? []).filter(
+    (m) => m.confidence === "confirmed",
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -544,7 +554,7 @@ export default function ValidationDetailPage() {
                   (n, e) => n + e.flags.length,
                   0,
                 ) +
-                (data.sanctions_checks?.[0]?.match_count ?? 0)}
+                confirmedSanctions}
             </p>
           </CardContent>
         </Card>

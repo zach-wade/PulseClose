@@ -70,6 +70,10 @@ export interface SanctionsCheck {
   source: string;
   check_date: string;
   raw_response?: Record<string, unknown>;
+  // Disambiguation roll-up (src/lib/screening/disambiguation.ts).
+  common_name_likely?: boolean;
+  review_summary?: string;
+  highest_confidence?: "confirmed" | "probable" | "possible" | "weak";
 }
 
 export interface SanctionsMatch {
@@ -80,6 +84,10 @@ export interface SanctionsMatch {
   schema: "Person" | "Company" | "LegalEntity" | "Other";
   score: number;
   source_url: string | null;
+  confidence?: "confirmed" | "probable" | "possible" | "weak";
+  name_match?: "exact" | "strong" | "partial" | "none";
+  review_required?: boolean;
+  match_reasons?: string[];
 }
 
 export interface VerifiedFlip {
