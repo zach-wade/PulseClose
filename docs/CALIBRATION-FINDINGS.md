@@ -94,6 +94,41 @@
    / doc-ingest path). Identifier surfacing is the human-review aid in the
    meantime.
 
-## Next loans to add to the golden set
-905 N LBJ Dr (signed 1003), 812 Tait St, 1518 Dolphin Ter (#8008173), 544 Sunset,
-286 Virginia, + audit logs 10287/10294/10295. Add each to `GOLDEN[]` in the harness.
+## Multi-loan run (2026-06-24) — 6 loans, distinctive-name contrast set
+
+Added 5 real loans to `GOLDEN[]` (audit logs 10287/10294/10295 + ICC packages
+286 Virginia, 544 Sunset), all with **distinctive** names, to test whether the
+disambiguation layer over-suppresses. It does not — it's calm on clean names and
+loud only on the common one:
+
+| Loan | Name | Litigation | Sanctions |
+|---|---|---|---|
+| 10228 Mark Morrison | common | 20 possible | 5 possible · **COMMON** |
+| 10287 Christopher Soverns | distinctive | 1 possible | **clear** |
+| 10294 Prashant Bhuyan | distinctive | 2 possible | 1 possible (FINRA; middle "Biraj" shown) |
+| 10295 Iyad Duwaji | distinctive | **0** | **clear** |
+| 286 Nik Kafetzopoulos | distinctive | 0 | 1 **weak** (obvious non-match) |
+| 544 Thomas Series | generic-ish | 0 | 1 **weak** (UK roofing co.) |
+
+**Findings from the run:**
+- **9. The layer behaves correctly across the spectrum.** Common name → many
+  "possible" + COMMON flag; distinctive names → clear / 0-2 possible / weak. No
+  evidence of over-suppression (the failure mode where a real hit gets buried).
+- **10. The screening "noise" is almost entirely non-OFAC exclusion lists** —
+  `us_sam_exclusions`, `us_ny_med_exclusions`, `us_finra_actions`,
+  `gb_coh_disqualified` (UK disqualified directors). For a property borrower
+  these are mostly irrelevant. Reinforces finding #7: **add list-type weighting /
+  separate "sanctions" from "regulatory exclusions" in the UI.** (OpenSanctions
+  bundles all of these into `/match/default`.)
+- **11. The Prashant Bhuyan FINRA "possible" may be a *real* match** (he is a
+  securities-industry figure; the entry's middle name "Biraj" matches). This is
+  the system working as intended: flag "possible — review" with the
+  distinguishing identifier surfaced, never auto-decide.
+- **12. Track record DOES resolve for non-Sonoma properties.** 286 Virginia
+  returned a real deed history (acq $830k 2017 → disp $1.75M 2025, $920k profit);
+  10287 returned an acquisition date. The 10228 track-record miss was specific to
+  the Regrid trial's Sonoma exclusion + a common-name owner search, not a
+  universal failure.
+
+**Still queued for the golden set:** 905 N LBJ Dr (signed 1003), 812 Tait St,
+1518 Dolphin Ter (#8008173) — not yet located in the trove.
