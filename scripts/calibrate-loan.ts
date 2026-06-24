@@ -239,9 +239,12 @@ async function calibrate(g: GoldenCase) {
 
   // ── ⑤ Sanctions (OpenSanctions → OFAC) ──
   const sanc = await adapter.screenSanctions({ borrower_name: g.borrower_name, entity_name: g.entity_name ?? g.borrower_name, guarantor_name: g.guarantor_name ?? undefined, known_states: [g.property_state].filter(Boolean) as string[] });
-  const sancReview = sanc.matches.filter((m) => m.review_required !== false).length;
+  const isScreening = (m: { category?: string }) => m.category == null || m.category === "sanction" || m.category === "pep";
+  const screening = sanc.matches.filter(isScreening);
+  const excl = sanc.matches.length - screening.length;
+  const sancReview = screening.filter((m) => m.confidence === "possible" || m.confidence === "probable").length;
   console.log(
-    `⑤ SANCTIONS  ${sanc.result} (${sanc.matches.length} raw match(es); ${sancReview} to review · ${sanc.highest_confidence ?? "n/a"} · ${sanc.common_name_likely ? "COMMON NAME" : "name ok"}) · source: ${sanc.source}`,
+    `⑤ SANCTIONS  ${sanc.result} (${screening.length} sanctions/PEP [${sancReview} to review], ${excl} exclusion-list [informational] · ${sanc.highest_confidence ?? "n/a"} · ${sanc.common_name_likely ? "COMMON NAME" : "name ok"}) · source: ${sanc.source}`,
   );
   if (sanc.review_summary) console.log(`             → ${sanc.review_summary}`);
   for (const m of sanc.matches.slice(0, 3)) {
