@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Trash2, BarChart3 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, BarChart3, ShieldCheck } from "lucide-react";
 import { InvestorPerformanceCard } from "@/components/dashboard/investor-performance-card";
 import { InvestorCriteriaEditor } from "@/components/dashboard/investor-criteria-editor";
 
@@ -117,12 +117,15 @@ export default function InvestorsAdminPage() {
         <Button variant="ghost" size="icon" render={<Link href="/dashboard/evaluate" />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Manage investors</h1>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold tracking-tight">Capital partners</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Configure capital partners and their guidelines. Each investor's criteria are stored as JSONB rows in <code className="text-xs bg-muted px-1 rounded">investor_criteria</code>; the engine reads all active rows when evaluating a deal.
+            The investors you route to and the standards (mandates) you must meet. Each partner&apos;s buy-box drives best-execution sizing and the mandate verdict.
           </p>
         </div>
+        <Button variant="outline" render={<Link href="/dashboard/capital/mandates" />}>
+          <ShieldCheck className="h-4 w-4 mr-2" /> Mandate Console
+        </Button>
       </div>
 
       <Card>
