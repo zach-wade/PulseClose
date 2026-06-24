@@ -184,8 +184,24 @@ export function nameMatchStrength(
   const candidateInSubject = [...cs].every((t) => ss.has(t));
 
   if (subjectInCandidate && candidateInSubject) return "exact";
-  // Subject fully contained in candidate (candidate adds a middle name etc.).
-  if (subjectInCandidate && cHasSurname) return "strong";
+  // Subject fully contained in candidate (candidate adds tokens). This is only
+  // a "strong" match if the extra tokens are plausibly MIDDLE names — i.e. the
+  // candidate doesn't carry a DIFFERENT leading first name. "Mark Morrison" ⊂
+  // "Mark Allen Morrison" is strong (added middle); "Mark Morrison" ⊂ "Paul
+  // Mark Morrison" is NOT — Paul is a different person whose middle name is
+  // Mark. (Calibration: CourtListener returns many such captions for a common
+  // surname.) Entities don't have this first-name semantics, so skip them.
+  if (subjectInCandidate && cHasSurname) {
+    if (treatAsEntity) return "strong";
+    const sFirst = s.tokens[0];
+    const firstIdxInC = c.tokens.indexOf(sFirst);
+    // Any candidate token positioned BEFORE the subject's first name that the
+    // subject doesn't have is a distinct leading given name → different person.
+    const hasDifferentLeadingGiven =
+      firstIdxInC > 0 &&
+      c.tokens.slice(0, firstIdxInC).some((t) => t !== sLast && !ss.has(t));
+    return hasDifferentLeadingGiven ? "partial" : "strong";
+  }
   // Surname + at least one given token shared, but not full containment.
   const sharedGiven = [...ss].filter((t) => t !== sLast && cs.has(t)).length;
   if (cHasSurname && sharedGiven >= 1) return "partial";

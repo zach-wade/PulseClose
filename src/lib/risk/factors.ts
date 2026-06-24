@@ -187,7 +187,13 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
   // matches — the common-name false-positive class (loan 10228's 20 dockets) —
   // are surfaced as review items that don't auto-drive the tier.
   const confirmedActive = activeCases.filter((c) => litigationConfidence(c) === "confirmed");
-  const reviewActive = activeCases.filter((c) => litigationConfidence(c) !== "confirmed");
+  // "weak"/"none" = the borrower isn't actually the named party (the caption is
+  // someone else; the name only appears in full-text). That's filtered noise,
+  // not a review item — only possible/probable are surfaced for review.
+  const reviewActive = activeCases.filter((c) => {
+    const conf = litigationConfidence(c);
+    return conf === "possible" || conf === "probable";
+  });
 
   if (confirmedActive.length > 0) {
     factors.push({
@@ -250,7 +256,12 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
     // must be reviewed but must not auto-set the tier (loan 10228's "Mark
     // Morrison" OFAC potential_match was a common-name false positive).
     const confirmed = sm.filter((m) => m.confidence === "confirmed");
-    const review = sm.filter((m) => m.confidence !== "confirmed");
+    // weak matches (name doesn't really match the listed party) are noise, not
+    // review items — only possible/probable are surfaced. Legacy rows have no
+    // confidence; treat those as possible (review) for back-compat.
+    const review = sm.filter(
+      (m) => m.confidence === "possible" || m.confidence === "probable" || m.confidence == null,
+    );
 
     if (confirmed.length > 0) {
       factors.push({

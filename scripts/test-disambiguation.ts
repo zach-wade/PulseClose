@@ -39,6 +39,11 @@ check("exact: 'Mark Morrison' vs 'Mark Morrison'", nameMatchStrength("Mark Morri
 check("strong: subject ⊂ candidate w/ middle", nameMatchStrength("Mark Morrison", "Mark Allen Morrison") === "strong");
 check("exact via reorder 'Morrison, Mark'", nameMatchStrength("Mark Morrison", "Morrison, Mark") === "exact");
 check("none: different surname", nameMatchStrength("Mark Morrison", "Mark Stevenson") === "none");
+// First-name-position precision (calibration: CourtListener common-surname captions).
+check("DIFFERENT leading first name → NOT strong ('Paul Mark Morrison')", nameMatchStrength("Mark Morrison", "Paul Mark Morrison") === "partial", nameMatchStrength("Mark Morrison", "Paul Mark Morrison"));
+check("'Richard Mark Morrison' → partial not strong", nameMatchStrength("Mark Morrison", "Richard Mark Morrison") === "partial");
+check("added MIDDLE name still strong ('Mark Allen Morrison')", nameMatchStrength("Mark Morrison", "Mark Allen Morrison") === "strong");
+check("lastname-first w/ middle still strong ('Morrison Mark Allen')", nameMatchStrength("Mark Morrison", "Morrison Mark Allen") === "strong");
 check("partial: surname + 1 given of 2", nameMatchStrength("Mark Allen Morrison", "Mark Morrison") === "exact" || nameMatchStrength("Mark Allen Morrison", "Mark Morrison") === "partial");
 
 console.log("\n── single common-name match (the trust-killer) ──");

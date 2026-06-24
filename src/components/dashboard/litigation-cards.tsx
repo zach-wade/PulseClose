@@ -141,11 +141,15 @@ export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }
     return byCat;
   }, [cases]);
 
-  // Name-only matches that have not been corroborated to this borrower. These
-  // are the common-name false-positive class — surfaced for review, never
-  // asserted as the borrower's cases.
+  // Matches surfaced for review: possible/probable only. "weak" means the
+  // borrower isn't actually the named party (caption is someone else) — that's
+  // filtered noise, not a review item. Confirmed is a verified match, shown
+  // separately.
   const reviewCount = useMemo(
-    () => cases.filter((c) => caseConfidence(c) !== "confirmed").length,
+    () => cases.filter((c) => {
+      const conf = caseConfidence(c);
+      return conf === "possible" || conf === "probable";
+    }).length,
     [cases],
   );
 
@@ -378,15 +382,29 @@ function CaseCard({
                 {c.status === "pending" ? "Pending" : STATUS_LABELS[c.status]}
                 {c.status === "pending" ? null : <CheckCircle2 className="ml-1 h-2.5 w-2.5" />}
               </Badge>
-              {caseConfidence(c) !== "confirmed" && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] uppercase border-amber-300 text-amber-700 bg-amber-50/60"
-                  title="Name-only match — not confirmed as this borrower. Verify identity before relying on it."
-                >
-                  Possible — review
-                </Badge>
-              )}
+              {(() => {
+                const conf = caseConfidence(c);
+                if (conf === "confirmed") return null;
+                if (conf === "weak")
+                  return (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] uppercase border-slate-200 text-slate-500"
+                      title="The borrower does not appear to be a named party — the name only appears in the docket text. Unlikely to be this borrower."
+                    >
+                      Unlikely
+                    </Badge>
+                  );
+                return (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] uppercase border-amber-300 text-amber-700 bg-amber-50/60"
+                    title="Name-only match — not confirmed as this borrower. Verify identity before relying on it."
+                  >
+                    Possible — review
+                  </Badge>
+                );
+              })()}
               {isManual && (
                 <span className="text-[9px] uppercase tracking-wide text-amber-700 bg-amber-50 rounded px-1 py-0.5 border border-amber-200">
                   manual

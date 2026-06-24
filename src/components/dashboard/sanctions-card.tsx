@@ -81,9 +81,21 @@ function MatchRow({ m, muted }: { m: SanctionsMatch; muted?: boolean }) {
             {!muted && (
               <Badge
                 variant="outline"
-                className={`text-[10px] uppercase ${unconfirmed ? "border-amber-300 text-amber-700 bg-amber-50/60" : "border-destructive/40 text-destructive"}`}
+                className={`text-[10px] uppercase ${
+                  m.confidence === "weak"
+                    ? "border-slate-200 text-slate-500"
+                    : unconfirmed
+                      ? "border-amber-300 text-amber-700 bg-amber-50/60"
+                      : "border-destructive/40 text-destructive"
+                }`}
               >
-                {m.confidence === "confirmed" ? "Confirmed" : m.confidence === "probable" ? "Probable — review" : "Possible — review"}
+                {m.confidence === "confirmed"
+                  ? "Confirmed"
+                  : m.confidence === "probable"
+                    ? "Probable — review"
+                    : m.confidence === "weak"
+                      ? "Unlikely"
+                      : "Possible — review"}
               </Badge>
             )}
           </div>
@@ -134,8 +146,11 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
   // is informational for a property borrower. null category = legacy/OFAC-direct.
   const allMatches = data.matches ?? [];
   const isExclusion = (m: SanctionsMatch) => m.category === "exclusion" || m.category === "other";
-  const screeningMatches = allMatches.filter((m) => !isExclusion(m));
+  const isWeak = (m: SanctionsMatch) => m.confidence === "weak";
   const exclusionMatches = allMatches.filter(isExclusion);
+  // Screening = sanctions/PEP, excluding weak (name doesn't match the listed
+  // party — filtered noise). Those become "unlikely" and don't drive the badge.
+  const screeningMatches = allMatches.filter((m) => !isExclusion(m) && !isWeak(m));
   const hasScreeningHit = screeningMatches.length > 0;
 
   const hasConfirmed =
@@ -143,9 +158,9 @@ export function SanctionsCard({ data }: { data: SanctionsCheck }) {
     rollup.highest_confidence === "confirmed" ||
     screeningMatches.some((m) => m.confidence === "confirmed");
   const commonNameLikely = data.common_name_likely ?? rollup.common_name_likely ?? false;
-  const reviewCount = screeningMatches.filter((m) => m.review_required !== false).length || screeningMatches.length;
-  // The header badge reflects sanctions/PEP only. Exclusion-only results read as
-  // "clear" for sanctions, with the exclusions noted below as informational.
+  const reviewCount = screeningMatches.filter((m) => m.confidence !== "confirmed").length;
+  // The header badge reflects reviewable sanctions/PEP only. Exclusion-only or
+  // weak-only results read as "clear," with details noted below.
   const badgeIsHit = isHit && hasScreeningHit;
   const badgeIsClear = isClear || (isHit && !hasScreeningHit);
 

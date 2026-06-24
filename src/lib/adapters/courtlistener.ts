@@ -107,6 +107,7 @@ function isBankruptcyCourt(courtId?: string): boolean {
   return !!courtId && courtId.includes("bankr");
 }
 
+
 function mapDocketToRecord(
   docket: CLDocket,
   searchType: "bankruptcy" | "lawsuit",
@@ -155,9 +156,14 @@ export async function searchLitigationCourtListener(
       const dockets = await searchDockets(name, token);
       if (dockets.length === 0) continue;
 
-      // Score this name's dockets as one group so a common name returning many
-      // dispersed dockets is capped at "possible — review" and flagged common,
-      // instead of each docket reading as a confirmed hit on the borrower.
+      // Match the borrower against each docket's CAPTION. For bankruptcy the
+      // caption IS the debtor's name; for civil it's "X v. Y". The matcher's
+      // first-name-position logic means a caption like "Paul Mark Morrison" or
+      // "Weinraub v. BofA" scores weak/none for a "Mark Morrison" search — the
+      // borrower isn't actually the named party, just text in the docket.
+      // (We do NOT fetch the /parties/ endpoint: it's empty for search-index
+      // bankruptcy dockets — calibration 0/8 — and the per-docket call storm
+      // trips CourtListener's rate limit, degrading the core search.)
       const isEntityName = name === req.entity_name && name !== req.borrower_name;
       const candidates: CandidateIdentity[] = dockets.map((d) => ({
         name: pickDocketField(d, "caseName", "case_name", "case_name_short") ?? name,
