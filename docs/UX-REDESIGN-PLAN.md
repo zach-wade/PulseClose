@@ -240,3 +240,82 @@ rest builds on.
   invite? (Affects the sharing model.)
 - Exactly what deal metadata crosses the tenant boundary with a verdict (the
   privacy line). Draft this with Damon — it's also a trust-selling point.
+
+---
+
+## 9. Live-review findings (2026-06-23)
+
+Drove the **live prod app** as three seeded test users (one per persona) and
+screenshotted every key screen. Repeatable harness lives in `scripts/`:
+`create-test-user.ts` → `seed-persona-data.ts` (stable IDs) → `drive-persona.ts`.
+Screens in `ux-review/<persona>/`. The plan above holds; this section records
+what the pixels confirmed, what to adjust, and bugs found en route.
+
+**Test orgs (prod):** Underwriter `uw@test.pulseclose.com` (Test Bridge Capital,
+2 validations + investors + eval + uw_model + mandate) · Spreadsheet Refugee
+`solo@test.pulseclose.com` (1 validation, no investors) · Mandator
+`fund@test.pulseclose.com` (Keystone Capital Partners, empty). Password
+`Test1234!`. Re-seed any time; IDs are stable (`1111…`/`2222…`/`3333…`).
+
+### Confirmed against real pixels
+- **§2 — the two-engine wall is exactly as described.** `/dashboard/evaluate`
+  renders the "Deal scenario" form (~13 inputs) and then, stacked directly below
+  on the *same* page, "Underwriting Workbench — size & judge" with its own NOI /
+  caps / rate / amort / coverage-basis / house-constraint inputs. A verify-only
+  lender (and the Spreadsheet Refugee) meets the full sizing wall whether or not
+  they want it. The stepper redesign is the right call.
+- **§3 — the mandate stamp is genuinely buried.** On the validation detail page,
+  "Capital-provider mandates" renders as the **11th of 13 stacked sections**
+  (order: header → 4 stat cards → AI Risk Assessment → Why this rating? → Entity
+  → Track Record → Borrower address verification → Public records → Sanctions →
+  GC → **Mandates** → Recent evaluations → Investor handoff). For the wedge
+  feature this is the headline output sitting near the bottom. Promote it to the
+  top, as §3 says.
+- **§4 — the Fund has no home, and it's worse than "an investor row."** The Fund
+  tenant's dashboard serves the **originator onboarding flow** verbatim —
+  "Start here: ① Validate the borrower ② Evaluate against your investors ③ Hand
+  off to capital" — which is the opposite of a fund's job. Confirms Fund-tenant
+  as Phase 2's core.
+
+### Adjustments / additions to the plan
+- **§3 — also de-duplicate the AI memo against the deterministic factors.** The
+  "AI Risk Assessment → Risks" list and the "Why this rating?" factor list show
+  the *same* items (active federal litigation, extended hold, GC license) with
+  the same severities, one above the other. When tabbing the detail page, the
+  `Summary` (AI memo) and `Evidence` (factors) tabs should not repeat the risk
+  list verbatim — let the memo narrate and the factor list drill down, not both
+  enumerate. (Aligns with the drill-down-over-characterization principle.)
+- **§1/§2 — "Manage investors" leaks the data model to the user.** The page
+  description literally says criteria are "stored as JSONB rows in
+  `investor_criteria`," and renders each criterion as a raw `snake_case`
+  key/value card (`loan_types`, `max_ltarv`, `rural_allowed`…). Job-shaped IA
+  should hide storage detail and present a readable buy-box. Fold into the §1 IA
+  pass.
+- **Empty-state for the analyzer is wrong for the no-investor persona.** With
+  zero investors the evaluate page still renders the entire two-engine wall and
+  shows a hint telling the user to **run a dev script**
+  (`npx tsx scripts/seed-sample-investors.ts`) — a developer instruction leaked
+  into the product. The Spreadsheet Refugee's first screen should be a guided
+  empty state, not the wall + a CLI command.
+
+### Bugs found while driving (fix independently of the redesign)
+1. **Detail page white-screens on object-shaped `disciplinary_actions`.**
+   `src/components/dashboard/gc-result-card.tsx:165` renders each
+   `disciplinary_actions` element directly as a React child. The production
+   contract is `string[]` (CSLB adapter, types), so real data is safe — but it's
+   the **one spot in the whole detail render path with no shape guard** (every
+   other card coerces with `String(...)`, null-checks, or `safeParse`). A single
+   malformed row → "Something went wrong" for the entire page. Add a defensive
+   coercion (belt-and-suspenders per ROADMAP robustness principles).
+2. **Validations with no `ai_analysis` show "Generating…" forever.** The
+   dashboard AI column renders a perpetual "Generating…" chip when `ai_analysis`
+   is null and nothing is actually running (seen on the Solo org's validation).
+   Needs a terminal state ("Not run" / "—") distinct from in-flight.
+3. **Header actions overflow on mobile.** On the validation detail at 390px the
+   "Evaluate against investors / Download risk… / Route…" buttons run off the
+   right edge (no wrap/collapse). The §3 tabbed redesign should fix this for
+   free, but note it.
+4. **`handle_new_user` slug strips capitals.** `regexp_replace` runs before
+   `lower()`, so "Test Bridge Capital" → slug `-est-ridge-apital-…`. Cosmetic
+   (uniqueness holds via id suffix) but wrong; swap the order. (Found seeding
+   test orgs; not UX-blocking.)

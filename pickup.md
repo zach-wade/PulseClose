@@ -62,7 +62,26 @@ applied to prod; `npm run build` clean; UW engine test 24/24.
 > against public alternatives, deeply reasoned. Don't jump to building; the first
 > three steps are research/design.
 
-### 1. 🎥 Live pixel-drive as a test user — one per persona
+### 1. 🎥 Live pixel-drive as a test user — one per persona ✅ DONE (2026-06-23)
+
+Completed. Drove the **live prod app** as 3 seeded personas, screenshotted every
+key screen, and wrote findings into [UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md)
+**§9 "Live-review findings."** Repeatable harness:
+`scripts/create-test-user.ts` → `scripts/seed-persona-data.ts` (stable IDs
+`1111…`/`2222…`/`3333…`) → `scripts/drive-persona.ts`. Screens in `ux-review/`
+(gitignored). Test logins: `uw@`/`solo@`/`fund@test.pulseclose.com`, pw
+`Test1234!` (orgs live in prod Supabase).
+
+**What it confirmed:** the §2 two-engine wall is real; the mandate stamp is the
+11th of 13 detail-page sections (promote it); the Fund tenant serves the
+*originator* onboarding flow (no home). **Bugs found** (§9, fix independently):
+gc-result-card white-screens on object-shaped `disciplinary_actions` (only
+unguarded spot in the render path); null `ai_analysis` → "Generating…" forever;
+mobile header-button overflow; `handle_new_user` slug strips capitals.
+
+**→ Next session starts at Step 2 (research).**
+
+<details><summary>Original Step 1 instructions (for reference)</summary>
 
 See the real rendered screens before redesigning. Personas are in
 [CUSTOMER-SCENARIOS.md](docs/CUSTOMER-SCENARIOS.md).
@@ -96,6 +115,8 @@ See the real rendered screens before redesigning. Personas are in
 4. Write findings back into [UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md) (a
    "live-review findings" section) — confirm/adjust the §2 analyzer redesign and
    §3 detail-page plan against real pixels.
+
+</details>
 
 ### 2. 🔍 Research + stress-test against public alternatives
 
