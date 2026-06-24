@@ -29,6 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
 import { UnifiedPropertyTable } from "@/components/dashboard/unified-property-table";
 import { VerifyTray } from "@/components/dashboard/verify-tray";
@@ -156,6 +157,12 @@ export default function ValidationDetailPage() {
   const [data, setData] = useState<ValidationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Detail-page tabs (UX-REDESIGN-PLAN §3). Deep-links to #handoff (from the
+  // evaluate handoff CTA + the next-step strip) open the Hand off tab.
+  const [tab, setTab] = useState("summary");
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#handoff") setTab("handoff");
+  }, []);
 
   const refetch = useCallback(async () => {
     try {
@@ -376,9 +383,13 @@ export default function ValidationDetailPage() {
             <Calculator className="h-4 w-4" /> Evaluate
           </span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <a href="#handoff" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            type="button"
+            onClick={() => setTab("handoff")}
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+          >
             <FileDown className="h-4 w-4" /> Hand off
-          </a>
+          </button>
         </div>
         <Button
           size="sm"
@@ -442,12 +453,13 @@ export default function ValidationDetailPage() {
                 will regenerate from your final set.
               </p>
             </div>
-            <a
-              href="#verify-tray"
+            <button
+              type="button"
+              onClick={() => setTab("evidence")}
               className="shrink-0 text-xs font-medium text-amber-900 hover:text-amber-700 underline"
             >
               Review now →
-            </a>
+            </button>
           </div>
         );
       })()}
@@ -537,15 +549,21 @@ export default function ValidationDetailPage() {
         </Card>
       </div>
 
-      {/* History with this borrower (E2) — surfaces only when there's
-          prior history with this org; first-time validations skip the card
-          to avoid "0 funded · 0 repaid" noise. */}
-      {data.primary_borrower_id && (
-        <BorrowerHistoryCard
-          borrowerId={data.primary_borrower_id}
-          currentValidationId={data.id}
-        />
-      )}
+      {/* Promoted: capital-provider mandate stamps — the downstream-adopter's
+          headline outcome, lifted out of the old 11th-of-13 scroll position
+          to sit directly under the summary (UX-REDESIGN-PLAN §3). */}
+      <MandateAssessmentsCard validationId={data.id} />
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="evidence">Evidence</TabsTrigger>
+          <TabsTrigger value="deal">Deal</TabsTrigger>
+          <TabsTrigger value="handoff">Hand off</TabsTrigger>
+          <TabsTrigger value="book">Book</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="summary" className="space-y-6 pt-4">
 
       {/* AI Analysis — pending state while async generation runs */}
       {!data.ai_analysis && (
@@ -584,6 +602,9 @@ export default function ValidationDetailPage() {
         validationId={data.id}
         onSignalApplied={handleSignalApplied}
       />
+        </TabsContent>
+
+        <TabsContent value="evidence" className="space-y-6 pt-4">
 
       {/*
         Pillar evidence — sits between the analytical layer (AI memo +
@@ -668,37 +689,39 @@ export default function ValidationDetailPage() {
         ))
       )}
 
-      {/* Operational layer — produce artifacts + watch for changes */}
+        </TabsContent>
 
-      {/* Item 4 — capital-provider mandate stamps (which fund standards this
-          validation meets). Auto-assessed on completion; re-assessable here. */}
-      <MandateAssessmentsCard validationId={data.id} />
+        <TabsContent value="deal" className="space-y-6 pt-4">
+          {/* Borrower's recent evaluations — jump to deals already run. The
+              Deal analyzer itself opens via the next-step strip / header CTA. */}
+          <BorrowerEvaluationsCard validationId={data.id} borrowerId={data.primary_borrower_id} />
+        </TabsContent>
 
-      {/* Borrower's recent evaluations — jump to deals already run. */}
-      <BorrowerEvaluationsCard validationId={data.id} borrowerId={data.primary_borrower_id} />
+        <TabsContent value="handoff" className="space-y-6 pt-4">
+          {/* Investor handoff — Excel + PDF export */}
+          <div id="handoff" className="scroll-mt-24">
+            <HandoffCard validationId={data.id} initial={data.handoff_data} />
+          </div>
+        </TabsContent>
 
-      {/* Investor handoff — Excel + PDF export */}
-      <div id="handoff" className="scroll-mt-24">
-        <HandoffCard validationId={data.id} initial={data.handoff_data} />
-      </div>
-
-      {/* Continuous monitoring */}
-      <MonitorCard
-        validationId={data.id}
-        borrowerId={data.primary_borrower_id}
-        borrowerName={data.borrower_name}
-        orgMonitorPausedUntil={data.org_monitor_paused_until}
-      />
-
-      {/* Deal outcome (E1) — what actually happened to this loan after
-          the validation ran. Drives reputation, performance, and
-          cross-tenant analytics; without it Stage 5+6 are unmeasurable. */}
-      <DealOutcomeCard validationId={data.id} initial={data.deal_outcome} />
-
-      {/* Activity on this validation — surfaces borrower-side events
-          (share-link sends, monitor runs, signal applications) that the
-          lender otherwise wouldn't see without refreshing pillar tables. */}
-      <ActivityStrip validationId={data.id} />
+        <TabsContent value="book" className="space-y-6 pt-4">
+          {/* History with this borrower (E2) — only when prior history exists. */}
+          {data.primary_borrower_id && (
+            <BorrowerHistoryCard borrowerId={data.primary_borrower_id} currentValidationId={data.id} />
+          )}
+          {/* Continuous monitoring */}
+          <MonitorCard
+            validationId={data.id}
+            borrowerId={data.primary_borrower_id}
+            borrowerName={data.borrower_name}
+            orgMonitorPausedUntil={data.org_monitor_paused_until}
+          />
+          {/* Deal outcome (E1) — what actually happened to this loan. */}
+          <DealOutcomeCard validationId={data.id} initial={data.deal_outcome} />
+          {/* Activity on this validation — borrower-side events. */}
+          <ActivityStrip validationId={data.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
