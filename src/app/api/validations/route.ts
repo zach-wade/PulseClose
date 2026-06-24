@@ -120,6 +120,7 @@ export async function POST(request: Request) {
         gc_license_number: body.gc_license_number,
         gc_state: body.gc_state,
         property_addresses: body.property_addresses,
+        borrower_dob: body.borrower_dob,
       },
     });
     return NextResponse.json({ id: result.validation_id, status: result.overall_status }, { status: 201 });

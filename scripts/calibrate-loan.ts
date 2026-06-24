@@ -223,7 +223,7 @@ async function calibrate(g: GoldenCase) {
   const found = lit.filter((l) => l.result === "found");
   const confirmed = found.filter((l) => l.confidence === "confirmed").length;
   const toReview = found.filter((l) => l.confidence === "possible" || l.confidence === "probable").length;
-  const weak = found.filter((l) => l.confidence === "weak" || l.confidence === "none").length;
+  const weak = found.filter((l) => l.confidence === "weak").length;
   console.log(`③ LITIGATION  ${found.length} federal record(s) for "${g.borrower_name}" — ${confirmed} confirmed · ${toReview} possible/review · ${weak} unlikely (not the named party) (CourtListener = FEDERAL only)`);
   if (toReview > 0 && confirmed === 0) console.log(`             → ${toReview} possible ${toReview === 1 ? "match" : "matches"} — review; ${weak} caption non-matches filtered to "unlikely" (disambiguation working).`);
   gaps.push("Litigation: CourtListener is federal-only — NO state-court judgments/liens (TLOxp/LexisNexis would fill, FCRA-gated).");

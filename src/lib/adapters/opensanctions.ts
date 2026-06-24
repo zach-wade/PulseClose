@@ -61,19 +61,42 @@ export class OpenSanctionsError extends Error {
   }
 }
 
-function buildPersonQuery(name: string) {
+// Supporting identifiers we hold on the borrower. Passing them into the query
+// lets OpenSanctions PENALIZE candidates whose DOB/nationality/country diverge
+// (their guidance + the name-qualified scoring variant) — server-side false-
+// positive reduction. country is derived from the borrower's known US states.
+interface SubjectProps {
+  country?: string[];   // ISO codes, e.g. ["us"]
+  birthDate?: string[]; // YYYY-MM-DD — once captured at intake (1003)
+}
+
+function buildPersonQuery(name: string, sp: SubjectProps = {}) {
   // OpenSanctions accepts a single `name` field — it splits internally.
   return {
     schema: "Person" as const,
-    properties: { name: [name] },
+    properties: {
+      name: [name],
+      ...(sp.country?.length ? { country: sp.country } : {}),
+      ...(sp.birthDate?.length ? { birthDate: sp.birthDate } : {}),
+    },
   };
 }
 
-function buildEntityQuery(name: string) {
+function buildEntityQuery(name: string, sp: SubjectProps = {}) {
   return {
     schema: "Company" as const,
-    properties: { name: [name] },
+    properties: {
+      name: [name],
+      ...(sp.country?.length ? { jurisdiction: sp.country } : {}),
+    },
   };
+}
+
+// US state list → ISO country code. All our borrowers are US-domiciled today;
+// passing country=us down-scores foreign-only sanctioned entities, which for a
+// US real-estate borrower are almost always false positives.
+function deriveCountry(knownStates?: string[]): string[] {
+  return (knownStates ?? []).length > 0 ? ["us"] : [];
 }
 
 function extractListName(entity: OpenSanctionsMatchEntity): string {
@@ -217,20 +240,26 @@ export async function screenSanctionsOpenSanctions(
   req: SanctionsScreenRequest,
   apiKey: string,
 ): Promise<SanctionsScreenResult> {
-  // Build queries: one per name we want to screen.
+  // Build queries: one per name we want to screen. Attach the borrower's known
+  // country (+ DOB once captured at intake) so OpenSanctions down-scores
+  // candidates whose nationality/DOB diverge — server-side FP reduction.
   const queries: Record<string, unknown> = {};
   const queryNameMap: Record<string, string> = {};
+  const sp: SubjectProps = {
+    country: deriveCountry(req.known_states),
+    birthDate: req.borrower_dob ? [req.borrower_dob.slice(0, 10)] : undefined,
+  };
 
   if (req.borrower_name) {
-    queries.borrower = buildPersonQuery(req.borrower_name);
+    queries.borrower = buildPersonQuery(req.borrower_name, sp);
     queryNameMap.borrower = req.borrower_name;
   }
   if (req.entity_name) {
-    queries.entity = buildEntityQuery(req.entity_name);
+    queries.entity = buildEntityQuery(req.entity_name, sp);
     queryNameMap.entity = req.entity_name;
   }
   if (req.guarantor_name && req.guarantor_name !== req.borrower_name) {
-    queries.guarantor = buildPersonQuery(req.guarantor_name);
+    queries.guarantor = buildPersonQuery(req.guarantor_name, sp);
     queryNameMap.guarantor = req.guarantor_name;
   }
   // Officers, registered agent, and other principals from the entity
@@ -245,7 +274,9 @@ export async function screenSanctionsOpenSanctions(
     if (!norm || seen.has(norm)) continue;
     seen.add(norm);
     const qid = `person_${idx}`;
-    queries[qid] = buildPersonQuery(name);
+    // Officers/agents: pass country (US-domiciled entity) but not the
+    // borrower's DOB — it isn't theirs.
+    queries[qid] = buildPersonQuery(name, { country: sp.country });
     queryNameMap[qid] = name;
   }
 
@@ -302,7 +333,12 @@ export async function screenSanctionsOpenSanctions(
 
       const candidates = entities.map(entityToCandidate);
       const group = scoreMatchGroup(
-        { fullName: queryName, knownStates: req.known_states },
+        {
+          fullName: queryName,
+          knownStates: req.known_states,
+          // DOB belongs only to the borrower/guarantor query, not officers.
+          dob: qid === "borrower" || qid === "guarantor" ? req.borrower_dob : undefined,
+        },
         candidates,
         { entity: isEntity, kind: "match" },
       );

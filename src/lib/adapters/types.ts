@@ -98,6 +98,11 @@ export interface SanctionsScreenRequest {
   // corroboration in disambiguation (a US-listed entry vs a US borrower is
   // marginally more relevant; an obviously-foreign listing helps clear).
   known_states?: string[];
+  // Borrower's date of birth (YYYY-MM-DD), when captured at intake (1003). The
+  // single strongest disambiguator: a DOB that matches a sanctions entry's
+  // birthDate confirms it; one that differs clears it. Passed both into the
+  // OpenSanctions query (server-side penalty) and the disambiguation subject.
+  borrower_dob?: string | null;
 }
 
 export interface SanctionsMatch {

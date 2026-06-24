@@ -57,6 +57,10 @@ function NewValidationInner() {
   const [guarantorName, setGuarantorName] = useState(
     searchParams.get("guarantor") ?? "",
   );
+  // Optional borrower DOB (YYYY-MM-DD). Used ONLY to disambiguate screening
+  // matches (the strongest second identifier per OFAC guidance) — passed
+  // transiently to the screen, never persisted, never sent to AI.
+  const [borrowerDob, setBorrowerDob] = useState("");
   const [gcName, setGcName] = useState("");
   const [gcLicense, setGcLicense] = useState("");
   const [gcState, setGcState] = useState("");
@@ -134,6 +138,7 @@ function NewValidationInner() {
           borrower_entity_name: entityName,
           entity_state: entityState,
           guarantor_name: guarantorName || null,
+          borrower_dob: borrowerDob || null,
           gc_name: gcName || null,
           gc_license_number: gcLicense || null,
           gc_state: gcState || null,
@@ -216,6 +221,22 @@ function NewValidationInner() {
                   onChange={(e) => setGuarantorName(e.target.value)}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="borrowerDob">Borrower date of birth</Label>
+              <Input
+                id="borrowerDob"
+                type="date"
+                className="sm:max-w-xs"
+                value={borrowerDob}
+                onChange={(e) => setBorrowerDob(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional, but recommended. Used <span className="font-medium">only</span> to
+                disambiguate sanctions/PEP matches against the listed entry&apos;s date of
+                birth — the strongest way to clear a common-name false positive. It is{" "}
+                <span className="font-medium">not stored and never sent to AI</span>.
+              </p>
             </div>
           </CardContent>
         </Card>

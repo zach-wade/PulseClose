@@ -60,6 +60,13 @@ export interface ValidationPipelineInput {
   gc_license_number?: string | null;
   gc_state?: string | null;
   property_addresses?: unknown;
+  /**
+   * Borrower date of birth (YYYY-MM-DD), optional. Used ONLY to disambiguate
+   * screening matches (the strongest second identifier per OFAC FAQ #5). Passed
+   * transiently into the sanctions screen and NOT persisted — it's PII we don't
+   * need to store, and it never reaches any AI call.
+   */
+  borrower_dob?: string | null;
 }
 
 export interface RunValidationPipelineOpts {
@@ -101,6 +108,7 @@ export async function runValidationPipeline(
     gc_license_number,
     gc_state,
     property_addresses,
+    borrower_dob,
   } = input;
 
   const addressesToVerify: string[] = Array.isArray(property_addresses)
@@ -255,6 +263,7 @@ export async function runValidationPipeline(
       guarantor_name: guarantor_name || undefined,
       additional_persons: additionalPersons,
       known_states: knownStates,
+      borrower_dob: borrower_dob || undefined,
     });
 
     // 3. Entity check + refresh cached SOS state.
