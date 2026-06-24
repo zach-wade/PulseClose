@@ -211,9 +211,9 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Validations</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Borrowers</h1>
           <p className="text-muted-foreground mt-1">
-            Borrower entity, track record, and credential checks
+            Your borrower pipeline — entity, track record, and credential checks
           </p>
         </div>
         <div className="flex items-center gap-2">

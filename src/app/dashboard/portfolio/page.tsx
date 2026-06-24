@@ -123,7 +123,7 @@ export default function PortfolioPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Book</h1>
           <p className="text-muted-foreground text-sm mt-1">Loading…</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -137,7 +137,7 @@ export default function PortfolioPage() {
   if (!data) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Book</h1>
         <p className="text-destructive">Failed to load portfolio data.</p>
       </div>
     );
@@ -150,7 +150,7 @@ export default function PortfolioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Book</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {data.totals.borrowers} borrower{data.totals.borrowers === 1 ? "" : "s"} • {data.totals.validations} validation{data.totals.validations === 1 ? "" : "s"} on record
         </p>
