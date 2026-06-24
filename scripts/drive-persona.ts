@@ -22,7 +22,8 @@ const PERSONA = process.env.PERSONA ?? "underwriter";
 const SCREENS: Record<string, Array<{ label: string; path: string; mobile?: boolean }>> = {
   underwriter: [
     { label: "dashboard", path: "/dashboard", mobile: true },
-    { label: "validation-clean", path: "/dashboard/validations/11111111-1111-4111-8111-111111111111", mobile: true },
+    { label: "validation-westbrook", path: "/dashboard/validations/44444444-4444-4444-8444-444444444444", mobile: true },
+    { label: "validation-clean", path: "/dashboard/validations/11111111-1111-4111-8111-111111111111" },
     { label: "validation-flagged", path: "/dashboard/validations/22222222-2222-4222-8222-222222222222" },
     { label: "evaluate", path: "/dashboard/evaluate" },
     { label: "evaluate-investors", path: "/dashboard/evaluate/investors" },
