@@ -35,6 +35,7 @@ import { UnifiedPropertyTable } from "@/components/dashboard/unified-property-ta
 import { VerifyTray } from "@/components/dashboard/verify-tray";
 import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
+import { ThirdPartyReportsCard } from "@/components/dashboard/third-party-reports-card";
 import { AddGCCard } from "@/components/dashboard/add-gc-card";
 import { SanctionsCard } from "@/components/dashboard/sanctions-card";
 import { VerifiedTrackRecord } from "@/components/dashboard/verified-track-record";
@@ -675,6 +676,9 @@ export default function ValidationDetailPage() {
       {data.sanctions_checks?.[0] && (
         <SanctionsCard data={data.sanctions_checks[0]} />
       )}
+
+      {/* Third-party report tracking (Damon-named subproduct) — preview. */}
+      <ThirdPartyReportsCard />
 
       {/* GC Validation — render existing or offer to add one */}
       {data.gc_validations.length === 0 ? (
