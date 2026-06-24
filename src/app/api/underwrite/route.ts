@@ -20,6 +20,8 @@ import {
 } from "@/lib/evaluate/engine";
 import { underwrite, type SizingInputs } from "@/lib/underwriting/sizing";
 import { sizeTakeout } from "@/lib/underwriting/exit";
+import { stabilizationPath } from "@/lib/underwriting/stabilization";
+import { sizeInterestReserve } from "@/lib/underwriting/reserve";
 import { sizeAllInvestors } from "@/lib/underwriting/per-investor";
 import {
   parseUwSizingInputsV1Strict,
@@ -112,6 +114,7 @@ type UnderwriteBody = Partial<DealParams> & {
   takeout_rate?: number | null;
   takeout_amort_months?: number | null;
   months_to_stabilize?: number | null;
+  target_dscr?: number | null;
   // links
   deal_evaluation_id?: string | null;
   validation_id?: string | null;
@@ -226,6 +229,35 @@ export async function POST(request: Request) {
       sizing = { ...sizing, takeout };
     } catch {
       // Takeout is additive depth — never block sizing if it can't resolve.
+    }
+  }
+
+  // Stabilization-path coverage + interest-reserve sizing — the temporal +
+  // carry depth (Damon's "years to 1.20–1.25x" and "some investors want an
+  // interest reserve"). Both need a stabilization horizon; default 18 mo.
+  if (sizingInputs.stabilizedNOI != null) {
+    const monthsToStabilize = num(body.months_to_stabilize) ?? 18;
+    try {
+      const stabilization = stabilizationPath({
+        currentNOI: sizingInputs.currentNOI,
+        stabilizedNOI: sizingInputs.stabilizedNOI,
+        monthsToStabilize,
+        loanAmount: sizing.maxLoan,
+        rate: sizingInputs.rate,
+        amortizationMonths: sizingInputs.amortizationMonths,
+        targetDSCR: num(body.target_dscr) ?? 1.25,
+      });
+      const interestReserve = sizeInterestReserve({
+        loanAmount: sizing.maxLoan,
+        rate: sizingInputs.rate,
+        amortizationMonths: sizingInputs.amortizationMonths,
+        reserveMonths: monthsToStabilize,
+        currentNOI: sizingInputs.currentNOI,
+        stabilizedNOI: sizingInputs.stabilizedNOI,
+      });
+      sizing = { ...sizing, stabilization, interestReserve };
+    } catch {
+      // Additive depth — never block sizing.
     }
   }
 

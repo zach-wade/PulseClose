@@ -58,6 +58,28 @@ export interface TakeoutResult {
   flags: string[];
 }
 
+// Stabilization-path coverage — mirrors src/lib/underwriting/stabilization.ts.
+export interface StabilizationResult {
+  annualDebtService: number;
+  targetDSCR: number;
+  years: { year: number; noi: number; dscr: number; debtYield: number; clearsTarget: boolean }[];
+  monthsToClear: number | null;
+  yearsToClear: number | null;
+  clearsWithinHorizon: boolean;
+  summary: string;
+}
+
+// Interest-reserve sizing — mirrors src/lib/underwriting/reserve.ts.
+export interface InterestReserveResult {
+  monthlyDebtService: number;
+  reserveMonths: number;
+  grossReserve: number;
+  noiOffset: number;
+  netReserve: number;
+  reserveAsPctOfLoan: number;
+  summary: string;
+}
+
 export interface SizingResult {
   asIsValue: number;
   stabilizedValue: number | null;
@@ -79,6 +101,8 @@ export interface SizingResult {
   returnOnCost: number | null;
   developmentSpread: number | null;
   takeout?: TakeoutResult;
+  stabilization?: StabilizationResult;
+  interestReserve?: InterestReserveResult;
 }
 
 export interface PerInvestorSizing {

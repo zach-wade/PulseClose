@@ -509,6 +509,37 @@ export const uwTakeoutResultV1 = z.object({
   flags: z.array(z.string()),
 });
 
+// Stabilization-path coverage (src/lib/underwriting/stabilization.ts) — the
+// temporal "years to 1.20–1.25x DSCR" trend. Optional (needs stabilized NOI).
+export const uwStabilizationResultV1 = z.object({
+  annualDebtService: z.number(),
+  targetDSCR: z.number(),
+  years: z.array(
+    z.object({
+      year: z.number(),
+      noi: z.number(),
+      dscr: z.number(),
+      debtYield: z.number(),
+      clearsTarget: z.boolean(),
+    }),
+  ),
+  monthsToClear: z.number().nullable(),
+  yearsToClear: z.number().nullable(),
+  clearsWithinHorizon: z.boolean(),
+  summary: z.string(),
+});
+
+// Interest-reserve sizing (src/lib/underwriting/reserve.ts). Optional.
+export const uwInterestReserveResultV1 = z.object({
+  monthlyDebtService: z.number(),
+  reserveMonths: z.number(),
+  grossReserve: z.number(),
+  noiOffset: z.number(),
+  netReserve: z.number(),
+  reserveAsPctOfLoan: z.number(),
+  summary: z.string(),
+});
+
 export const uwSizingResultV1 = z.object({
   schema_version: schemaVersion,
   asIsValue: z.number(),
@@ -531,6 +562,8 @@ export const uwSizingResultV1 = z.object({
   returnOnCost: z.number().nullable(),
   developmentSpread: z.number().nullable(),
   takeout: uwTakeoutResultV1.optional(),
+  stabilization: uwStabilizationResultV1.optional(),
+  interestReserve: uwInterestReserveResultV1.optional(),
 });
 export type UwSizingResultV1 = z.infer<typeof uwSizingResultV1>;
 export const parseUwSizingResultV1Strict = strict(uwSizingResultV1, "uw_models.sizing");

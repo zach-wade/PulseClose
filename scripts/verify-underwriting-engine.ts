@@ -15,6 +15,8 @@ import {
   type SizingInputs,
 } from "../src/lib/underwriting/sizing";
 import { sizeTakeout } from "../src/lib/underwriting/exit";
+import { stabilizationPath } from "../src/lib/underwriting/stabilization";
+import { sizeInterestReserve } from "../src/lib/underwriting/reserve";
 
 // $10M multifamily acquisition, $2M reposition, $0.5M closing ($12.5M all-in).
 // In-place NOI $600k (6% going-in cap => $10M as-is); stabilized NOI $1.2M
@@ -133,6 +135,48 @@ check("NOT refinanceable", t2.refinanceable === false);
 check("reports a shortfall > $1M", t2.shortfall > 1_000_000, `got ${t2.shortfall}`);
 check("raises a shortfall flag", t2.flags.some((f) => f.includes("shorts the bridge")));
 check("raises a longer-term-required flag", t2.flags.some((f) => f.includes("Longer term required")));
+
+// ── Stabilization-path coverage (stabilization.ts) ──────────────────────────
+// Westbrook-shaped: in-place $138k ramps to stabilized $228k over 18 mo on the
+// $1.8M bridge @ 9.5% IO. Target 1.25x DSCR. Annual DS = 171,000.
+// At stabilization NOI 228k => DSCR 1.33x, so it clears inside the ramp.
+console.log("\nStabilization path (years to target DSCR):");
+const sp = stabilizationPath({
+  currentNOI: 138_000,
+  stabilizedNOI: 228_000,
+  monthsToStabilize: 18,
+  loanAmount: 1_800_000,
+  rate: 0.095,
+  targetDSCR: 1.25,
+});
+check("annual debt service = $171,000", near(sp.annualDebtService, 171_000), `got ${sp.annualDebtService}`);
+check("projects 5 years", sp.years.length === 5, `got ${sp.years.length}`);
+check("clears target within horizon", sp.clearsWithinHorizon === true);
+check("clears in ≤ 18 months (within ramp)", sp.monthsToClear != null && sp.monthsToClear <= 18, `got ${sp.monthsToClear}`);
+check("year-5 DSCR ≥ stabilized 1.33x", sp.years[4].dscr >= 1.33, `got ${sp.years[4].dscr}`);
+
+console.log("\nStabilization path that never clears (target too high):");
+const sp2 = stabilizationPath({ currentNOI: 100_000, stabilizedNOI: 150_000, monthsToStabilize: 24, loanAmount: 2_000_000, rate: 0.10, targetDSCR: 1.25 });
+check("does NOT clear within horizon", sp2.clearsWithinHorizon === false && sp2.monthsToClear === null);
+
+// ── Interest-reserve sizing (reserve.ts) ────────────────────────────────────
+// $1.8M @ 9.5% IO, 18-mo reserve; in-place $138k ramping to $228k offsets it.
+console.log("\nInterest-reserve sizing:");
+const ir = sizeInterestReserve({
+  loanAmount: 1_800_000,
+  rate: 0.095,
+  reserveMonths: 18,
+  currentNOI: 138_000,
+  stabilizedNOI: 228_000,
+});
+check("monthly debt service = $14,250", near(ir.monthlyDebtService, 14_250), `got ${ir.monthlyDebtService}`);
+check("gross reserve = $256,500 (18 mo)", near(ir.grossReserve, 256_500), `got ${ir.grossReserve}`);
+check("net reserve < gross (NOI offsets)", ir.netReserve < ir.grossReserve && ir.netReserve > 0, `got ${ir.netReserve}`);
+check("reserve % of loan reported", ir.reserveAsPctOfLoan > 0 && ir.reserveAsPctOfLoan < 1);
+
+console.log("\nInterest reserve not required (income covers DS):");
+const ir2 = sizeInterestReserve({ loanAmount: 1_000_000, rate: 0.07, reserveMonths: 12, currentNOI: 200_000 });
+check("no reserve when in-place income covers", ir2.netReserve === 0);
 
 if (failures > 0) {
   console.error(`\n❌ ${failures} check(s) failed.\n`);

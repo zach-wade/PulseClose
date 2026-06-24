@@ -835,6 +835,40 @@ function StepSizing({
                 )}
               </div>
             )}
+            {sizing.stabilization && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Stabilization path — years to {sizing.stabilization.targetDSCR.toFixed(2)}x DSCR</p>
+                  <Badge variant="outline" className="text-[11px]">
+                    {sizing.stabilization.clearsWithinHorizon
+                      ? `clears in ~${(sizing.stabilization.monthsToClear! / 12).toFixed(1)} yr`
+                      : "never clears in horizon"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{sizing.stabilization.summary}</p>
+                <div className="grid grid-cols-5 gap-2">
+                  {sizing.stabilization.years.map((y) => (
+                    <div key={y.year} className={`rounded-md border px-2 py-1.5 text-center ${y.clearsTarget ? "border-success/40 bg-success/5" : "border-border"}`}>
+                      <p className="text-[10px] uppercase text-muted-foreground">Yr {y.year}</p>
+                      <p className={`text-sm font-semibold ${y.clearsTarget ? "text-success" : ""}`}>{mult(y.dscr)}</p>
+                      <p className="text-[10px] text-muted-foreground">{usd(y.noi)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sizing.interestReserve && sizing.interestReserve.netReserve > 0 && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <p className="text-sm font-semibold">Interest reserve — carry to stabilization</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Field label="Net reserve needed" value={usd(sizing.interestReserve.netReserve)} big />
+                  <Field label="% of loan" value={ratioPct(sizing.interestReserve.reserveAsPctOfLoan)} />
+                  <Field label="Monthly debt service" value={usd(sizing.interestReserve.monthlyDebtService)} />
+                  <Field label="Reserve period" value={`${sizing.interestReserve.reserveMonths} mo`} />
+                </div>
+                <p className="text-xs text-muted-foreground">{sizing.interestReserve.summary}</p>
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
               {!deal.optedInJudgment ? (
                 <Button variant="outline" onClick={() => { dispatch({ type: "optInJudgment" }); onGoJudgment(); }} disabled={!deal.uw_model_id}>

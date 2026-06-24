@@ -19,6 +19,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { underwrite, type SizingInputs } from "../src/lib/underwriting/sizing";
 import { sizeTakeout } from "../src/lib/underwriting/exit";
+import { stabilizationPath } from "../src/lib/underwriting/stabilization";
+import { sizeInterestReserve } from "../src/lib/underwriting/reserve";
 import { sizeAllInvestors } from "../src/lib/underwriting/per-investor";
 import {
   assembleRulesFromCriteria,
@@ -256,7 +258,15 @@ async function seedWestbrook(): Promise<string> {
     takeoutRate: Math.max(0.06, base.rate - 0.025), takeoutAmortizationMonths: 360,
     bridgeTermMonths: 24, monthsToStabilize: 18,
   });
-  const sizingWithExit = { schema_version: 1, ...sizing, takeout };
+  const stabilization = stabilizationPath({
+    currentNOI: base.currentNOI, stabilizedNOI: base.stabilizedNOI!, monthsToStabilize: 18,
+    loanAmount: sizing.maxLoan, rate: base.rate, targetDSCR: 1.25,
+  });
+  const interestReserve = sizeInterestReserve({
+    loanAmount: sizing.maxLoan, rate: base.rate, reserveMonths: 18,
+    currentNOI: base.currentNOI, stabilizedNOI: base.stabilizedNOI!,
+  });
+  const sizingWithExit = { schema_version: 1, ...sizing, takeout, stabilization, interestReserve };
 
   const deal: DealParams = {
     loan_type: "bridge", property_type: "small_multifamily", property_state: "CA",
