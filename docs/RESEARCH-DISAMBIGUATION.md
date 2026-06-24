@@ -102,9 +102,29 @@ name-only acceptance.
   "review," not auto-clear. Matches our "possible — review" (never auto-clear,
   never auto-block).
 
-## Build plan (priority order, derived from the above)
+## Build plan — STATUS (all shipped 2026-06-24)
 
-1. **🔴 List-type classification (OFAC Step 1).** Classify each OpenSanctions
+- ✅ **#1 List-type classification** — `sanction | pep | exclusion | other`; only
+  sanction/pep drive risk. Live: every match in the 6-loan set was an exclusion.
+- ✅ **#2 OpenSanctions query identifiers** — borrower country (+DOB) passed into
+  the `/match` query so the API down-scores divergent-nationality/DOB candidates.
+- ✅ **#3 Litigation caption precision** — the `/parties/` endpoint proved empty
+  for search-index bankruptcy dockets (0/8) and the fetch storm tripped rate
+  limits, so instead fixed the core matcher with first-name-position awareness.
+  Live: Mark Morrison litigation 20 possible → **1 possible + 19 unlikely**.
+- ✅ **#4 Capture borrower DOB at intake** — optional 1003 DOB field; transient
+  (not persisted, never to AI); feeds the OpenSanctions query + the
+  disambiguation subject (DOB match → confirmed; divergent → cleared).
+- ✅ **#5 Adjudication audit trail** — satisfied by the EXISTING override-and-rerun
+  mechanism (`factor_overrides`: actor + timestamp + reason, renders on the
+  handoff PDF). The `sanctions_review`/`litigation_review` factors flow through
+  it; the override UI now uses OFAC-FAQ-#5 adjudication framing (name the
+  identifier that cleared/confirmed the match). No parallel table — leveraging
+  the audit trail we already have.
+
+### Original plan detail
+
+1. **List-type classification (OFAC Step 1).** Classify each OpenSanctions
    match into `sanction | pep | exclusion | other` from its `topics` + dataset.
    Only `sanction`/`pep` feed the sanctions risk factor; `exclusion`/`other`
    (SAM, FINRA, medical, disqualified-directors) render in a separate

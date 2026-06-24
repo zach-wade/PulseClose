@@ -498,17 +498,29 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, validationId, onS
                   )}
                 </div>
                 {/* Inline reason form for the active override target. */}
-                {overrideForFactor === f.factor_key && (
+                {overrideForFactor === f.factor_key && (() => {
+                  // OFAC FAQ #5 adjudication framing for screening factors: the
+                  // recorded reason should name the identifier that cleared (or
+                  // confirmed) the possible match. The factor_overrides row
+                  // (actor + timestamp + reason) IS the defensible audit trail.
+                  const isScreening = [
+                    "sanctions_review", "sanctions_hit", "litigation_review", "active_fed_litigation",
+                  ].includes(f.factor_key);
+                  return (
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
                     <p className="text-xs text-amber-900">
-                      Excluding this factor from the tier computation. Reason
-                      becomes part of the audit trail and renders on the
-                      handoff PDF.
+                      {isScreening
+                        ? "Record your match adjudication. Note which identifier cleared (or confirmed) the possible match — this becomes the audit-trail record and renders on the handoff PDF."
+                        : "Excluding this factor from the tier computation. Reason becomes part of the audit trail and renders on the handoff PDF."}
                     </p>
                     <textarea
                       className="w-full text-xs rounded border border-input bg-white p-2"
                       rows={2}
-                      placeholder="e.g. Reviewed the case — frivolous suit dismissed in state court 2025-11"
+                      placeholder={
+                        isScreening
+                          ? "e.g. Cleared — the SDN entry's DOB (1962, Iran) doesn't match the borrower (1980, US). False positive."
+                          : "e.g. Reviewed the case — frivolous suit dismissed in state court 2025-11"
+                      }
                       value={overrideReason}
                       onChange={(e) => setOverrideReason(e.target.value)}
                       maxLength={1000}
@@ -538,7 +550,8 @@ export function WhyThisRating({ tier, riskFactors, borrowerId, validationId, onS
                       </Button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* Drill-down evidence for non-extended-hold factors. The
                     extended_hold block below renders its own per-property
