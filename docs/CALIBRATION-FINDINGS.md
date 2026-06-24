@@ -75,6 +75,25 @@
 4. **Fix the Regrid plan** (paid coverage) or retire it.
 5. **Fix the sanctions `match_count`** bug.
 
+## New findings (2026-06-24, disambiguation v2 run)
+
+7. **The "sanctions" screen surfaces non-OFAC exclusion lists — noisy for a
+   real-estate borrower.** Live on 10228, "Mark Morrison" matched
+   `us_sam_exclusions` (federal contractor debarment) and `us_ny_med_exclusions`
+   (NY medical license exclusions) at 85–92%, not OFAC/sanctions. For a property
+   investor these lists are mostly false-positive surface area. *Consider:*
+   list-type weighting (OFAC/PEP = high signal; SAM/medical exclusions =
+   contextual) and/or separating "sanctions" from "exclusions" in the UI.
+   (Disambiguation already caps them at "possible" — this is about relevance,
+   not safety.)
+8. **Identifier surfacing works — but most exclusion lists publish no DOB.**
+   OpenSanctions hands back DOB/POB/nationality/role where the source carries it
+   (e.g. a fuzzy "MARK J MORRONE": DOB 1961, role DENTIST → trivially clearable),
+   but SAM/medical exclusion entries are name-only. So auto-promotion to
+   "confirmed" still hinges on holding the *borrower's* own DOB/address (the 1003
+   / doc-ingest path). Identifier surfacing is the human-review aid in the
+   meantime.
+
 ## Next loans to add to the golden set
 905 N LBJ Dr (signed 1003), 812 Tait St, 1518 Dolphin Ter (#8008173), 544 Sunset,
 286 Virginia, + audit logs 10287/10294/10295. Add each to `GOLDEN[]` in the harness.
