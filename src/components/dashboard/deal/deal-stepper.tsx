@@ -772,8 +772,11 @@ function StepSizing({
                       <div className="flex items-center gap-3 shrink-0">
                         {pi.sizing ? (
                           <>
-                            <span className="font-semibold">{usd(pi.sizing.maxLoan)}</span>
-                            <Badge variant="outline" className="text-[10px]">{pi.sizing.bindingConstraint}</Badge>
+                            <span className="text-xs text-muted-foreground w-28 text-right">
+                              {ratioPct(pi.sizing.ltv)} LTV · {ratioPct(pi.sizing.ltc)} LTC
+                            </span>
+                            <span className="font-semibold w-24 text-right">{usd(pi.sizing.maxLoan)}</span>
+                            <Badge variant="outline" className="text-[10px]" title="binding constraint">{pi.sizing.bindingConstraint}</Badge>
                             <span className="text-xs text-muted-foreground w-14 text-right">{pi.rate_used_pct != null ? `${pi.rate_used_pct.toFixed(2)}%` : "—"}</span>
                           </>
                         ) : (
