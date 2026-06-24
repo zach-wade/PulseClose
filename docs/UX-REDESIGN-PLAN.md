@@ -234,6 +234,13 @@ rest builds on.
 
 ## 8. Open questions to resolve before Phase 2
 
+- **⭐ GATING: will a fund actually grant rep-and-warranty relief (or faster
+  funding / lighter re-diligence) on a PulseClose verdict?** 2026-06-24
+  competitive research confirmed the cross-originator mandate verdict is empty
+  space (no competitor does it) but could *not* confirm any fund leans on a
+  third-party verdict. If the answer is no, the entire Phase-2 Fund build is
+  low-value — it degrades to "nice routing." **Settle with Damon before building
+  §4.** (Now on the PRICING-STRATEGY §5 Damon agenda.)
 - Fund tenant: separate org type vs. a role on an existing org? (Affects auth +
   RLS.)
 - Program consent: per-originator opt-in to a named fund, or fund-initiated

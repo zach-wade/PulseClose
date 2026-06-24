@@ -163,8 +163,23 @@ borrower-diligence reps satisfied," then repeat with the next fund. FinCEN's
 private-fund AML rule (source-of-wealth / PEP / sanctions — already in our stack)
 is the compliance tailwind, but it slipped to **Jan 2028** — cite it as prudence,
 don't anchor messaging to the date. The product hook this assumes — a
-fund-defined standard a validation can be stamped against — doesn't exist yet;
-it's the "capital-provider mandate object" on the post-NPLA roadmap.
+fund-defined standard a validation can be stamped against — **now ships** as the
+capital-provider mandate object (Item 4, migration 00044): mandates with gates +
+per-validation pass/conditional/fail assessments. The *cross-originator* sharing
+of those verdicts (Fund tenant) is the remaining Phase-2 build.
+
+**Competitive validation of the wedge (2026-06-24 deep-research, 22 sources,
+claims adversarially verified):** the mandate verdict is **genuine empty space.**
+Routing marketplaces (LendingWise, StackSource, Janover) match deals to lenders
+by buy-box *fit* — one-directional routing. LOS tools enforce policy *internally*
+(Built) or manage a lender's *own* investors (Baseline). **No competitor produces
+a per-originator pass/conditional/fail verdict against an external fund's published
+mandate.** Diligence (Cobalt SOS, ComplyAdvantage sanctions, Baselayer KYB) and
+loan sizing (Blooma) are table-stakes — don't sell on them; sell on the gateway +
+mandate layer. **The one unverified link:** research could *not* confirm any fund
+actually grants rep-and-warranty relief on a third-party verdict. That's the
+load-bearing assumption — a Damon question (now on the PRICING-STRATEGY §5 agenda)
+to settle **before** the Phase-2 Fund-tenant build.
 
 ### Why this niche, why now
 

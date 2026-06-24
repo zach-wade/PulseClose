@@ -42,6 +42,24 @@ runs (real Opus marginal cost); keep $799 as a *land* price, underwriting as the
 up-tier; **validate in person** (does $1,499 land? platform fee vs per-deal bundle?);
 don't price purely flat (leaves expansion revenue behind).
 
+**Competitive validation (2026-06-24 deep-research, 22 sources, claims adversarially verified):**
+- **The two pricing axes that bound us are now sourced.** *Floor* = per-check KYB
+  usage: Cobalt **$0.50–2.00/lookup**, Enformion **$0.25/match**, ComplyAdvantage
+  **~$99/mo per 100 monitored entities**. *Ceiling* = per-active-loan / institution-size
+  LOS: Baseline **$995–$1,995/mo banded by loan volume**; Blooma, Mortgage Automator,
+  LendingWise are **sales-gated (no public price)**. Our Underwriting + Fund tiers
+  should sit between the KYB floor and the LOS ceiling, hybrid base+usage — exactly
+  the decided direction.
+- **Our capability-modular tiers (verify / +underwrite / +fund) cut against the
+  grain.** The space norm is *volume-banded* (all features at every tier, pay for
+  volume — e.g., Baseline). Capability-modularity is the exception (only Mortgage
+  Automator's 4 functional modules + Baselayer-by-category). **Defensible, but the
+  tier story must be crisp** — buyers won't pattern-match it, so each tier's "what
+  you get" has to be self-evident.
+- **Caveat:** LOS pricing is largely opaque; floating $699/mo and $75/mo figures
+  are unattributed/unreliable. Treat the Baseline band as the one hard public LOS
+  anchor.
+
 ---
 
 ## 1. Tier rationale (current — as built)
@@ -237,6 +255,7 @@ The fastest way to validate the three hypotheses is to ask Damon directly during
 | *"What would Insignia's annual budget for borrower validation tooling look like, ballpark?"* | Anchor for Pro vs Enterprise vs Fund tier sizing. | Whether the $799 Enterprise ceiling is too low for high-volume lenders. |
 | *"If you got an investor-side dashboard — funded vs defaulted by GP, average time to funding, repeat-borrower flags — at what price does it become a no-brainer?"* | Specific price discovery for the most differentiated future feature (A4). | Whether A4 ships at fund tier, or as a paid add-on. |
 | *"How much do you spend on borrower validation today, all-in (vendor calls + analyst time)?"* | Anchor for total addressable spend per lender. | Pricing ceiling — we should never price above 50% of all-in current spend. |
+| **⭐ *"If an originator handed you a PulseClose verdict that your borrower passed your published mandate, would you lean on it — grant any rep-and-warranty relief, faster funding, lighter re-diligence?"*** | **The load-bearing assumption of the entire Fund wedge.** 2026-06-24 research confirmed *no competitor* produces a cross-originator mandate verdict — it's empty space — but also could not confirm any fund grants relief on a third-party verdict. If funds won't lean on our verdict, the wedge degrades to "nice routing" and Fund-tier pricing power collapses. **Ask before Phase 2 build.** | Whether the Fund tenant + cross-originator mandate view (UX-REDESIGN-PLAN §4, Phase 2) is worth building at all, and what Fund-tier price the relief justifies. |
 
 ---
 

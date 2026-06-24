@@ -118,26 +118,30 @@ See the real rendered screens before redesigning. Personas are in
 
 </details>
 
-### 2. 🔍 Research + stress-test against public alternatives
+### 2. 🔍 Research + stress-test against public alternatives ✅ DONE (2026-06-24)
 
-Use the **`deep-research` skill** (or a Workflow fan-out) to research and
-pressure-test positioning, pricing, UX, and feature packaging vs. real comps:
-- **KYB/diligence:** Middesk, Baselayer, Enformion, ComplyAdvantage (sanctions/PEP).
-- **Bridge/CRE LOS + UW:** LendingWise, Liquid Logics, Mortgage Automator,
-  Baseline, Lev, Janover, Blooma, Rabbet, Built, Lightbox.
-- Pull: their pricing models + axes, how they package modules, their IA/onboarding,
-  their underwriting UX, and where PulseClose's gateway+mandate wedge is
-  genuinely differentiated vs. table-stakes. Feed it into pricing (§5) + positioning.
+Ran the `deep-research` workflow (5 angles, 22 sources, 25 claims adversarially
+verified). Full cited record: **[COMPETITIVE-RESEARCH-2026-06.md](docs/COMPETITIVE-RESEARCH-2026-06.md)**.
+**Verdict:** the **mandate verdict is empty competitive space** (no comp does
+cross-originator pass/conditional/fail vs. a fund's published mandate); diligence
++ sizing are table-stakes; pricing axes are per-check KYB *floor* / per-loan LOS
+*ceiling* (capability-modular tiers are unusual but defensible). **Load-bearing
+risk:** unconfirmed whether funds grant rep-and-warranty relief on a third-party
+verdict → now the top Damon question.
 
-### 3. 🧠 Synthesize the overarching plan
+### 3. 🧠 Synthesize the overarching plan — ◐ PARTIAL
 
-From live review + research, produce/refresh:
-- Overarching **flow** (the coherent end-to-end journey per persona).
-- **Build strategy** (refine the UX-REDESIGN-PLAN §7 phasing).
-- **UX per persona**, **pricing** (module-shaped tiers, §5), **web pages**
-  (landing must add the Mandator strip; pricing must add Underwriting + Fund).
-- Resolve the §8 open questions (Fund tenant model, program consent, the
-  cross-tenant privacy line — draft with Damon).
+**Done:** research folded into [PRICING-STRATEGY §0+§5](docs/PRICING-STRATEGY.md)
+(sourced pricing axes + the rep-and-warranty Damon question), [STRATEGY](STRATEGY.md)
+positioning (mandate-verdict = empty space; mandate object now ships), and
+[UX-REDESIGN-PLAN §8](docs/UX-REDESIGN-PLAN.md) (rep-and-warranty as the gating Q).
+
+**Remaining (next session, before/with build):**
+- Overarching **per-persona flow** — the coherent end-to-end journey doc.
+- **Web pages** — landing must add the Mandator strip; pricing page must add
+  Underwriting + Fund tiers (numbers Damon-gated).
+- Resolve the §8 open questions with Damon (rep-and-warranty relief FIRST, then
+  Fund tenant model, program consent, cross-tenant privacy line).
 
 ### 4. 🛠 Build — Phase 1 first
 
