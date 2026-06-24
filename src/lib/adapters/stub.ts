@@ -108,7 +108,7 @@ export class StubAdapter implements ValidationAdapter {
         outcome: completed ? "completed" : "in_progress",
         hold_months: holdMonths,
         profit: salePrice ? salePrice - acqPrice - rehabCost : null,
-        source: "ATTOM Property Records [DEMO]",
+        source: "RentCast Property Records [DEMO]",
         raw_response: { _demo: true, _adapter: "stub" },
       });
     }

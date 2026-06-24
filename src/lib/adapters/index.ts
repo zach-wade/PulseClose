@@ -6,7 +6,7 @@ import { createCobaltAdapter } from "./cobalt";
 // Real adapters are used when keys exist; stub fills in the rest.
 export function getAdapter(): ValidationAdapter {
   const cobaltKey = process.env.COBALT_INTELLIGENCE_API_KEY;
-  const attomKey = process.env.ATTOM_API_KEY;
+  const rentcastKey = process.env.RENTCAST_API_KEY;
   const regridToken = process.env.REGRID_API_TOKEN;
   const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
   const openSanctionsKey = process.env.OPENSANCTIONS_API_KEY;
@@ -16,14 +16,14 @@ export function getAdapter(): ValidationAdapter {
   if (cobaltKey) {
     // Cobalt: entity lookups
     // Realie (primary) + Regrid (fallback): property/track record search
-    // ATTOM: sale history enrichment (only when Regrid is used)
+    // RentCast: sale history enrichment (only when Regrid is used)
     // CSLB: GC validation (CA only, auto-detected by state)
     // CourtListener: litigation (bankruptcy + federal lawsuits)
     // OpenSanctions (if key) → OFAC SDN direct (always-on free fallback)
     return createCobaltAdapter({
       cobaltKey,
       realieKey: realieKey || undefined,
-      attomKey: attomKey || undefined,
+      rentcastKey: rentcastKey || undefined,
       regridToken: regridToken || undefined,
       courtListenerToken: courtListenerToken || undefined,
       openSanctionsKey: openSanctionsKey || undefined,
@@ -34,10 +34,10 @@ export function getAdapter(): ValidationAdapter {
 }
 
 // Helper: detect which data source was actually used for property search
-// Realie is primary (richer data), Regrid is fallback, ATTOM enriches Regrid results
+// Realie is primary (richer data), Regrid is fallback, RentCast enriches Regrid results
 export function getPropertyDataSource(): string {
   if (process.env.REALIE_API_KEY) return "realie";
-  if (process.env.REGRID_API_TOKEN && process.env.ATTOM_API_KEY) return "regrid+attom";
+  if (process.env.REGRID_API_TOKEN && process.env.RENTCAST_API_KEY) return "regrid+rentcast";
   if (process.env.REGRID_API_TOKEN) return "regrid";
   return "stub";
 }

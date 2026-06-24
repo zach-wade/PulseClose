@@ -14,7 +14,7 @@ import type {
 import { stubAdapter } from "./stub";
 import { searchPropertiesRealie, RealieError } from "./realie";
 import { searchPropertiesRegrid, RegridError } from "./regrid";
-import { enrichPropertiesWithAttom } from "./attom";
+import { enrichPropertiesWithRentcast } from "./rentcast";
 import { canonicalizeName } from "@/lib/domain/upsert";
 import { searchLitigationCourtListener } from "./courtlistener";
 import { lookupCSLB, CSLBError } from "./cslb";
@@ -261,14 +261,14 @@ function getLastFilingDate(biz: CobaltBusiness): string | null {
 interface CobaltAdapterOptions {
   cobaltKey: string;
   realieKey?: string;
-  attomKey?: string;
+  rentcastKey?: string;
   regridToken?: string;
   courtListenerToken?: string;
   openSanctionsKey?: string;
 }
 
 function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
-  const { cobaltKey: apiKey, realieKey, attomKey, regridToken, courtListenerToken, openSanctionsKey } = opts;
+  const { cobaltKey: apiKey, realieKey, rentcastKey, regridToken, courtListenerToken, openSanctionsKey } = opts;
   return {
     async lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult> {
       try {
@@ -330,7 +330,7 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
     },
 
     // Property search: Realie primary (rich data) → Regrid fallback → stub
-    // ATTOM enriches with sale history if Regrid was used (Realie already has transfer data)
+    // RentCast enriches with sale history if Regrid was used (Realie already has transfer data)
     async searchProperties(req: PropertySearchRequest): Promise<PropertyRecord[]> {
       let results: PropertyRecord[] = [];
       let usedRealie = false;
@@ -359,14 +359,14 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
         return stubAdapter.searchProperties(req);
       }
 
-      // ATTOM enrichment only if we used Regrid (Realie already has transfer/lender data)
-      if (!usedRealie && attomKey && results.length > 0) {
+      // RentCast enrichment only if we used Regrid (Realie already has transfer/lender data)
+      if (!usedRealie && rentcastKey && results.length > 0) {
         try {
           const toEnrich = results.slice(0, 5);
-          const enriched = await enrichPropertiesWithAttom(toEnrich, attomKey);
+          const enriched = await enrichPropertiesWithRentcast(toEnrich, rentcastKey);
           results = [...enriched, ...results.slice(5)];
         } catch (err) {
-          console.warn("ATTOM enrichment failed, returning data without enrichment:", err);
+          console.warn("RentCast enrichment failed, returning data without enrichment:", err);
         }
       }
 

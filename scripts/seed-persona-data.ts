@@ -104,7 +104,7 @@ async function seedCleanPillars(vid: string) {
     { property_address: "1290 Birch Ave, Roseville, CA 95661", acquisition_date: "2023-01-18", disposition_date: "2023-09-05", acquisition_price: 525000, disposition_price: 712000, rehab_cost: 95000, project_type: "flip", outcome: "completed", hold_months: 8, profit: 92000, confidence: "high", verified: true },
     { property_address: "77 Cedar Ct, Folsom, CA 95630", acquisition_date: "2024-06-02", disposition_date: null, acquisition_price: 640000, disposition_price: null, rehab_cost: 110000, project_type: "rehab", outcome: "in_progress", hold_months: 12, profit: null, confidence: "medium", verified: true },
   ];
-  for (const p of props) await ins("track_record_entries", { validation_id: vid, source: "attom", ...p });
+  for (const p of props) await ins("track_record_entries", { validation_id: vid, source: "seed", ...p });
   await ins("gc_validations", {
     validation_id: vid, gc_name: "Holloway Build Co", license_number: "1024558",
     license_state: "CA", license_status: "active", license_classification: "B - General Building",
@@ -129,7 +129,7 @@ async function seedFlaggedPillars(vid: string) {
     source_url: "https://mycpa.cpa.state.tx.us/", confidence: "high",
     flags: ["Registered agent is the entity itself — no third-party agent of record."],
   });
-  await ins("track_record_entries", { validation_id: vid, source: "attom", property_address: "904 Pine Hill Rd, Austin, TX 78701", acquisition_date: "2023-03-01", disposition_date: "2024-10-10", acquisition_price: 880000, disposition_price: 905000, rehab_cost: 180000, project_type: "flip", outcome: "distressed", hold_months: 19, profit: -155000, confidence: "high", verified: true });
+  await ins("track_record_entries", { validation_id: vid, source: "seed", property_address: "904 Pine Hill Rd, Austin, TX 78701", acquisition_date: "2023-03-01", disposition_date: "2024-10-10", acquisition_price: 880000, disposition_price: 905000, rehab_cost: 180000, project_type: "flip", outcome: "distressed", hold_months: 19, profit: -155000, confidence: "high", verified: true });
   await ins("gc_validations", {
     validation_id: vid, gc_name: "Lone Star Renovations", license_number: "—",
     license_state: "TX", license_status: "expired", license_classification: null,
@@ -158,7 +158,7 @@ async function seedFlaggedPillars(vid: string) {
 const AI_CLEAN = {
   schema_version: 2, summary: "Experienced California flipper with a clean entity, three verified projects, and no litigation or sanctions exposure. Track record is short but profitable.",
   risk_rating: "low",
-  pillar_assessments: { entity: "Active CA LLC since 2019, current filings.", track_record: "Three ATTOM-verified projects; two completed flips averaging ~$100k profit, one in progress.", litigation: "No federal cases found.", gc: "Named GC holds an active CA B license with verified insurance.", sanctions: "No OFAC or OpenSanctions matches." },
+  pillar_assessments: { entity: "Active CA LLC since 2019, current filings.", track_record: "Three deed-verified projects; two completed flips averaging ~$100k profit, one in progress.", litigation: "No federal cases found.", gc: "Named GC holds an active CA B license with verified insurance.", sanctions: "No OFAC or OpenSanctions matches." },
   strengths: [ { title: "Profitable, recent track record", narrative: "Two completed flips in 2022–2023 each cleared roughly $100k with sub-9-month holds." }, { title: "Clean compliance profile", narrative: "Active entity, licensed GC, no litigation, no sanctions hits." } ],
   risks: [ { factor_key: "lender_concentration", severity: "minor", narrative: "Reliance on a single private lender across most projects." } ],
   recommendations: [ { priority: "should", narrative: "Confirm liquidity/reserves given the one in-progress project tying up capital." } ],
@@ -187,7 +187,7 @@ const AI_WESTBROOK = {
   risk_rating: "low",
   pillar_assessments: {
     entity: "Active CA LLC since 2017; current filings; third-party registered agent.",
-    track_record: "Four ATTOM/deed-verified multifamily value-add exits, 2019–2025, each a completed reposition held 18–26 months.",
+    track_record: "Four deed-verified multifamily value-add exits, 2019–2025, each a completed reposition held 18–26 months.",
     litigation: "No federal cases found.",
     gc: "Owner-managed reposition; licensed GC of record with verified insurance.",
     sanctions: "No OFAC or OpenSanctions matches.",
@@ -226,7 +226,7 @@ async function seedWestbrook(): Promise<string> {
     { property_address: "915 Broadway, Sacramento, CA 95818", acquisition_date: "2022-01-20", disposition_date: "2023-08-10", acquisition_price: 2050000, disposition_price: 2890000, rehab_cost: 510000, project_type: "rehab", outcome: "completed", hold_months: 18, profit: 330000, confidence: "high", verified: true },
     { property_address: "2210 P Street, Sacramento, CA 95816", acquisition_date: "2023-05-05", disposition_date: "2025-03-28", acquisition_price: 2380000, disposition_price: 3360000, rehab_cost: 560000, project_type: "rehab", outcome: "completed", hold_months: 22, profit: 420000, confidence: "high", verified: true },
   ];
-  for (const p of mfExits) await ins("track_record_entries", { validation_id: v, source: "attom", ...p });
+  for (const p of mfExits) await ins("track_record_entries", { validation_id: v, source: "seed", ...p });
   await ins("gc_validations", {
     validation_id: v, gc_name: "Westbrook Build (in-house)", license_number: "1041220",
     license_state: "CA", license_status: "active", license_classification: "B - General Building",

@@ -30,7 +30,7 @@ the authority + distribution stack.
 scored deterministically with an AI memo for narrative:
 
 1. **Entity validation** — Cobalt Intelligence SOS lookup across 50 states. Ownership verification. Officers + registered agent extraction.
-2. **Track record verification** — Realie property search → ATTOM enrichment for sale history (Regrid as fallback). Trust-but-verify deed-chain matcher against borrower-submitted addresses.
+2. **Track record verification** — Realie property search → RentCast enrichment for sale history (Regrid as fallback). Trust-but-verify deed-chain matcher against borrower-submitted addresses.
 3. **GC validation** — CSLB scrape for CA contractors. Other states pending.
 4. **Litigation screening** — CourtListener federal courts (bankruptcy + civil). Materialized into structured cards.
 5. **Sanctions / PEP screening** — OpenSanctions with OFAC SDN direct as auto-fallback.
@@ -82,7 +82,7 @@ src/
     ui/                       # base-ui primitives (Button, Dialog, Card, ...)
     dashboard/                # Validation cards, activity feed/strip, monitor card, deal-outcome card, AI memo, ...
   lib/
-    adapters/                 # Vendor adapters (cobalt, realie, regrid, attom, courtlistener, cslb, opensanctions, ofac)
+    adapters/                 # Vendor adapters (cobalt, realie, regrid, rentcast, courtlistener, cslb, opensanctions, ofac)
     ai/                       # check-enabled, redact, redact-pii, analysis, regenerate
     domain/                   # upsert helpers (borrower / entity / property / lender) — canonical-name dedup
     risk/                     # factors.ts (9 deterministic factors) + persist.ts (atomic RPC)

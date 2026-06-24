@@ -2,7 +2,7 @@
 
 // Unified property table — Phase 1 of the property-card consolidation.
 // Replaces both TrackRecordTable (auto-discovered properties from
-// Realie/Regrid/Attom) and the row-listing of VerifiedTrackRecord
+// Realie/Regrid/RentCast) and the row-listing of VerifiedTrackRecord
 // (borrower-claimed properties checked against deed records). One row
 // per property; provenance is metadata in a small badge column.
 //

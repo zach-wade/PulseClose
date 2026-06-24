@@ -628,7 +628,7 @@ export default function ValidationDetailPage() {
       ))}
 
       {/* Unified Property Track Record (Phase 1) — merges auto-discovered
-          (Realie/Regrid/Attom), borrower-claimed (verified_flips), and
+          (Realie/Regrid/RentCast), borrower-claimed (verified_flips), and
           manual rows into one card with provenance badges. Replaces the
           old paired TrackRecordTable + VerifiedTrackRecord-rows display.
           Pending-review rows (Flow B hits below auto-promote threshold)

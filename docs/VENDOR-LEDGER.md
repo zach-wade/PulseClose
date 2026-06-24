@@ -20,7 +20,7 @@ Last reviewed: 2026-05-04. Owner: Zach Wade.
 | 1 | **Cobalt Intelligence** | SOS entity scraping (50 states) | `COBALT_INTELLIGENCE_API_KEY` | Per-call (volume-tiered) | Rotate ~2026-06-10 for NPLA capacity | None — entity validation fails | See §1 |
 | 2 | **Realie** | Property + deed-chain (primary) | `REALIE_API_KEY` | Per-call premium | Annual (TBD) | Regrid | See §2 |
 | 3 | **Regrid** | Property fallback | `REGRID_API_TOKEN` | Per-call | Annual (TBD) | Stub adapter (demo data) | See §3 |
-| 4 | **ATTOM** | Sale-history enrichment | `ATTOM_API_KEY` | Per-call | Annual (TBD) | Skip enrichment, return Regrid as-is | See §4 |
+| 4 | **RentCast** | Sale-history enrichment | `RENTCAST_API_KEY` | Per-call | Annual (TBD) | Skip enrichment, return Regrid as-is | See §4 |
 | 5 | **CourtListener** | Federal litigation (PACER + RECAP) | `COURTLISTENER_API_TOKEN` | Free, 5K req/day | None (free token) | Stub adapter | See §5 |
 | 6 | **OpenSanctions** | Sanctions/PEP screening | `OPENSANCTIONS_API_KEY` | **Trial — expires 2026-05-28** | Rotate trial keys; paid tier post-NPLA | OFAC SDN direct | See §6 |
 | 7 | **OFAC SDN direct** | Sanctions fallback (CSV) | None (Treasury endpoint) | Free | n/a | n/a (this IS the floor) | See §7 |
@@ -133,14 +133,14 @@ failure with Realie set means Realie's result is what the user sees.
 
 ---
 
-## §4 — ATTOM
+## §4 — RentCast (replaced ATTOM 2026-06-24)
 
 **Purpose:** Sale-history enrichment for Regrid results (Realie already
 includes transfer data inline). Only called when `usedRealie === false`
 and we have ≥1 Regrid result.
 
-**Where it's called:** `src/lib/adapters/attom.ts` via
-`enrichPropertiesWithAttom(toEnrich.slice(0,5), attomKey)`. Slice cap of 5
+**Where it's called:** `src/lib/adapters/rentcast.ts` via
+`enrichPropertiesWithRentcast(toEnrich.slice(0,5), rentcastKey)`. Slice cap of 5
 limits cost.
 
 **Pricing:** Per-call.
@@ -148,7 +148,7 @@ limits cost.
 **Renewal/rotation:** Annual contract (TBD).
 
 **Fallback:** Skip on failure — Regrid result returned as-is. Code path:
-"ATTOM enrichment failed, returning data without enrichment".
+"RentCast enrichment failed, returning data without enrichment".
 
 **Incident playbook:** Low priority. Outage manifests as missing
 `acquisition_date` / `acquisition_price` enrichment on Regrid-sourced
@@ -486,7 +486,7 @@ Chronological. **Bold = NPLA-critical.**
 | Monthly (~16th) | ZHVI refresh | User OR cron | `set -a; source .env.local; set +a; npx tsx scripts/ingest-zhvi-zips.ts` |
 | Quarterly | Anthropic spend vs rate caps review | User | Pull token-count rows from `investor_criteria_extractions` (A1) and equivalent from analysis.ts; compare to Stripe revenue per org. |
 | Annually | Stripe webhook secret rotation | User | Rotate `STRIPE_WEBHOOK_SECRET`, redeploy, replay any missed events. |
-| Annually | Realie / Regrid / ATTOM contract renewal | User | Negotiate; re-evaluate volume tiers. |
+| Annually | Realie / Regrid / RentCast contract renewal | User | Negotiate; re-evaluate volume tiers. |
 | Annually | Supabase service-role key rotation | User | Generate new, deploy to Vercel, retire old. |
 | Annually | GoDaddy Managed WP plan | User | Domain + WP renewal. |
 | As-needed | Vercel auto-deploy failure | User | `vercel deploy --prod --yes` after every `git push` if `vercel ls pulseclose` doesn't show a new build. |
@@ -503,7 +503,7 @@ from billing dashboards in next pass.
 | Cobalt Intelligence | $300-800 | TODO — usage-tier dependent. Rotate-multiple-keys plan inflates this. |
 | Realie | $200-500 | TODO — premium-endpoint per-call. |
 | Regrid | $50-150 | TODO — fallback usage; lower volume. |
-| ATTOM | $50-150 | TODO — only fires on Regrid path; sliced to 5. |
+| RentCast | $0 free tier (50/mo) → usage | Replaced ATTOM; /properties sale history. |
 | CourtListener | $0 | Free tier. |
 | OpenSanctions | $0 (trial) → $TBD post-trial | Enterprise tier ~$500-2000/mo if pursued. |
 | Anthropic Claude | $50-300 | Opus 4.7 + 4096 max_tokens × ~50 validations/mo today; will scale ~linearly with validation volume. |
