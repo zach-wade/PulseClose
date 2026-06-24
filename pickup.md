@@ -163,7 +163,10 @@ establishes the "one Deal" model the rest builds on. No new tables (consolidates
    caps default from matched investors. Reuses all APIs/tables. Smoke-tested
    green on prod. **Follow-up:** retire `underwriting-panel.tsx` once
    `evaluate/[id]/page.tsx` is migrated to mount the stepper in resume mode.
-2. Validation/borrower detail tabs + promoted mandate stamp — *~1.5d* (next)
+2. ✅ **SHIPPED (2026-06-24)** Validation detail tabs + promoted mandate stamp —
+   `validations/[id]/page.tsx` now tabs into Summary/Evidence/Deal/Hand off/Book
+   with the mandate card lifted to directly under the summary cards. `#handoff`
+   deep-link opens the Hand off tab (verified). Smoke-tested green on prod.
 3. Borrower-spine IA (Borrowers/Deals/Capital/Book nav + borrower detail) — *~2–3d*
 4. Settings→Webhooks UI + empty/error states + handoff "what's next" — *~1–1.5d*
 
