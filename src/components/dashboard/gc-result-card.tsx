@@ -161,7 +161,12 @@ export function GCResultCard({ data }: { data: GCValidation }) {
                   className="flex items-center gap-2 text-sm text-red-600"
                 >
                   <XCircle className="h-3.5 w-3.5" />
-                  {action}
+                  {/* Contract is string[], but guard against malformed rows so a
+                      single bad value never white-screens the whole detail page. */}
+                  {typeof action === "string"
+                    ? action
+                    : (action as { description?: string })?.description ??
+                      JSON.stringify(action)}
                 </div>
               ))}
             </div>

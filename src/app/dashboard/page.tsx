@@ -538,10 +538,18 @@ export default function DashboardPage() {
                           <Clock className="h-3 w-3" />
                           Waiting
                         </Badge>
-                      ) : (
+                      ) : Date.now() - new Date(v.created_at).getTime() < 5 * 60 * 1000 ? (
+                        // Memo generation is async; only show "Generating…" while a
+                        // run is plausibly still in flight (created < 5 min ago).
+                        // After that, a null memo means it didn't run — show a
+                        // terminal state instead of spinning forever.
                         <Badge variant="secondary" className="gap-1">
                           <Sparkles className="h-3 w-3 animate-pulse" />
                           Generating…
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1 text-muted-foreground">
+                          No memo
                         </Badge>
                       )}
                     </TableCell>

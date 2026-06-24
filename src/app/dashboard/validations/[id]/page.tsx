@@ -300,7 +300,7 @@ export default function ValidationDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -322,7 +322,7 @@ export default function ValidationDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap justify-start sm:justify-end">
           <Button
             render={
               <Link

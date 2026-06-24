@@ -1,51 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+// Evaluate Deal — the shell around the Deal analyzer stepper (UX-REDESIGN-PLAN
+// §2). All the deal/eligibility/sizing/judgment work lives in <DealStepper>;
+// this page only owns the header, the investor count + empty/error state, and
+// the recent-evaluations list. The two-engine form-wall it replaced is gone.
+
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { StateSelect } from "@/components/ui/state-select";
 import { Calculator, ChevronRight, Settings } from "lucide-react";
-import { EvaluateScenarios } from "@/components/dashboard/evaluate-scenarios";
-import { UnderwritingPanel } from "@/components/dashboard/underwriting-panel";
-
-interface FailureReason {
-  field: string;
-  rule: string;
-  expected: string | number | string[] | null;
-  actual: string | number | null;
-}
-
-interface AppliedAdjuster {
-  name: string;
-  rate_bps: number;
-  points_bps: number;
-}
-
-interface BoundaryWarning {
-  field: string;
-  message: string;
-}
-
-interface EligibilityResult {
-  investor_id: string;
-  investor_name: string;
-  result: "pass" | "conditional" | "fail";
-  failure_reasons: FailureReason[];
-  boundary_warnings: BoundaryWarning[];
-  max_ltv: number | null;
-  max_ltc: number | null;
-  max_ltarv: number | null;
-  estimated_rate_pct: number | null;
-  estimated_points: number | null;
-  applied_adjusters: AppliedAdjuster[];
-  matched_tier_index: number | null;
-  reasoning: string;
-}
+import { DealStepper } from "@/components/dashboard/deal/deal-stepper";
 
 interface RecentEvaluation {
   id: string;
@@ -57,86 +23,38 @@ interface RecentEvaluation {
   additional_params: { borrower_name?: string | null; property_address?: string | null } | null;
 }
 
-const LOAN_TYPES = ["bridge", "fix_flip", "ground_up", "dscr"] as const;
-const PROPERTY_TYPES = ["sfr", "2_4_unit", "small_multifamily", "condo", "townhouse", "mixed_use"] as const;
-const OCCUPANCIES = ["non_owner_occupied", "owner_occupied"] as const;
-const LOAN_PURPOSES = ["purchase", "refinance", "cash_out_refi"] as const;
-
-function fmtPct(v: number | null) {
-  if (v == null) return "—";
-  const pct = v <= 1 ? v * 100 : v;
-  return `${pct.toFixed(1)}%`;
-}
-function fmtRate(v: number | null) {
-  if (v == null) return "—";
-  return `${v.toFixed(2)}%`;
-}
 function fmtCurrency(v: number | null | undefined) {
   if (v == null) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v);
 }
 
-function ResultBadge({ result }: { result: "pass" | "conditional" | "fail" }) {
-  if (result === "pass") return <Badge className="bg-emerald-500/90 text-white hover:bg-emerald-500">Eligible</Badge>;
-  if (result === "conditional") return <Badge className="bg-amber-500/90 text-white hover:bg-amber-500">Conditional</Badge>;
-  return <Badge variant="destructive">Ineligible</Badge>;
-}
-
 function EvaluatePageInner() {
-  // Pre-fill from URL params when navigated from a validation detail page
-  // (G5.1 — "Evaluate against my investors" CTA). Only borrower-side
-  // signals come through; loan-specific fields stay defaults so the lender
-  // is forced to think about them.
+  // Prefill from URL params when navigated from a validation detail page
+  // ("Evaluate against my investors"). Only borrower-side signals come
+  // through; loan-specific Terms stay defaults so the lender thinks about them.
   const searchParams = useSearchParams();
-  const initialBorrower = searchParams.get("borrower") ?? "";
-  const initialState = searchParams.get("state") ?? "";
-  // Carried through from a validation detail page so the handoff CTA can
-  // deep-link back to that validation's #handoff card (UX-PLAN §1.3).
-  const validationId = searchParams.get("validation_id");
-  const initialExperienceParam = searchParams.get("experience");
-  // Validation experience_tier is 1-4 where 1 = most experienced (10+
-  // properties) and 4 = none visible. The evaluate form takes a "deal
-  // count" integer where higher = more experienced. Translate roughly:
-  // tier 1 → 10, tier 2 → 5, tier 3 → 2, tier 4 → 0.
-  const tierToExperience: Record<string, string> = { "1": "10", "2": "5", "3": "2", "4": "0" };
-  const initialExperience = initialExperienceParam && tierToExperience[initialExperienceParam]
-    ? tierToExperience[initialExperienceParam]
-    : "5";
+  const prefill = {
+    validation_id: searchParams.get("validation_id"),
+    borrower_name: searchParams.get("borrower") ?? "",
+    property_state: searchParams.get("state") ?? "",
+    experience_tier: searchParams.get("experience"),
+  };
 
   const [recent, setRecent] = useState<RecentEvaluation[]>([]);
   const [investorCount, setInvestorCount] = useState<number | null>(null);
   const [investorLoadError, setInvestorLoadError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [results, setResults] = useState<EligibilityResult[] | null>(null);
-  const [evaluationId, setEvaluationId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // Form state
-  const [loanType, setLoanType] = useState<typeof LOAN_TYPES[number]>("bridge");
-  const [propertyType, setPropertyType] = useState<typeof PROPERTY_TYPES[number]>("sfr");
-  const [propertyState, setPropertyState] = useState(initialState || "CA");
-  const [purchasePrice, setPurchasePrice] = useState("500000");
-  const [loanAmount, setLoanAmount] = useState("375000");
-  const [arv, setArv] = useState("");
-  const [rehabBudget, setRehabBudget] = useState("");
-  const [borrowerFico, setBorrowerFico] = useState("720");
-  const [borrowerExperience, setBorrowerExperience] = useState(initialExperience);
-  const [occupancy, setOccupancy] = useState<typeof OCCUPANCIES[number]>("non_owner_occupied");
-  const [loanPurpose, setLoanPurpose] = useState<typeof LOAN_PURPOSES[number]>("purchase");
-  const [isRural, setIsRural] = useState(false);
-  const [borrowerName, setBorrowerName] = useState(initialBorrower);
-  const [propertyAddress, setPropertyAddress] = useState("");
+  const refreshRecent = useCallback(async () => {
+    const res = await fetch("/api/evaluate");
+    if (res.ok) setRecent(await res.json());
+  }, []);
 
   useEffect(() => {
     (async () => {
-      // Track investor-fetch failure separately so the empty state below
-      // can differentiate "you have 0 investors configured" from "API
-      // failed to load" — without this, both render as "No investors yet"
-      // and a real outage looks like a fresh tenant during a live demo.
-      const [evalsRes, invsRes] = await Promise.all([
-        fetch("/api/evaluate"),
-        fetch("/api/investors"),
-      ]);
+      // Track investor-fetch failure separately so the empty state can tell
+      // "you have 0 investors" apart from "the API failed" — otherwise a real
+      // outage looks like a fresh tenant during a live demo.
+      const [evalsRes, invsRes] = await Promise.all([fetch("/api/evaluate"), fetch("/api/investors")]);
       if (evalsRes.ok) setRecent(await evalsRes.json());
       if (invsRes.ok) {
         const invs = await invsRes.json();
@@ -147,64 +65,9 @@ function EvaluatePageInner() {
     })();
   }, []);
 
-  async function handleEvaluate(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    setResults(null);
-    try {
-      const res = await fetch("/api/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          loan_type: loanType,
-          property_type: propertyType,
-          property_state: propertyState,
-          purchase_price: purchasePrice ? Number(purchasePrice) : null,
-          loan_amount: Number(loanAmount),
-          arv: arv ? Number(arv) : null,
-          rehab_budget: rehabBudget ? Number(rehabBudget) : null,
-          borrower_fico: borrowerFico ? Number(borrowerFico) : null,
-          borrower_experience: borrowerExperience ? Number(borrowerExperience) : 0,
-          occupancy,
-          loan_purpose: loanPurpose,
-          is_rural: isRural,
-          borrower_name: borrowerName || null,
-          property_address: propertyAddress || null,
-          validation_id: validationId,
-        }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `Request failed (${res.status})`);
-      }
-      const json = await res.json();
-      setResults(json.results ?? []);
-      setEvaluationId(json.evaluation_id ?? null);
-      // Refresh recent list
-      const evals = await fetch("/api/evaluate").then((r) => (r.ok ? r.json() : []));
-      setRecent(evals);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // Sort: pass → conditional → fail; within group, by rate ascending (lowest rate first).
-  const sortedResults = results
-    ? [...results].sort((a, b) => {
-        const order: Record<string, number> = { pass: 0, conditional: 1, fail: 2 };
-        if (order[a.result] !== order[b.result]) return order[a.result] - order[b.result];
-        const ra = a.estimated_rate_pct ?? Infinity;
-        const rb = b.estimated_rate_pct ?? Infinity;
-        return ra - rb;
-      })
-    : null;
-
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-md bg-info/10 p-2">
             <Calculator className="h-5 w-5 text-info" />
@@ -212,7 +75,7 @@ function EvaluatePageInner() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Evaluate Deal</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Multi-investor comparison engine — best-execution recommendation across all configured investors.
+              One deal, five steps — eligibility across your investors, then optional sizing + AI judgment.
             </p>
           </div>
         </div>
@@ -225,316 +88,22 @@ function EvaluatePageInner() {
       {investorLoadError ? (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardContent className="p-4 text-sm">
-            <strong>{investorLoadError}.</strong> Refresh the page to retry.
-            This is an API problem, not an empty configuration.
+            <strong>{investorLoadError}.</strong> Refresh the page to retry. This is an API problem, not an empty configuration.
           </CardContent>
         </Card>
       ) : investorCount === 0 ? (
         <Card className="border-amber-300 bg-amber-50/50">
           <CardContent className="p-4 text-sm">
-            No investors configured yet. Add one or more in{" "}
+            No investors configured yet. Eligibility needs at least one capital partner to evaluate against — add one in{" "}
             <Link href="/dashboard/evaluate/investors" className="underline font-medium">
               Manage investors
-            </Link>{" "}
-            (or run <code className="text-xs bg-muted px-1 rounded">npx tsx scripts/seed-sample-investors.ts</code> to load three example investor configs).
+            </Link>
+            . A starter criteria template is created for you to edit.
           </CardContent>
         </Card>
       ) : null}
 
-      <form onSubmit={handleEvaluate}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Deal scenario</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="loan_type">Loan type</Label>
-                <select
-                  id="loan_type"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  value={loanType}
-                  onChange={(e) => setLoanType(e.target.value as typeof LOAN_TYPES[number])}
-                >
-                  {LOAN_TYPES.map((lt) => <option key={lt} value={lt}>{lt}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="property_type">Property type</Label>
-                <select
-                  id="property_type"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  value={propertyType}
-                  onChange={(e) => setPropertyType(e.target.value as typeof PROPERTY_TYPES[number])}
-                >
-                  {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="property_state">State</Label>
-                <StateSelect
-                  id="property_state"
-                  value={propertyState}
-                  onChange={(v) => setPropertyState(v)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="purchase_price">Purchase price</Label>
-                <Input id="purchase_price" type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="loan_amount">Loan amount *</Label>
-                <Input id="loan_amount" type="number" required value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="arv">ARV</Label>
-                <Input id="arv" type="number" value={arv} onChange={(e) => setArv(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="rehab_budget">Rehab budget</Label>
-                <Input id="rehab_budget" type="number" value={rehabBudget} onChange={(e) => setRehabBudget(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="borrower_fico">Borrower FICO</Label>
-                <Input id="borrower_fico" type="number" value={borrowerFico} onChange={(e) => setBorrowerFico(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="borrower_experience">Experience (deals completed)</Label>
-                <Input id="borrower_experience" type="number" value={borrowerExperience} onChange={(e) => setBorrowerExperience(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="occupancy">Occupancy</Label>
-                <select
-                  id="occupancy"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  value={occupancy}
-                  onChange={(e) => setOccupancy(e.target.value as typeof OCCUPANCIES[number])}
-                >
-                  {OCCUPANCIES.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="loan_purpose">Loan purpose</Label>
-                <select
-                  id="loan_purpose"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  value={loanPurpose}
-                  onChange={(e) => setLoanPurpose(e.target.value as typeof LOAN_PURPOSES[number])}
-                >
-                  {LOAN_PURPOSES.map((lp) => <option key={lp} value={lp}>{lp}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5 flex items-end">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={isRural} onChange={(e) => setIsRural(e.target.checked)} />
-                  <span className="text-sm">Rural property</span>
-                </label>
-              </div>
-              <div className="space-y-1.5 col-span-2 md:col-span-3">
-                <Label htmlFor="property_address">Property address (optional)</Label>
-                <Input id="property_address" value={propertyAddress} onChange={(e) => setPropertyAddress(e.target.value)} />
-              </div>
-              <div className="space-y-1.5 col-span-2 md:col-span-3">
-                <Label htmlFor="borrower_name">Borrower (optional)</Label>
-                <Input id="borrower_name" value={borrowerName} onChange={(e) => setBorrowerName(e.target.value)} />
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button type="submit" disabled={submitting || investorCount === 0}>
-                {submitting ? "Evaluating…" : "Evaluate against investors"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </form>
-
-      {sortedResults && sortedResults.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Results — sorted by best execution
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {sortedResults.map((r) => (
-              <div
-                key={r.investor_id}
-                className={`rounded-md border p-3 ${
-                  r.result === "pass"
-                    ? "border-emerald-200 bg-emerald-50/30"
-                    : r.result === "conditional"
-                      ? "border-amber-200 bg-amber-50/30"
-                      : "border-destructive/30 bg-destructive/5"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div>
-                    <p className="font-medium">{r.investor_name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{r.reasoning}</p>
-                  </div>
-                  <ResultBadge result={r.result} />
-                </div>
-                {(r.result === "pass" || r.result === "conditional") && (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm pt-2 border-t border-border/50">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Max LTV</p>
-                      <p className="font-semibold">{fmtPct(r.max_ltv)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Max LTC</p>
-                      <p className="font-semibold">{fmtPct(r.max_ltc)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Max LTARV</p>
-                      <p className="font-semibold">{fmtPct(r.max_ltarv)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Rate</p>
-                      <p className="font-semibold">{fmtRate(r.estimated_rate_pct)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Points</p>
-                      <p className="font-semibold">{r.estimated_points != null ? r.estimated_points.toFixed(2) : "—"}</p>
-                    </div>
-                  </div>
-                )}
-                {r.applied_adjusters.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-border/50">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Rate adjusters applied</p>
-                    <ul className="text-xs space-y-0.5">
-                      {r.applied_adjusters.map((a, i) => (
-                        <li key={i}>
-                          {a.name}: {a.rate_bps > 0 ? `+${a.rate_bps}` : a.rate_bps}bps rate
-                          {a.points_bps !== 0 ? `, ${a.points_bps > 0 ? "+" : ""}${a.points_bps}bps points` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {r.boundary_warnings.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-border/50">
-                    <p className="text-xs uppercase tracking-wide text-amber-700 mb-1">Boundary warnings</p>
-                    <ul className="text-xs space-y-0.5 text-amber-900">
-                      {r.boundary_warnings.map((w, i) => (
-                        <li key={i}>{w.message}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {r.failure_reasons.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-border/50">
-                    <p className="text-xs uppercase tracking-wide text-destructive mb-1">Why ineligible</p>
-                    <ul className="text-xs space-y-0.5">
-                      {r.failure_reasons.map((f, i) => (
-                        <li key={i}>
-                          <span className="font-medium">{f.field}</span>: {f.rule}
-                          {f.expected != null && (
-                            <span className="text-muted-foreground"> (expected {Array.isArray(f.expected) ? f.expected.join(", ") : f.expected}, got {f.actual})</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* F1 + F2 — scenario comparison + rate stress test, only after
-          a base evaluation has landed. Both reuse the deal as captured
-          on the form. */}
-      {sortedResults && sortedResults.length > 0 && (
-        <EvaluateScenarios
-          baseResults={sortedResults}
-          deal={{
-            loan_type: loanType,
-            property_type: propertyType,
-            property_state: propertyState,
-            purchase_price: purchasePrice ? Number(purchasePrice) : null,
-            loan_amount: Number(loanAmount),
-            arv: arv ? Number(arv) : null,
-            rehab_budget: rehabBudget ? Number(rehabBudget) : null,
-            borrower_fico: borrowerFico ? Number(borrowerFico) : null,
-            borrower_experience: borrowerExperience ? Number(borrowerExperience) : 0,
-            occupancy,
-            loan_purpose: loanPurpose,
-            is_rural: isRural,
-            borrower_name: borrowerName || null,
-            property_address: propertyAddress || null,
-          }}
-        />
-      )}
-
-      {/* Underwriting Workbench — deterministic loan sizing + per-investor
-          best execution + optional AI judgment. Always available (sizes
-          deal-level even before an eligibility run; per-investor populates
-          from the org's investors). */}
-      {(
-        <UnderwritingPanel
-          dealEvaluationId={evaluationId}
-          deal={{
-            loan_type: loanType,
-            property_type: propertyType,
-            property_state: propertyState,
-            purchase_price: purchasePrice ? Number(purchasePrice) : null,
-            loan_amount: Number(loanAmount),
-            arv: arv ? Number(arv) : null,
-            rehab_budget: rehabBudget ? Number(rehabBudget) : null,
-            borrower_fico: borrowerFico ? Number(borrowerFico) : null,
-            borrower_experience: borrowerExperience ? Number(borrowerExperience) : 0,
-            occupancy,
-            loan_purpose: loanPurpose,
-            is_rural: isRural,
-            borrower_name: borrowerName || null,
-            property_address: propertyAddress || null,
-          }}
-        />
-      )}
-
-      {/*
-        G6.2 — once at least one investor passes (or is conditional), prompt
-        the lender to head back to the borrower's validation page where the
-        HandoffCard lives. Dashboard search isn't shipped yet (B3) so we
-        link to the validation list and let the lender click the matching
-        borrower; the CTA's job is to make the validate→evaluate→handoff
-        chain perceptible without leaving the user dead-ended on results.
-      */}
-      {sortedResults && sortedResults.some((r) => r.result === "pass" || r.result === "conditional") && (
-        <Card className="border-info/30 bg-info/5">
-          <CardContent className="p-4 flex items-start gap-3">
-            <div className="rounded-md bg-info/10 p-2 shrink-0">
-              <ChevronRight className="h-4 w-4 text-info" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Ready for the investor handoff?</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {validationId
-                  ? `${borrowerName ? `${borrowerName}'s` : "This borrower's"} Handoff card generates the polished Excel + PDF — jump straight to it.`
-                  : borrowerName
-                    ? `Open ${borrowerName}'s validation and use the Handoff card to generate the polished Excel + PDF.`
-                    : "Open the borrower's validation and use the Handoff card to generate the polished Excel + PDF."}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              render={<Link href={validationId ? `/dashboard/validations/${validationId}#handoff` : "/dashboard"} />}
-            >
-              {validationId ? "Go to handoff" : "Open validation"}
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <DealStepper prefill={prefill} investorCount={investorCount} onEvaluated={refreshRecent} />
 
       {recent.length > 0 && (
         <Card>
@@ -559,9 +128,7 @@ function EvaluatePageInner() {
                     <p className="text-xs text-muted-foreground truncate">{e.additional_params.property_address}</p>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {new Date(e.evaluated_at).toLocaleDateString()}
-                </span>
+                <span className="text-xs text-muted-foreground shrink-0">{new Date(e.evaluated_at).toLocaleDateString()}</span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </Link>
             ))}
@@ -572,9 +139,9 @@ function EvaluatePageInner() {
   );
 }
 
-// useSearchParams() requires a Suspense boundary on Next 16 — same lesson
-// as PR 14 (Compare page). Without this, prerender of /dashboard/evaluate
-// fails the build and Vercel keeps serving the prior deploy.
+// useSearchParams() requires a Suspense boundary on Next 16 — without it the
+// prerender of /dashboard/evaluate fails the build and Vercel keeps serving the
+// prior deploy.
 export default function EvaluatePage() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
