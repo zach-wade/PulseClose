@@ -156,10 +156,20 @@ establishes the "one Deal" model the rest builds on. No new tables (consolidates
 ## The redesign backlog (from UX-REDESIGN-PLAN §7)
 
 **Phase 1 — lender-flow coherence (no multi-tenancy):**
-1. Deal analyzer stepper over one Deal object — *~3–4d* (build first)
-2. Validation/borrower detail tabs + promoted mandate stamp — *~1.5d*
+1. ✅ **SHIPPED (2026-06-24)** Deal analyzer stepper over one Deal object —
+   `src/lib/deal/view-model.ts` + `src/components/dashboard/deal/deal-stepper.tsx`;
+   `evaluate/page.tsx` is now a thin shell. 5 steps (Terms → Eligibility →
+   Sizing[opt-in] → Judgment[opt-in] → Hand off), stale-state flagging, sizing
+   caps default from matched investors. Reuses all APIs/tables. Smoke-tested
+   green on prod. **Follow-up:** retire `underwriting-panel.tsx` once
+   `evaluate/[id]/page.tsx` is migrated to mount the stepper in resume mode.
+2. Validation/borrower detail tabs + promoted mandate stamp — *~1.5d* (next)
 3. Borrower-spine IA (Borrowers/Deals/Capital/Book nav + borrower detail) — *~2–3d*
 4. Settings→Webhooks UI + empty/error states + handoff "what's next" — *~1–1.5d*
+
+**Bugs fixed (2026-06-24, from §9 live-review):** gc-result-card white-screen
+guard · dashboard "No memo" terminal state · mobile header stacking · migration
+00045 slug-casing (⚠️ **NOT applied to prod — run `supabase db push`**).
 
 **Phase 2 — arm the wedge (Fund as first-class citizen):**
 5. Fund tenant + mandate console — *~3–4d*
