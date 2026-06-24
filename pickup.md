@@ -96,8 +96,41 @@ synthesis) · `d38393d` (stepper + bugs) · `db80175` · `e765838` (webhooks) ·
   Walkthrough: **docs/DEMO-WALKTHROUGH-WESTBROOK.md** (login
   `uw@test.pulseclose.com`, validation `4444…`). Underwriter org `27296b6b…`.
 
-**→ Next: show Damon the Westbrook deal** (the load-bearing "is this enough depth?"
-question), then the remaining depth adds per §6 step 2 below.
+## Shipped 2026-06-24 (comprehensive build pass — "show Damon breadth", deployed)
+
+Per a deliberate decision to build the broadest credible platform for the Damon
+pitch (seed the vision; some preview where gated) — holding three lines: spine
+stays (engine decides, AI narrates, drill-down everywhere); NO Excel-parity DCF;
+aspirational features labeled **Preview**. All green on `main`, e2e-driven.
+
+- **Stepper resume mode** (`599ea51`) — `evaluate/[id]` mounts the Deal stepper
+  hydrated from the saved evaluation + latest `uw_model` (sizing incl. exit/
+  takeout, best-execution, judgment). The persisted exit panel is now viewable at
+  a URL, not only via a live re-run. Retired `underwriting-panel.tsx`.
+  `dealFromEvaluation()` in view-model; `/api/evaluate/[id]` returns `uw_model`.
+- **Borrower-organized list** (`599ea51`) — dashboard dedups by
+  `primary_borrower_id` (canonical-name fallback), shows a checks count, name
+  links to borrower history.
+- **Stabilization-path + interest-reserve depth** (`8bcc715`) — `stabilization.ts`
+  ("years to 1.20–1.25x DSCR", per-year DSCR trend) + `reserve.ts` (per-month
+  deficit interest reserve). Pure, regression-tested, wired schema→API→Sizing UI;
+  Westbrook seed persists both.
+- **Mandate Console** (`1402607`) — fund-side verdict roll-up at
+  `/dashboard/capital/mandates` (meet/conditional/fail, pass rate, recent
+  verdicts) + an explicitly-labeled **Preview** cross-originator panel. The Fund
+  vision without re-architecting tenancy (org-type/RLS stays Damon-gated).
+- **3rd-party report tracking** (`4efbe5a`) — Damon-named subproduct, preview
+  card on the validation Evidence tab (needed→ordered→received→cleared pipeline).
+
+**Deferred (documented, NOT done):** side-by-side sizing scenarios + governing-
+assumption picker (eligibility scenarios already exist; sizing version is the
+enhancement); **ZHVI haircut + Oakhurst >$3M cap engine wiring** (needs a
+property-value-vs-ZHVI deal input); the **full Fund tenant** (org type + RLS +
+real cross-originator sharing — gated on the rep-and-warranty question).
+
+**→ Next: show Damon the Westbrook deal + the new surfaces** (the load-bearing
+"is this enough depth?" question), then settle the R&W question before the full
+Fund tenant.
 
 ## The reshaped plan (start here)
 

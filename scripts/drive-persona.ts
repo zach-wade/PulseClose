@@ -27,6 +27,7 @@ const SCREENS: Record<string, Array<{ label: string; path: string; mobile?: bool
     { label: "validation-flagged", path: "/dashboard/validations/22222222-2222-4222-8222-222222222222" },
     { label: "evaluate", path: "/dashboard/evaluate" },
     { label: "evaluate-investors", path: "/dashboard/evaluate/investors" },
+    { label: "mandate-console", path: "/dashboard/capital/mandates" },
     { label: "activity", path: "/dashboard/activity" },
     { label: "settings", path: "/dashboard/settings" },
     { label: "usage", path: "/dashboard/usage" },
