@@ -24,8 +24,10 @@ import {
   Sparkles,
   Shield,
   Home,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isGCStateAutomated, isGCStateCobaltPending } from "@/lib/adapters/gc-coverage";
 import Link from "next/link";
 import { DocIngest, type IngestExtraction } from "@/components/dashboard/doc-ingest";
 import { BorrowerMatchHint } from "@/components/dashboard/borrower-match-hint";
@@ -349,6 +351,25 @@ function NewValidationInner() {
                 />
               </div>
             </div>
+
+            {/* No-coverage warning. GC license validation is automated for CA
+                today (CSLB); other states aren't yet. Set the expectation up
+                front so a lender knows this GC will need a manual check —
+                rather than being surprised by a "not automated" result later. */}
+            {gcName.trim() && !isGCStateAutomated(gcState, gcLicense) && (
+              <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <p>
+                  {!gcState
+                    ? "Select the license state. GC license validation is automated for California (CSLB) today."
+                    : gcState.toUpperCase() === "CA"
+                      ? "Add the CSLB license number to automate the California license check — without it, this GC will be flagged for manual review."
+                      : isGCStateCobaltPending(gcState)
+                        ? `${gcState.toUpperCase()} license validation is available via Cobalt but not yet enabled — this GC will be flagged for manual review for now.`
+                        : `License validation isn't automated for ${gcState.toUpperCase()} — this GC will be flagged for manual review. Automated coverage today: California (CSLB).`}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

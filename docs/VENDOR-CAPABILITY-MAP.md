@@ -54,9 +54,21 @@ Excel/PDF" architecture.
 1. **RentCast in, ATTOM out** — ✅ done, deployed.
 2. **Regrid** — calibration proved the trial is geo-limited; **decide: paid plan or
    retire** (lean on Realie + RentCast). Open.
-3. **Cobalt contractor API** — adopt for CA/FL/NY/TX/OR (replaces/augments the CSLB
-   scrape); **front-end "no coverage" warning** for other states. **Queued, not
-   built.**
+3. **Cobalt contractor API** — ⏳ **front-end "no coverage" warning SHIPPED**
+   (2026-06-24); the API swap is **vendor-$ blocked**. Verified live this session:
+   - **Endpoint:** `GET https://apigateway.cobaltintelligence.com/contractorSearch?licenseNumber=&state=&callbackUrl=`
+     with `x-api-key` (note: **no `/v1` prefix**, unlike `/search`).
+   - **States:** CA, FL, TX, NY, OR. **License NUMBER required** (not name).
+   - **BLOCKER:** our Cobalt key returns `429 "Trial limit exceeded — contact
+     support@cobaltintelligence.com to upgrade"` on `/contractorSearch`. The
+     contractor product needs a **paid upgrade** (like Regrid).
+   - **Also verify before wiring:** the docs describe an **async callbackUrl**
+     model (results POSTed to your webhook); confirm whether it also returns a
+     synchronous result / `retryId` (like `/search`) or whether we must stand up
+     a callback endpoint. Don't wire as primary until tested against a real
+     (paid) response — the response shape isn't observable on the trial.
+   - **Coverage today:** CA only (CSLB scrape). `GC_AUTOMATED_STATES` in
+     `src/lib/adapters/gc-coverage.ts` — move FL/TX/NY/OR there once enabled.
 4. **Disambiguation before flagging** (litigation/sanctions) — the calibration
    trust-killer; **#1 priority** (see CALIBRATION-FINDINGS).
 5. **Liens/judgments (TLOxp/LexisNexis)** — gated on FCRA onboarding; later.

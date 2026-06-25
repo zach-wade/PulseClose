@@ -42,6 +42,15 @@ export function getPropertyDataSource(): string {
   return "stub";
 }
 
+// GC coverage constants live in the pure ./gc-coverage module (client-safe);
+// re-export for server callers that import from the adapters index.
+export {
+  GC_AUTOMATED_STATES,
+  GC_COBALT_PENDING_STATES,
+  isGCStateAutomated,
+  isGCStateCobaltPending,
+} from "./gc-coverage";
+
 // Helper: detect which data source was used for GC lookup
 export function getGCDataSource(state: string, licenseNumber?: string): string {
   if (state.toUpperCase() === "CA" && licenseNumber) return "cslb";
