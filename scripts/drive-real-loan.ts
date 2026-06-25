@@ -131,6 +131,9 @@ async function main() {
     } catch (err) {
       console.warn(`  ✗ ${LOANS[i].id} failed: ${(err as Error).message}`);
     }
+    // Space the runs so Cobalt's shared rate limit recovers between loans —
+    // verifies the entity pillar resolves cleanly when not hammered (#19).
+    if (i < LOANS.length - 1) await page.waitForTimeout(20000);
   }
 
   // ── Evaluate / underwrite surface (deal stepper landing) ──

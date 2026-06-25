@@ -230,10 +230,23 @@ export function assessGates(
     });
   }
   if (gates.min_confidence_score != null && dil.confidence_score != null && dil.confidence_score < gates.min_confidence_score) {
-    failures.push({
-      gate: "min_confidence_score",
-      message: `Confidence ${dil.confidence_score} is below the required ${gates.min_confidence_score}.`,
-    });
+    // When a check could not complete, the confidence score is artificially
+    // depressed (incomplete diligence ≠ low-quality borrower). Don't HARD-fail a
+    // borrower on a confidence number we couldn't fully compute — make it
+    // conditional ("re-run") instead (finding #18 / same family as #13).
+    const incomplete = dil.sos_unavailable || dil.litigation_incomplete || dil.sanctions_incomplete;
+    if (incomplete) {
+      conditional = true;
+      conditionalReasons.push({
+        gate: "min_confidence_score",
+        message: `Confidence (${dil.confidence_score}) is below the required ${gates.min_confidence_score}, but diligence is incomplete (a check did not complete) — re-run to compute a reliable score before relying on this verdict.`,
+      });
+    } else {
+      failures.push({
+        gate: "min_confidence_score",
+        message: `Confidence ${dil.confidence_score} is below the required ${gates.min_confidence_score}.`,
+      });
+    }
   }
   if (gates.require_gc_active && dil.has_inactive_gc) {
     failures.push({ gate: "require_gc_active", message: "A general contractor on this deal does not hold an active license." });
