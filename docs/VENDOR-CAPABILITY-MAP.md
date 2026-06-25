@@ -54,8 +54,12 @@ Excel/PDF" architecture.
 1. **RentCast in, ATTOM out** — ✅ done, deployed.
 2. **Regrid** — calibration proved the trial is geo-limited; **decide: paid plan or
    retire** (lean on Realie + RentCast). Open.
-3. **GC validation — DECISION UPDATED (deep-research 2026-06-24, see
-   [RESEARCH-GC-VALIDATION.md](RESEARCH-GC-VALIDATION.md)).** Don't pay for
+3. **GC validation — ✅ BULK-INGEST SHIPPED (WA/OR/FL, ~346k licenses);
+   deep-research 2026-06-24, see [RESEARCH-GC-VALIDATION.md](RESEARCH-GC-VALIDATION.md).**
+   `contractor_licenses` table + per-state ingest scripts + DB-first `lookupGC`;
+   CA stays on the CSLB scrape (bulk-CA = paid-FTP follow-up); TX/NY/PA have no
+   statewide license. Did NOT adopt Cobalt contractor (redundant/structurally
+   empty). Original decision rationale retained below. Don't pay for
    Cobalt's contractor API — it's CA/TX/NY/FL only, and TX/NY have **no
    statewide GC license** to verify (oversight is municipal), so it overlaps
    states we can bulk-ingest for free (CA/FL) or that don't have the credential.

@@ -49,6 +49,23 @@ States not individually confirmed this run (AZ ROC appears to require a records
 request, not open download; CO/NV/GA/NC/TN/VA/NJ/MA not checked) — verify
 per-state before adding.
 
+## STATUS — SHIPPED 2026-06-24
+
+Bulk-ingest built and live for **WA / OR / FL** (~346k licenses):
+- Table: `public.contractor_licenses` (migration 00046), public-read reference data.
+- Scripts: `scripts/ingest-contractor-{wa,or,fl}.ts` (+ shared `_contractor-ingest.ts`).
+  WA `data.wa.gov` Socrata (158,933), OR `data.oregon.gov` Socrata (45,394),
+  FL `CONSTRUCTIONLICENSE_1.csv` (142,082). Re-run to refresh (idempotent upsert).
+- Lookup: `src/lib/gc/lookup.ts` — by license # (exact) or unambiguous name match;
+  the pipeline tries the DB first, then the CSLB scrape (CA), then not_automated.
+- `GC_AUTOMATED_STATES` now = CA, WA, OR, FL.
+
+**Follow-ups:** (1) **CA bulk migration** — CA stays on the CSLB per-license
+scrape; the free master-list download URL isn't statically discoverable (JS
+portal) and the clean path is the paid Full File/Update File FTP service — a
+vendor-$ decision. (2) A **refresh cron** for the three scripts (WA 3×/day, OR
+daily, FL weekly) — currently run on demand.
+
 ## Recommendation
 
 1. **Do NOT pay for the Cobalt contractor API.** Its live contractor states

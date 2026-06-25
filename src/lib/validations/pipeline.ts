@@ -48,6 +48,7 @@ import { scoreAndPromotePendingRows } from "@/lib/track-record/review";
 import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 import { dispatchWebhookEvent } from "@/lib/webhooks/deliver";
 import { assessValidationMandates } from "@/lib/mandates/assess";
+import { lookupContractorFromDb } from "@/lib/gc/lookup";
 
 const APP_BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.pulseclose.com";
 
@@ -237,13 +238,25 @@ export async function runValidationPipeline(
   try {
     // First wave: entity, properties, litigation, GC in parallel; sanctions
     // after so officers/agent from the entity filing are included.
+    // GC: try the ingested contractor_licenses table first (WA/OR/FL bulk data,
+    // + any CA rows), then fall back to the CSLB scrape (CA) / not_automated.
+    const resolveGc = async () => {
+      if (!gc_name && !gc_license_number) return null;
+      const gcReq = {
+        gc_name: gc_name ?? "",
+        license_number: gc_license_number ?? undefined,
+        state: gc_state || entity_state,
+      };
+      const fromDb = await lookupContractorFromDb(supabase, gcReq);
+      if (fromDb) return fromDb;
+      return gc_name ? adapter.lookupGC(gcReq) : null;
+    };
+
     const [entityResult, properties, litigationResults, gcResult] = await Promise.all([
       adapter.lookupEntity({ entity_name: borrower_entity_name, state: entity_state }),
       adapter.searchProperties({ borrower_name, entity_name: borrower_entity_name, state: entity_state }),
       adapter.searchLitigation({ entity_name: borrower_entity_name, borrower_name, known_states: knownStates }),
-      gc_name
-        ? adapter.lookupGC({ gc_name, license_number: gc_license_number ?? undefined, state: gc_state || entity_state })
-        : Promise.resolve(null),
+      resolveGc(),
     ]);
 
     const cobaltResults = (entityResult.raw_response as

@@ -11,10 +11,12 @@
 //   - No nationwide GC-license API exists; Cobalt's contractor product is thin
 //     and adds ~zero over bulk-ingest, so we did NOT adopt it.
 
-// States with GC license validation live today.
-export const GC_AUTOMATED_STATES = ["CA"] as const;
+// States with GC license validation live today. CA via the CSLB scrape;
+// WA/OR/FL via the ingested contractor_licenses table (official bulk data).
+export const GC_AUTOMATED_STATES = ["CA", "WA", "OR", "FL"] as const;
 
-// States that publish an official bulk dataset we can ingest (ETL pending).
+// States whose data we ingest in bulk (no per-request vendor call). CA stays on
+// the scrape for now (bulk-CA download is a follow-up — see RESEARCH doc).
 export const GC_BULK_INGEST_STATES = ["WA", "OR", "FL"] as const;
 
 // States with NO statewide GC license — verification is municipal/registration
@@ -57,16 +59,14 @@ export function gcCoverage(state: string, licenseNumber?: string): {
           message: "Add the CSLB license number to automate the California license check — without it, this GC will be flagged for manual review.",
         };
   }
+  // WA/OR/FL — automated via the ingested license dataset (license # or name).
+  if (isGCStateAutomated(s)) {
+    return { category: "automated", message: null };
+  }
   if (has(GC_NO_STATEWIDE_LICENSE_STATES, s)) {
     return {
       category: "no_statewide_license",
       message: `${s} has no statewide GC license — general-contractor oversight is municipal (or a trade-specific/registration regime), so a state license check isn't possible. Verify the local city registration where the deal warrants.`,
-    };
-  }
-  if (has(GC_BULK_INGEST_STATES, s)) {
-    return {
-      category: "bulk_pending",
-      message: `${s} publishes an official contractor-license dataset; automated checks are on the roadmap (bulk ingest). For now this GC will be flagged for manual review.`,
     };
   }
   return {
