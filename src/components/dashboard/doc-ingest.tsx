@@ -14,6 +14,15 @@ export interface IngestExtraction {
   gc_license_number: string | null;
   gc_state: string | null;
   property_addresses: string[];
+  // Underwriting values from the package — pre-fill the sizing workbench.
+  loan_amount: number | null;
+  purchase_price: number | null;
+  as_is_value: number | null;
+  arv: number | null;
+  rehab_budget: number | null;
+  fico: number | null;
+  property_type: string | null;
+  loan_purpose: string | null;
   notes: string | null;
 }
 

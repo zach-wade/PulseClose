@@ -34,29 +34,52 @@ interface IngestResult {
   gc_license_number: string | null;
   gc_state: string | null;
   property_addresses: string[];
+  // Underwriting values from the loan package / pro-forma. These are
+  // appraisal/package data that is NEVER pullable from an API (calibration
+  // hard boundary) — ingesting them here is the only way to pre-fill the
+  // sizing workbench instead of re-keying. Numbers in plain USD (no $/commas).
+  loan_amount: number | null;
+  purchase_price: number | null;   // acquisition / land cost
+  as_is_value: number | null;      // appraised as-is (refi) if distinct from purchase
+  arv: number | null;              // after-repair / completed value
+  rehab_budget: number | null;     // construction / renovation budget
+  fico: number | null;
+  property_type: string | null;    // sfr | condo | multifamily | mixed_use | land | other
+  loan_purpose: string | null;     // purchase | refinance | construction | bridge
   notes: string | null;
 }
 
-const PROMPT = `You are extracting borrower-validation fields from a lender intake document. Pull the following fields and return JSON exactly matching this shape:
+const PROMPT = `You are extracting loan-intake fields from a lender's borrower package (loan request, 1003, pro-forma, or track-record sheet). Pull the following fields and return JSON exactly matching this shape:
 
 {
   "borrower_name": "string | null",          // Individual principal / guarantor — typically a person
-  "borrower_entity_name": "string | null",   // The borrowing LLC / Corp / Trust
+  "borrower_entity_name": "string | null",   // The borrowing LLC / Corp / Trust (the vesting entity)
   "entity_state": "string | null",           // 2-letter state where the entity is registered (e.g. "CA")
   "guarantor_name": "string | null",         // Personal guarantor if different from borrower
   "gc_name": "string | null",                // General contractor name if specified
   "gc_license_number": "string | null",
   "gc_state": "string | null",
   "property_addresses": ["string", ...],     // Subject + collateral / track-record addresses listed in the doc
-  "notes": "string | null"                   // Anything else worth flagging — loan amount, rehab budget, narrative
+  "loan_amount": number | null,              // Requested / proposed loan amount, USD
+  "purchase_price": number | null,           // Acquisition or land cost (cost basis), USD
+  "as_is_value": number | null,              // Appraised AS-IS value (refinance), USD — null if same as purchase
+  "arv": number | null,                      // After-repair / completed / exit value, USD
+  "rehab_budget": number | null,             // Construction or renovation budget, USD
+  "fico": number | null,                     // Borrower credit score (a single number, e.g. 731)
+  "property_type": "string | null",          // one of: sfr | condo | multifamily | mixed_use | land | other
+  "loan_purpose": "string | null",           // one of: purchase | refinance | construction | bridge
+  "notes": "string | null"                   // Anything else worth flagging in <200 chars
 }
 
 Rules:
 - Return only fields you can confidently extract. Use null for missing fields, [] for missing addresses.
 - entity_state must be the 2-letter postal code, uppercase.
+- All monetary fields are PLAIN NUMBERS in USD — no "$", no commas, no text. E.g. 4239490 not "$4,239,490".
+- fico is a single integer; if a range like "740+" appears, use the floor (740).
+- property_type / loan_purpose must be one of the listed lowercase values, else null.
 - Don't invent data. If the doc has just an entity name with no obvious individual borrower, set borrower_name to null.
 - property_addresses: include up to 50 addresses (downstream verifier caps at 50). Prefer current/active holdings + recent flips; truncate older entries if the doc lists more.
-- Keep the "notes" field under 200 characters.
+- Do NOT extract Social Security numbers, dates of birth, or other personal identifiers — they are not needed here.
 - Return JSON only. No prose, no markdown fences.`;
 
 async function pdfToContentBlock(buffer: Buffer): Promise<Anthropic.Messages.DocumentBlockParam> {
@@ -225,6 +248,29 @@ export async function POST(request: Request) {
     // Normalize state codes
     if (parsed.entity_state) parsed.entity_state = parsed.entity_state.toUpperCase().slice(0, 2);
     if (parsed.gc_state) parsed.gc_state = parsed.gc_state.toUpperCase().slice(0, 2);
+    // Coerce monetary/numeric fields defensively — Claude occasionally returns
+    // "$4,239,490" or "740+" despite the prompt. Strip to a clean number or null.
+    const toNum = (v: unknown): number | null => {
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      if (typeof v === "string") {
+        const n = Number(v.replace(/[^0-9.]/g, ""));
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+      return null;
+    };
+    parsed.loan_amount = toNum(parsed.loan_amount);
+    parsed.purchase_price = toNum(parsed.purchase_price);
+    parsed.as_is_value = toNum(parsed.as_is_value);
+    parsed.arv = toNum(parsed.arv);
+    parsed.rehab_budget = toNum(parsed.rehab_budget);
+    parsed.fico = toNum(parsed.fico);
+    // Constrain enums to known values (else null) so downstream selects don't break.
+    const PROP_TYPES = new Set(["sfr", "condo", "multifamily", "mixed_use", "land", "other"]);
+    const PURPOSES = new Set(["purchase", "refinance", "construction", "bridge"]);
+    parsed.property_type = parsed.property_type && PROP_TYPES.has(parsed.property_type.toLowerCase())
+      ? parsed.property_type.toLowerCase() : null;
+    parsed.loan_purpose = parsed.loan_purpose && PURPOSES.has(parsed.loan_purpose.toLowerCase())
+      ? parsed.loan_purpose.toLowerCase() : null;
     // Defensively cap addresses at 50 (downstream verifier limit) so a
     // long extraction doesn't blow past MAX_ADDRESSES on the next leg.
     if (Array.isArray(parsed.property_addresses) && parsed.property_addresses.length > 50) {

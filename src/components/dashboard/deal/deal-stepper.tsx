@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { StateSelect } from "@/components/ui/state-select";
 import { ChevronRight, Ruler, Sparkles } from "lucide-react";
 import { EvaluateScenarios } from "@/components/dashboard/evaluate-scenarios";
+import { DocIngest, type IngestExtraction } from "@/components/dashboard/doc-ingest";
 import {
   type Deal,
   type DealTerms,
@@ -429,6 +430,38 @@ function StepTerms({
   const t = deal.terms;
   const set = (key: keyof DealTerms, value: string | boolean) => dispatch({ type: "setTerm", key, value });
   const running = deal.steps.eligibility === "running";
+
+  // Pre-fill the terms from a dropped loan package (Noah: "the less you ask the
+  // borrower, the better"). as-is/ARV/rehab/loan/FICO are appraisal/package
+  // data that can't be pulled from any API — ingesting them is the only way to
+  // avoid re-keying. The lender can edit anything after.
+  function applyExtraction(d: IngestExtraction) {
+    const apply = (key: keyof DealTerms, v: string | null | undefined) => {
+      if (v != null && v !== "") set(key, v);
+    };
+    const num = (n: number | null) => (n != null ? String(n) : null);
+    apply("loan_amount", num(d.loan_amount));
+    apply("purchase_price", num(d.purchase_price ?? d.as_is_value));
+    apply("arv", num(d.arv));
+    apply("rehab_budget", num(d.rehab_budget));
+    apply("borrower_fico", num(d.fico));
+    apply("borrower_name", d.borrower_name);
+    apply("property_address", d.property_addresses?.[0]);
+    // Property state from the first address ("…, Costa Mesa, CA 92627").
+    const st = d.property_addresses?.[0]?.match(/\b([A-Z]{2})\b(?:\s+\d{5})?\s*$/)?.[1];
+    apply("property_state", st);
+    // Map the extractor's enums onto the stepper's allowed values; skip when
+    // there's no clean match (lender picks from the dropdown).
+    const ptMap: Record<string, string> = {
+      sfr: "sfr", condo: "condo", mixed_use: "mixed_use", multifamily: "small_multifamily",
+    };
+    if (d.property_type && ptMap[d.property_type]) set("property_type", ptMap[d.property_type]);
+    const lpMap: Record<string, string> = { purchase: "purchase", refinance: "refinance" };
+    if (d.loan_purpose && lpMap[d.loan_purpose]) set("loan_purpose", lpMap[d.loan_purpose]);
+    const ltMap: Record<string, string> = { construction: "ground_up", bridge: "bridge" };
+    if (d.loan_purpose && ltMap[d.loan_purpose]) set("loan_type", ltMap[d.loan_purpose]);
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -438,6 +471,7 @@ function StepTerms({
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        <DocIngest onExtracted={applyExtraction} />
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="loan_type">Loan type</Label>
