@@ -100,3 +100,51 @@ entity pillar 429s regardless of the new backoff (a vendor-$/queue issue, not a 
 bug); **#23** — AI memo generation; a minor handoff "Litigation & sanctions" info line
 still prints the raw `potential_match` instead of the classified "1 exclusion-list
 (informational)".
+
+## Doc-ingest tested on REAL ICC packages (2026-06-25) — Task 1
+
+Tested `/api/ingest/borrower-doc` end-to-end on the real packages (`scripts/drive-docingest.ts`).
+
+**✅ Extraction quality is strong — the moat path works.** This is the answer to "is
+the doc-ingested underwriting half real?": **yes.**
+- **905 LBJ (signed app PDF, 3.3M):** borrower Evan Shapiro, Evander Co LLC, CA,
+  loan $356,250, sfr/bridge, **+ 2 track-record addresses** (601 Pacific, 2716 6th) —
+  form pre-filled perfectly.
+- **286 Virginia (loan-request, via CSV):** Kafetzopoulos / Achilles Properties LLC,
+  loan $3.4M (80% LTC), purchase $1.75M, ARV $5.67M, rehab $2.5M, FICO 740,
+  construction, **+8 track-record addresses**, notes caught "refinancing existing
+  $1.079M Insignia bridge."
+- **544 Sunset (loan-request, via CSV):** loan **$4,239,490 (exact file match)**,
+  purchase $2.2M, ARV $6.48M, FICO 731 — spot-on.
+
+**🔴 #26 — The 4MB upload cap blocks the real packages.** The actual ICC files are
+5.3M (286 xlsx) / 5.7M (544 xlsx) / 5.8M (812 Tait) / 8.1M (1310 Armadale). All
+return **HTTP 413 "File too large (max 4MB)"** — only the 3.3M PDF fit. The route
+comment names the fix: **signed direct-to-Supabase upload** (like the upload-photo
+route) to bypass Vercel's 4.5MB serverless body cap, then process from storage. This
+is the #1 doc-ingest gap — until fixed, real packages can't be dropped in as-is.
+**(Workaround proven: converting the xlsx → CSV (89KB/41KB) sails through and extracts
+perfectly — so the parser is fine; it's purely the upload transport.)**
+
+**🟡 #27 — "Max 10MB" UI copy** (`doc-ingest.tsx`) contradicts the 4MB API cap — fix
+the copy (or raise the limit via #26).
+
+## Per-persona pass (2026-06-25) — Task 2
+
+Drove `solo@` and `fund@` (`scripts/drive-persona.ts`; `ux-review/{solo,fund}/`).
+- **Solo** ("Spreadsheet Refugee / Solo Lending LLC"): functional, **identical UI/nav
+  to the underwriter** (Borrowers/Deals/Capital/Book). Works, but un-differentiated —
+  a solo operator gets the same Capital/Book surfaces as a team. Low priority.
+- **🔴 #29 — Fund persona gets the WRONG home.** `fund@` ("Fund Mandator / Keystone
+  Capital Partners") lands on the **originator onboarding** screen — "Start here…
+  Validate the borrower / Run your first validation." A capital provider doesn't run
+  borrower validations; their home is the **Mandate Console + cross-originator program
+  view** (the verdict surface). This is the known "make the Fund a first-class
+  citizen" gap (the Fund tenant is unbuilt) — the top persona finding.
+
+**🟡 #28 — Multi-value docs:** a loan request can carry several figures (max-ask vs
+approved loan; pro-forma vs conservative ARV). The AI picks one — 286's loan came
+back $3.4M (80%-LTC max) vs the $3.29M approved, ARV $5.67M vs the $4.615M in our
+golden set. The "review before running" step covers it, but surfacing *which* figure
+(or flagging alternates) would help. Minor; entity_state also came back null from the
+CSVs (present in the PDF).

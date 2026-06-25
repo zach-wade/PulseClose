@@ -62,6 +62,68 @@ The one diligence layer we don't have — turns the AI judgment's
 - **Unblocks when:** a customer's deals hinge on market reads the lender can't
   supply, OR a vendor-cost decision frees ~$500–2,000/mo.
 
+### Land / development enrichment (Damon, ICC call 2026-06-25)
+
+Damon described, for a Texas land/development deal (a 30-50 parcel deal), wanting
+the underwriting to auto-pull the local market read instead of an analyst manually
+pulling ~100 charts per $2M loan: "if the AI is doing it, no additional time, just
+compute." This is a concrete unblock signal for the AVM layer, specifically for the
+Underwriting Workbench **Template 9 (Land / Development)**, whose current field list
+lacks these. Signals + free sources to wire:
+
+- **Local unemployment rate** -> BLS LAUS (county/MSA); sibling BLS QCEW already specced.
+- **Median income** -> Census ACS.
+- **Housing permits + housing starts** coming online next year -> Census Building
+  Permits Survey + New Residential Construction (starts).
+- **Borrower's share of the area pipeline** -> derived metric (borrower units / area
+  pipeline; a calc on top of permits/starts, no vendor supplies it directly).
+- **Absorption rate** of new units -> derived from starts/completions vs sales/occupancy;
+  CoStar/HouseCanary supply MF absorption; for-sale SFR absorption is a calc.
+
+Note: the AI UW Copilot spec already lists the matching **market risk flags** ("oversupply:
+new permits outpacing absorption," "single-employer-town concentration risk") and the
+batch sources (Census permits, BLS employment) - so this is mostly "wire the specced
+sources into Template 9," not net-new design. Insignia already has CoStar access.
+
+**Build-now assessment (2026-06-25):** The usual cost gate doesn't apply — BLS/Census
+APIs are FREE. But this is the *higher-effort* of the two new ideas: per-deal geo
+lookups + the two **derived** metrics (absorption rate, borrower pipeline share) are
+real work, and it only fires on land/Template-9 deals. **Recommend: defer behind the
+macro overlay** (below) — build it when land deal-flow actually shows up, since
+applicability is narrow. Promote to ROADMAP after the macro overlay ships.
+
+## Macro / recession-indicator overlay (Damon, ICC call 2026-06-25) — NEW, no prior home
+
+Distinct from the per-deal AVM read above: a **firm/portfolio-level macro overlay** that
+feeds the "market" and "exit" dimensions of the Module 6 judgment AND the investor
+memo (Module 9 / Deal Summary), so models and LOIs are defensible. Damon's framing:
+"build our own market intelligence" in the style of bond-fund managers - he named
+**Bill Gross and Jeff Gundlach** (and referenced **Michael Burry** and **Aswath
+Damodaran**) - "what are the 3 things they look for" on rates up/down, recession,
+housing oversupply. The point is to put a defensible macro read into investor memos
+without manual chart-pulling.
+
+- **Likely feed (inference - Damon named people, not data series):** FRED (St. Louis
+  Fed) free macro - yield curve / 10Y-2Y spread, high-yield credit spreads (OAS),
+  Fed funds path, CPI/PCE, unemployment trend, Sahm Rule recession signal.
+- **Where it lives:** a macro layer feeding Module 6's market/exit dimensions + the
+  partner/investor memo output; NOT the per-deal property AVM.
+- **Methodology voice already in the Wade Intel orbit:** the DCF tool reconciles to a
+  Damodaran workbook; the Burry methodology pivot landed with Damon on the 5/13
+  advisory - so the vocabulary exists, only the automated macro feed is new.
+- **Unblocks when:** a deal's defensibility (investor memo) hinges on a macro read -
+  the 6/25 ICC call is the first concrete instance.
+
+**Build-now assessment (2026-06-25):** The strongest near-term feature candidate of
+the two. FREE (FRED API), **small** (a handful of series → one macro-context block
+threaded into Module 6's market/exit dimensions + the investor memo), **differentiated**
+(nobody puts a Gundlach/Damodaran-style macro read in a bridge-loan memo), and it
+serves the exact thing Damon asked for — *defensible LOIs/memos* — which is the
+distribution wedge (capital-provider endorsement). NOT a single-deal-type feature
+(applies to every memo). **Recommend: promote to ROADMAP as the next feature AFTER the
+in-flight work** (Cobalt de-rent, doc-ingest 4MB fix, fund-persona home, AI-memo #23).
+Don't start mid-stream — too many open threads — but it's first in line once they clear.
+
 ## Capital-provider "mandate" object (the wedge's missing product surface)
 
 The distribution thesis assumes a fund can *mandate* PulseClose to its
