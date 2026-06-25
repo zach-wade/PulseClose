@@ -7,6 +7,19 @@ interface UserProfile {
   org_id: string;
   full_name: string;
   role: string;
+  /** "originator" (default) | "fund" — drives fund home routing (#29). */
+  org_type: string;
+}
+
+// Resolve an org's type via the admin client (non-sensitive; reliable regardless
+// of RLS). Defaults to "originator" if absent.
+async function fetchOrgType(orgId: string): Promise<string> {
+  const { data } = await createAdminClient()
+    .from("organizations")
+    .select("org_type")
+    .eq("id", orgId)
+    .maybeSingle();
+  return (data as { org_type?: string } | null)?.org_type ?? "originator";
 }
 
 // Reliably gets the authenticated user + their org_id.
@@ -28,7 +41,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
     .single();
 
   if (profile) {
-    return { id: user.id, email: user.email ?? "", org_id: profile.org_id, full_name: profile.full_name ?? "", role: profile.role ?? "owner" };
+    return { id: user.id, email: user.email ?? "", org_id: profile.org_id, full_name: profile.full_name ?? "", role: profile.role ?? "owner", org_type: await fetchOrgType(profile.org_id) };
   }
 
   // Fallback: use admin client to bypass RLS
@@ -40,7 +53,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
     .single();
 
   if (adminProfile) {
-    return { id: user.id, email: user.email ?? "", org_id: adminProfile.org_id, full_name: adminProfile.full_name ?? "", role: adminProfile.role ?? "owner" };
+    return { id: user.id, email: user.email ?? "", org_id: adminProfile.org_id, full_name: adminProfile.full_name ?? "", role: adminProfile.role ?? "owner", org_type: await fetchOrgType(adminProfile.org_id) };
   }
 
   // Profile doesn't exist — auto-create (trigger must have failed)
@@ -68,5 +81,5 @@ export async function getUserProfile(): Promise<UserProfile | null> {
   });
 
   const fullName = meta.full_name || user.email?.split("@")[0] || "User";
-  return { id: user.id, email: user.email ?? "", org_id: newOrg.id, full_name: fullName, role: "owner" };
+  return { id: user.id, email: user.email ?? "", org_id: newOrg.id, full_name: fullName, role: "owner", org_type: "originator" };
 }
