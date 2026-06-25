@@ -54,8 +54,20 @@ Excel/PDF" architecture.
 1. **RentCast in, ATTOM out** — ✅ done, deployed.
 2. **Regrid** — calibration proved the trial is geo-limited; **decide: paid plan or
    retire** (lean on Realie + RentCast). Open.
-3. **Cobalt contractor API** — ⏳ **front-end "no coverage" warning SHIPPED**
-   (2026-06-24); the API swap is **vendor-$ blocked**. Verified live this session:
+3. **GC validation — DECISION UPDATED (deep-research 2026-06-24, see
+   [RESEARCH-GC-VALIDATION.md](RESEARCH-GC-VALIDATION.md)).** Don't pay for
+   Cobalt's contractor API — it's CA/TX/NY/FL only, and TX/NY have **no
+   statewide GC license** to verify (oversight is municipal), so it overlaps
+   states we can bulk-ingest for free (CA/FL) or that don't have the credential.
+   **The durable path is bulk-data ingest**: WA L&I (Socrata + CSV, PDDL public
+   domain, 3×/day), OR CCB (daily Excel/open-data), FL DBPR (weekly CSV), and
+   **migrate CA off the CSLB scrape onto the CSLB master-list download**. Build
+   a `contractor_licenses` table + per-source refresh scripts + point `lookupGC`
+   at it. Smarter no-coverage messaging (TX/NY/PA = "no statewide license", vs
+   WA/OR/FL = "ingest pending") SHIPPED. *Cobalt finding retained below for the
+   record.*
+
+   ~~Cobalt contractor API~~ — superseded by the above. Verified live: endpoint
    - **Endpoint:** `GET https://apigateway.cobaltintelligence.com/contractorSearch?licenseNumber=&state=&callbackUrl=`
      with `x-api-key` (note: **no `/v1` prefix**, unlike `/search`).
    - **States:** CA, FL, TX, NY, OR. **License NUMBER required** (not name).

@@ -46,9 +46,10 @@ export function getPropertyDataSource(): string {
 // re-export for server callers that import from the adapters index.
 export {
   GC_AUTOMATED_STATES,
-  GC_COBALT_PENDING_STATES,
+  GC_BULK_INGEST_STATES,
+  GC_NO_STATEWIDE_LICENSE_STATES,
   isGCStateAutomated,
-  isGCStateCobaltPending,
+  gcCoverage,
 } from "./gc-coverage";
 
 // Helper: detect which data source was used for GC lookup
