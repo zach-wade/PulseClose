@@ -153,7 +153,7 @@ export async function POST(
     const mediaType = asMimeFromExt(file.name, file.type);
     try {
       const response = await client.messages.create({
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-sonnet-4-6",
         // 4096 per ROADMAP principle 11 (truncation defense). The
         // verdict + notes shape is short but giving headroom is cheap.
         max_tokens: 4096,

@@ -9,7 +9,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-export const INVESTOR_EXTRACT_MODEL = "claude-sonnet-4-5-20250929";
+export const INVESTOR_EXTRACT_MODEL = "claude-sonnet-4-6";
 
 // Known criteria keys the engine actually consumes. Lifted from
 // src/lib/schemas/jsonb.ts criteriaShapeByKey — keep in sync if that
