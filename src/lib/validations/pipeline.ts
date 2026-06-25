@@ -49,6 +49,7 @@ import { regenerateAiMemoForValidation } from "@/lib/ai/regenerate";
 import { dispatchWebhookEvent } from "@/lib/webhooks/deliver";
 import { assessValidationMandates } from "@/lib/mandates/assess";
 import { lookupContractorFromDb } from "@/lib/gc/lookup";
+import { lookupEntityCached } from "@/lib/sos/lookup";
 
 const APP_BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.pulseclose.com";
 
@@ -253,7 +254,9 @@ export async function runValidationPipeline(
     };
 
     const [entityResult, properties, litigationResults, gcResult] = await Promise.all([
-      adapter.lookupEntity({ entity_name: borrower_entity_name, state: entity_state }),
+      // DB-first: hits the shared sos_entities cache / bulk-ingested rows before
+      // paying Cobalt (de-rent, #1). Caches resolved live results for reuse.
+      lookupEntityCached(supabase, adapter, { entity_name: borrower_entity_name, state: entity_state }),
       adapter.searchProperties({ borrower_name, entity_name: borrower_entity_name, state: entity_state }),
       adapter.searchLitigation({ entity_name: borrower_entity_name, borrower_name, known_states: knownStates }),
       resolveGc(),
