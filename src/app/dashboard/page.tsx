@@ -32,6 +32,7 @@ import {
 import { useRouter } from "next/navigation";
 import { GCStatusChip, type GCSummaryView } from "@/components/dashboard/gc-status-chip";
 import { UsageMeter } from "@/components/dashboard/usage-meter";
+import { createClient } from "@/lib/supabase/client";
 
 interface Validation {
   id: string;
@@ -116,6 +117,10 @@ function buildValidationsCsv(rows: Validation[]): string {
 export default function DashboardPage() {
   const [validations, setValidations] = useState<Validation[]>([]);
   const [loading, setLoading] = useState(true);
+  // A FUND / capital provider's home is the Mandate Console, not the originator
+  // "run your first validation" onboarding (#29). Gate render on this check so
+  // funds never flash the wrong screen.
+  const [redirecting, setRedirecting] = useState(true);
   // Distinguish "no validations exist yet" from "the API failed to load".
   // Without this, both render as the empty state and a real outage looks
   // like a fresh tenant during a live demo.
@@ -136,6 +141,26 @@ export default function DashboardPage() {
       return [...prev, id];
     });
   }
+
+  // Route funds to the Mandate Console before rendering the originator home (#29).
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const supabase = createClient();
+        // organizations RLS scopes this to the caller's own org.
+        const { data } = await supabase.from("organizations").select("org_type").limit(1).maybeSingle();
+        if (active && (data as { org_type?: string } | null)?.org_type === "fund") {
+          router.replace("/dashboard/capital/mandates");
+          return; // keep `redirecting` true so the originator home never paints
+        }
+      } catch {
+        // On any error, fall through to the normal originator home.
+      }
+      if (active) setRedirecting(false);
+    })();
+    return () => { active = false; };
+  }, [router]);
 
   useEffect(() => {
     async function load() {
@@ -231,6 +256,17 @@ export default function DashboardPage() {
     { label: "Flagged", value: flagged, icon: AlertTriangle, color: "text-amber-500" },
     { label: "Pending", value: pending, icon: Clock, color: "text-muted-foreground" },
   ];
+
+  // Hold the render while we check org_type — a fund is being redirected to the
+  // Mandate Console and must never see the originator home (#29).
+  if (redirecting) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
