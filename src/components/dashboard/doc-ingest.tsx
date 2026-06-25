@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileUp, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export interface IngestExtraction {
   borrower_name: string | null;
@@ -42,12 +43,33 @@ export function DocIngest({ onExtracted }: Props) {
     setError(null);
     setLastFileName(file.name);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/ingest/borrower-doc", { method: "POST", body: fd });
+      // Upload the file STRAIGHT to Supabase Storage from the browser — this
+      // bypasses Vercel's ~4.5MB serverless body cap, so real loan packages
+      // (5–8MB) and appraisals go through. The API then reads it from storage.
+      // (Finding #26.)
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Not signed in");
+
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
+      const storagePath = `ingest-tmp/${userId}/${crypto.randomUUID()}-${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from("documents")
+        .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
+      if (upErr) {
+        // Bucket size-limit and similar surface here with a clear message.
+        throw new Error(`Upload failed: ${upErr.message}`);
+      }
+
+      const res = await fetch("/api/ingest/borrower-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storage_path: storagePath, filename: file.name, content_type: file.type }),
+      });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `Upload failed (${res.status})`);
+        throw new Error(body?.error ?? `Extraction failed (${res.status})`);
       }
       const json = (await res.json()) as IngestExtraction;
       onExtracted(json);
@@ -83,7 +105,7 @@ export function DocIngest({ onExtracted }: Props) {
               Skip the form — drop a borrower intake PDF, Excel, or CSV
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Claude reads the file and pre-fills the borrower / entity / GC fields below. You review before running. (Max 10MB.)
+              Claude reads the file and pre-fills the borrower / entity / GC fields below. You review before running. (PDF, Excel, or CSV — up to 50MB.)
             </p>
             {lastFileName && !error && !busy && (
               <p className="text-xs mt-1.5 flex items-center gap-1 text-emerald-700">

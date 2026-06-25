@@ -7,16 +7,25 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import ExcelJS from "exceljs";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { AiDisabledError, requireAiEnabled } from "@/lib/ai/check-enabled";
 import { scrubPii } from "@/lib/ai/redact-pii";
 
 export const maxDuration = 60;
 
-// Vercel App Router caps request bodies at 4.5MB by default; values
-// above that are unreachable. See upload-photo route for the path to
-// raise this (signed direct-to-Supabase upload).
-const MAX_BYTES = 4 * 1024 * 1024;
+// Two upload paths:
+//  - Multipart (legacy / small files): the file rides in the request body,
+//    which Vercel caps at ~4.5MB — so MULTIPART_MAX stays under that.
+//  - storage_path (direct-to-Supabase): the browser uploads straight to the
+//    documents bucket (bounded by the bucket's 50MB limit, not Vercel), then
+//    sends just the path here. The server reads it via the admin client. This
+//    is how real ICC packages (5–8MB) + appraisals get in (finding #26).
+const MULTIPART_MAX = 4 * 1024 * 1024;
+// Claude's PDF request cap is 32MB; base64 inflates ~33%, so guard the raw
+// buffer well under that. xlsx/csv convert to text, so size is irrelevant there.
+const CLAUDE_PDF_MAX = 24 * 1024 * 1024;
+const STORAGE_BUCKET = "documents";
 const SUPPORTED = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -146,23 +155,68 @@ export async function POST(request: Request) {
     throw err;
   }
 
-  const form = await request.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: `File too large (max ${MAX_BYTES / 1024 / 1024}MB)` }, { status: 413 });
-  }
-  if (file.type && !SUPPORTED.has(file.type) && !file.name.match(/\.(pdf|xlsx?|csv|txt)$/i)) {
-    return NextResponse.json({ error: `Unsupported file type: ${file.type || file.name}` }, { status: 415 });
+  // Acquire the file via whichever path the client used. JSON body with a
+  // storage_path = the direct-to-Supabase upload (real packages); multipart
+  // form = the legacy small-file path.
+  let buffer: Buffer;
+  let fileName: string;
+  let fileType: string;
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json().catch(() => null)) as { storage_path?: string; filename?: string; content_type?: string } | null;
+    const storagePath = body?.storage_path;
+    if (!storagePath) {
+      return NextResponse.json({ error: "No storage_path provided" }, { status: 400 });
+    }
+    // IDOR defense: the path must live under THIS user's ingest prefix. The
+    // browser uploads to `ingest-tmp/{user_id}/...`; reject anything else so a
+    // user can't point the admin reader at another user's/org's objects.
+    if (!storagePath.startsWith(`ingest-tmp/${profile.id}/`)) {
+      return NextResponse.json({ error: "Invalid storage path" }, { status: 403 });
+    }
+    const admin = createAdminClient();
+    const { data, error } = await admin.storage.from(STORAGE_BUCKET).download(storagePath);
+    // Read into memory, then delete the temp object immediately — we never need
+    // it again, so there's no cleanup to thread through the later return paths.
+    void admin.storage.from(STORAGE_BUCKET).remove([storagePath]);
+    if (error || !data) {
+      return NextResponse.json({ error: `Could not read uploaded file: ${error?.message ?? "not found"}` }, { status: 404 });
+    }
+    buffer = Buffer.from(await data.arrayBuffer());
+    fileName = body?.filename ?? "upload";
+    fileType = body?.content_type ?? data.type ?? "";
+  } else {
+    const form = await request.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
+    if (file.size > MULTIPART_MAX) {
+      return NextResponse.json({ error: `File too large for direct upload (max ${MULTIPART_MAX / 1024 / 1024}MB) — use the drop zone, which uploads larger files to storage.` }, { status: 413 });
+    }
+    buffer = Buffer.from(await file.arrayBuffer());
+    fileName = file.name;
+    fileType = file.type;
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  const isExcel = /\.xlsx?$/i.test(file.name) || file.type.includes("spreadsheet") || file.type.includes("ms-excel");
-  const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
-  const isText = file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
+  if (fileType && !SUPPORTED.has(fileType) && !fileName.match(/\.(pdf|xlsx?|csv|txt)$/i)) {
+    return NextResponse.json({ error: `Unsupported file type: ${fileType || fileName}` }, { status: 415 });
+  }
+
+  const isPdf = fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+  const isExcel = /\.xlsx?$/i.test(fileName) || fileType.includes("spreadsheet") || fileType.includes("ms-excel");
+  const isCsv = /\.csv$/i.test(fileName) || fileType === "text/csv";
+  const isText = fileType === "text/plain" || fileName.toLowerCase().endsWith(".txt");
+
+  // Claude caps PDFs at 32MB/request; guard the raw buffer. (xlsx/csv become
+  // text, so they're exempt.)
+  if (isPdf && buffer.length > CLAUDE_PDF_MAX) {
+    return NextResponse.json(
+      { error: `PDF too large for AI extraction (${(buffer.length / 1024 / 1024).toFixed(0)}MB; max ${CLAUDE_PDF_MAX / 1024 / 1024}MB). Split it, or upload the loan-request spreadsheet instead.` },
+      { status: 413 },
+    );
+  }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -195,7 +249,7 @@ export async function POST(request: Request) {
 
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-sonnet-4-6",
       // 4096 fits ~50 addresses + the rest of the shape comfortably.
       // Was 1024 — too tight for real intake xlsxs (Truong's has 50+ rows
       // across Active/Track-Record/Re-Writes sheets) which cut JSON
