@@ -15,159 +15,7 @@
 
 import { getAdapter, getPropertyDataSource, getGCDataSource } from "../src/lib/adapters";
 import { enrichPropertiesWithRentcast } from "../src/lib/adapters/rentcast";
-
-// ── Golden cases: ground truth from the real loan files ─────────────────────
-interface GoldenCase {
-  loan_id: string;
-  // intake inputs (what we'd feed the pipeline)
-  borrower_name: string;
-  entity_name: string | null; // vesting LLC — null if not captured at intake
-  entity_state: string;
-  guarantor_name?: string | null;
-  property_address: string;
-  property_state: string;
-  gc_name?: string | null;
-  gc_state?: string | null;
-  // ground truth from the file (to diff against)
-  truth: {
-    as_is_value?: number;
-    arv?: number;
-    rehab_budget?: number;
-    loan_amount?: number;
-    fico?: number;
-    loan_purpose?: string;
-    property_type?: string;
-  };
-}
-
-const GOLDEN: GoldenCase[] = [
-  {
-    loan_id: "10228",
-    borrower_name: "Mark Morrison",
-    entity_name: null, // borrowerType=LLC but the vesting entity name isn't in the structure fields → GAP
-    entity_state: "CA",
-    guarantor_name: "Mark Morrison",
-    property_address: "2290 Newgate Ct, Santa Rosa, CA 95404",
-    property_state: "CA",
-    gc_name: null, // heavy rehab ($2.1M) implies a GC, but no GC name captured → GAP
-    gc_state: "CA",
-    truth: {
-      as_is_value: 550_000,
-      arv: 2_850_000,
-      rehab_budget: 2_114_441,
-      loan_amount: 2_473_970,
-      fico: 640,
-      loan_purpose: "refinance",
-      property_type: "sfr",
-    },
-  },
-
-  // ── Distinctive-name contrast cases ──────────────────────────────────────
-  // All five below have UNCOMMON names. They prove the disambiguation layer
-  // doesn't over-suppress: a clean borrower should return few/zero screening
-  // false positives, NOT get everything buried under "possible — review".
-  // Ground truth pulled from the Nexys audit logs (10287/10294/10295) and the
-  // ICC loan-request packages (286 Virginia, 544 Sunset) in the real trove.
-
-  {
-    // Audit log 10287 — luxury SFR, MA. Distinctive surname.
-    loan_id: "10287",
-    borrower_name: "Christopher Soverns",
-    entity_name: "14 Trapps Pond LLC",
-    entity_state: "MA",
-    guarantor_name: "Christopher Soverns",
-    property_address: "14 Trapps Pond Rd, Edgartown, MA 02539",
-    property_state: "MA",
-    gc_name: null,
-    gc_state: "MA",
-    truth: {
-      as_is_value: 9_750_000,
-      loan_amount: 6_630_000,
-      fico: 775,
-      property_type: "sfr",
-    },
-  },
-  {
-    // Audit log 10294 — non-warrantable condo, Big Sky MT; entity DE-domiciled,
-    // first-time investor (0 transactions). Distinctive full name w/ middle.
-    loan_id: "10294",
-    borrower_name: "Prashant Bhuyan",
-    entity_name: "MKRP Holdings LLC",
-    entity_state: "DE",
-    guarantor_name: "Prashant Bhuyan",
-    property_address: "237 W Golf Course Dr #7033, Big Sky, MT 59716",
-    property_state: "MT",
-    gc_name: null,
-    gc_state: "MT",
-    truth: {
-      as_is_value: 7_950_000,
-      loan_amount: 5_168_146,
-      fico: 771,
-      loan_purpose: "purchase",
-      property_type: "condo",
-    },
-  },
-  {
-    // Audit log 10295 — SFR, West LA. Entity not captured at intake (GAP).
-    loan_id: "10295",
-    borrower_name: "Iyad Duwaji",
-    entity_name: null,
-    entity_state: "CA",
-    guarantor_name: "Iyad Duwaji",
-    property_address: "2747 Glendon Ave, Rancho Park, CA 90064",
-    property_state: "CA",
-    gc_name: null,
-    gc_state: "CA",
-    truth: {
-      as_is_value: 2_658_000,
-      loan_amount: 675_000,
-      property_type: "sfr",
-    },
-  },
-  {
-    // ICC package — 286 Virginia Pl: ground-up SFR, Eastside Costa Mesa.
-    // Entity borrower + individual guarantor (distinctive).
-    loan_id: "286-virginia",
-    borrower_name: "Nik Kafetzopoulos",
-    entity_name: "Achilles Properties LLC",
-    entity_state: "CA",
-    guarantor_name: "Nik Kafetzopoulos",
-    property_address: "286 Virginia Pl, Costa Mesa, CA 92627",
-    property_state: "CA",
-    gc_name: null,
-    gc_state: "CA",
-    truth: {
-      as_is_value: 1_750_000, // land cost basis
-      arv: 4_615_000,
-      rehab_budget: 2_500_000, // construction budget
-      loan_amount: 3_292_938,
-      fico: 740,
-      loan_purpose: "construction",
-      property_type: "sfr",
-    },
-  },
-  {
-    // ICC package — 544 Sunset Ave, Venice CA. GUC/refi construction.
-    loan_id: "544-sunset",
-    borrower_name: "Thomas Series",
-    entity_name: null, // borrower/guarantor listed as a person; vesting entity not in package fields
-    entity_state: "CA",
-    guarantor_name: "Thomas Series",
-    property_address: "544 Sunset Ave, Venice, CA 90291",
-    property_state: "CA",
-    gc_name: null,
-    gc_state: "CA",
-    truth: {
-      as_is_value: 2_200_000, // purchase price
-      arv: 6_480_000,
-      rehab_budget: 2_560_725, // direct building cost remaining
-      loan_amount: 4_239_490,
-      fico: 731,
-      loan_purpose: "construction",
-      property_type: "sfr",
-    },
-  },
-];
+import { GOLDEN, type GoldenCase } from "./golden-loans";
 
 const usd = (n: number | null | undefined) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 const GAP = "⛔ GAP";
@@ -220,12 +68,17 @@ async function calibrate(g: GoldenCase) {
 
   // ── ③ Litigation (CourtListener — FEDERAL ONLY) ──
   const lit = await adapter.searchLitigation({ entity_name: g.entity_name ?? g.borrower_name, borrower_name: g.borrower_name, known_states: [g.property_state].filter(Boolean) as string[] });
+  const litIncomplete = lit.some((l) => l.result === "not_run");
   const found = lit.filter((l) => l.result === "found");
   const confirmed = found.filter((l) => l.confidence === "confirmed").length;
   const toReview = found.filter((l) => l.confidence === "possible" || l.confidence === "probable").length;
   const weak = found.filter((l) => l.confidence === "weak").length;
-  console.log(`③ LITIGATION  ${found.length} federal record(s) for "${g.borrower_name}" — ${confirmed} confirmed · ${toReview} possible/review · ${weak} unlikely (not the named party) (CourtListener = FEDERAL only)`);
-  if (toReview > 0 && confirmed === 0) console.log(`             → ${toReview} possible ${toReview === 1 ? "match" : "matches"} — review; ${weak} caption non-matches filtered to "unlikely" (disambiguation working).`);
+  if (litIncomplete) {
+    console.log(`③ LITIGATION  ${PARTIAL} SCREEN INCOMPLETE (not_run) — rate-limited/upstream error; NOT presented as clear (finding #13 fix). ${found.length} partial record(s).`);
+  } else {
+    console.log(`③ LITIGATION  ${found.length} federal record(s) for "${g.borrower_name}" — ${confirmed} confirmed · ${toReview} possible/review · ${weak} unlikely (not the named party) (CourtListener = FEDERAL only)`);
+    if (toReview > 0 && confirmed === 0) console.log(`             → ${toReview} possible ${toReview === 1 ? "match" : "matches"} — review; ${weak} caption non-matches filtered to "unlikely" (disambiguation working).`);
+  }
   gaps.push("Litigation: CourtListener is federal-only — NO state-court judgments/liens (TLOxp/LexisNexis would fill, FCRA-gated).");
 
   // ── ④ GC (CSLB / Cobalt contractor) ──

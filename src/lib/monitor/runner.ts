@@ -252,7 +252,13 @@ export async function runSubscription(
       );
     }
     if (process.env.COURTLISTENER_API_TOKEN) cost_cents += 1000;
-    adapter_results.litigation = { status: "ok" };
+    // The adapter no longer throws on a rate-limit — it returns a "not_run"
+    // sentinel. Reflect that as rate_limited rather than falsely reporting "ok"
+    // (finding #13).
+    const litNotRun = litigationResults.find((l) => l.result === "not_run");
+    adapter_results.litigation = litNotRun
+      ? { status: "rate_limited", error: litNotRun.details ?? "Litigation screen incomplete" }
+      : { status: "ok" };
 
     // Re-materialize litigation_cases for the case-card UI now that fresh
     // litigation_checks rows landed. Idempotent — same (validation_id,

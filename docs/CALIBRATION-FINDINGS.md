@@ -133,3 +133,110 @@ loud only on the common one:
 
 **Still queued for the golden set:** 905 N LBJ Dr (signed 1003), 812 Tait St,
 1518 Dolphin Ter (#8008173) — not yet located in the trove.
+
+## Re-run (2026-06-25) — post-disambiguation/doc-ingest/GC, new failure-mode finding
+
+Re-ran the 6-loan `GOLDEN[]` set. The disambiguation findings (#7–#12) all held
+exactly: 10228 Mark Morrison → 1 possible + 19 unlikely litigation, 0 sanctions/PEP
++ 5 exclusion-list (COMMON NAME); distinctive names calm (clear / 1-2 possible /
+weak); 286 Virginia track record still resolves ($830k→$1.75M, $920k profit, flip).
+**The trust-killer fix is stable.** One new gap surfaced:
+
+13. **✅ FIXED (2026-06-25) — A failed check is indistinguishable from a clean
+    check — and litigation *rewarded* the failure.** Hammered sequentially, this run tripped **Cobalt 429**
+    (entity → surfaced as `not_found` on Soverns/Bhuyan/Kafetzopoulos) and
+    **CourtListener 429** (litigation → surfaced as `0 records` on
+    Duwaji/Kafetzopoulos/Series). In the harness that's just rate-limit noise, but
+    it exposes a production trust bug: the pipeline can't tell "ran and found
+    nothing" from "never ran."
+    - **Litigation** (`courtlistener.ts:205`) swallows the 429 in a per-name
+      try/catch and returns `[]` — **no error sentinel**. The pipeline then *adds*
+      `+10` confidence (`activeLitigation.length === 0`, `pipeline.ts:585`) and keeps
+      `overallStatus: "verified"`. **A check that never completed reads as — and
+      scores as — a passed check.** This is a direct violation of Noah's "can't
+      trust the output without the inputs."
+    - **Entity** carries an `_error` sentinel (`cobalt.ts:327`) and the pipeline
+      respects it (`pipeline.ts:566`, suppresses the borrower-link warning), but the
+      *surfaced* status is still `not_found` — which reads to a reviewer as "this LLC
+      doesn't exist in SOS," a false claim on a 429.
+    - **Sanctions already does this right** (`ofac.ts:256`): a total failure returns
+      `result: "not_run"` + `_error: true` — a distinct, honest state. **That's the
+      pattern litigation + entity should mirror.**
+    - **Track record** also returns `[]` on a both-source failure (Realie 404 +
+      Regrid 403) with no sentinel — less of a false "clean" (empty ≈ "no record"),
+      but still ambiguous to a reviewer.
+    **Fix (days, not weeks — pattern already exists in sanctions):** give litigation
+    a `not_run`/incomplete state when *any* name search fails (track per-name
+    completion, not just per-name results); never add the +10 "no litigation"
+    confidence when the screen was incomplete; set `overallStatus` to reflect
+    "incomplete," not "verified"; surface "litigation screen did not complete —
+    re-run" in the UI instead of "no records found." Same for entity: distinguish
+    `not_found` (ran, absent) from `unavailable` (failed). The harness should also
+    space its vendor calls so a real 429 doesn't mask a real result.
+    **Resolution:** litigation now emits a `not_run` sentinel on an incomplete
+    screen (`LitigationRecord.result` gained `"not_run"`; migration 00048 extends
+    the `litigation_checks` CHECK; CourtListener tracks per-name `failedNames`; the
+    Cobalt wrapper emits the sentinel instead of fake "clear"/stub rows). The
+    pipeline withholds the +10 "no litigation" confidence bonus on an incomplete
+    screen, forces `overall_status` to at least `partial`, and pushes an
+    `input_warning` ("…do not treat the borrower as litigation-clear"). Entity +
+    sanctions `not_run` get the same warning treatment. The litigation UI shows a
+    **"Did not complete"** badge + re-run copy; the monitor reports `rate_limited`
+    (not `ok`); the AI memo is told an incomplete screen ≠ clear. **Verified live:**
+    the harness's 429'd loans now print "SCREEN INCOMPLETE (not_run)" instead of
+    "0 records." (Per-name failure in the *deterministic* engine is unaffected —
+    this is the diligence layer.)
+
+## Field-by-field fidelity score (2026-06-25) — engine vs. real ICC outcomes
+
+Built the second half of the calibration loop: `scripts/fidelity-score.ts` runs the
+**deterministic sizing engine** (`src/lib/underwriting/sizing.ts`) against each
+loan's actual approved amount, and `scripts/golden-loans.ts` now holds the shared
+golden set (both harnesses import it — no drift). Added **3 real loans** from the
+trove, extending coverage to a **TX property** (905-lbj), the **first multifamily +
+a real named GC** (812-tait, Arias General Construction), and a **post-close
+construction package** (1310-armadale).
+
+**The reframe that makes the score meaningful:** the engine sizes the MAX
+SUPPORTABLE loan; the file gives the ACTUAL approved loan. So fidelity is (1) the
+IMPLIED LEVERAGE of each actual loan — which reveals ICC's real buy-box — and (2)
+whether the actual sits within a standard buy-box. `actual > engine max` = ICC ran
+hotter; `actual << engine max` = borrower under-requested (not an engine error).
+
+**Results @ buy-box LTV 75% / LTC 80% / LTARV 70%:** 3/8 sizable loans within, 1
+under-requested, 4 "exceed" — and **every "exceed" is a data/classification issue,
+not an engine math error.** The engine reproduces the human cleanly where the data
+is clean: 286-virginia **+2%** (construction, LTARV-bound), 10287 −9% / 10294 −13%
+(LTV-bound bridges). Implied leverage across the set: **LTV avg 69%, LTC avg 83%,
+LTARV avg 73% (max 87%)** — that IS ICC's real policy.
+
+14. **🟠 Loan-type classification can't trust the stated purpose.** Loan 10228 is
+    tagged "refinance" but rehab ($2.1M) is ~4× the as-is ($550k) — it's really a
+    ground-up/teardown, and an as-is LTV cap on it is meaningless (computed 450%
+    before the fix). The fidelity score now keys off the *economics*
+    (`rehab >= as-is` → ground-up, skip as-is LTV), not the label. **The product's
+    sizing UX needs the same rule:** infer the governing basis from the numbers,
+    don't let the user's "purpose" dropdown pick the wrong constraint set.
+15. **🟠 ICC's construction leverage runs hotter than a textbook 80% LTC, and is
+    really LTARV-governed.** 544-sunset sized to LTC 89% (vs 80% buy-box) but LTARV
+    is a comfortable 65%; 286-virginia ran LTARV 71%. On completed/near-complete
+    builds the binding constraint ICC actually uses is **LTARV (~70%), with LTC as a
+    loose secondary (~85–90%)** — not the other way round. This is what the queued
+    **governing-assumption picker** is for: let construction deals size LTARV-primary.
+16. **🟠 Partially-complete projects break cost-basis sizing.** 812-tait shows LTV
+    118% / LTC 116% — pure artifacts: the file's "rehab" is the $143k *cost-to-
+    complete*, but ~$3.3M was already spent, so the true basis is ~$9.9M. The only
+    honest constraint is **LTARV 66.9% — dead within policy** (matches the OM's
+    stated 66.87%). Sizing needs a **"total project basis incl. spent-to-date"**
+    input for refi-of-in-progress deals, or it must fall back to LTARV-only.
+17. **🔴 The application / closed-doc package alone is insufficient sizing truth —
+    the appraisal/UW file is required.** 1310-armadale (post-close package) carries
+    no as-is/ARV/FICO; 905-lbj (signed 1003) states no purchase price/as-is/FICO.
+    Both are "insufficient truth to size" or distorted (Armadale LTC 129% on a
+    missing basis). **Confirms doc-ingest must target the underwriting package
+    (appraisal + term sheet), not just the borrower application.**
+
+**Next on the fidelity score:** tune `BUY_BOX` to ICC's implied policy (LTARV-primary
+for construction), add a total-basis input for in-progress refis, and — when the
+audit logs expose it — diff the engine's TIER and investor PLACEMENT against the
+file's actual, not just the loan amount.

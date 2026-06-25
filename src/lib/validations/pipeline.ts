@@ -531,7 +531,34 @@ export async function runValidationPipeline(
     );
     const sanctionsHit = sanctionsResult.result === "potential_match";
 
+    // Finding #13 — a check that could not COMPLETE must never read as, or score
+    // as, a clean check. Litigation now emits a "not_run" sentinel on an
+    // incomplete screen; entity carries an _error flag; sanctions has its own
+    // "not_run". Collect those so we withhold the clean-result confidence bonuses
+    // and force the overall status to reflect the incompleteness.
+    const litigationIncomplete = litigationResults.some((l) => l.result === "not_run");
+    const entityUnavailable = Boolean(
+      (entityResult.raw_response as { _error?: boolean } | null)?._error,
+    );
+    const sanctionsNotRun = sanctionsResult.result === "not_run";
+
     const inputWarnings: string[] = [];
+    if (litigationIncomplete) {
+      const note = litigationResults.find((l) => l.result === "not_run")?.details;
+      inputWarnings.push(
+        note ?? "Litigation screen did not complete (rate-limited or upstream error). Re-run to complete it — do not treat the borrower as litigation-clear.",
+      );
+    }
+    if (entityUnavailable) {
+      inputWarnings.push(
+        `Entity/SOS lookup for "${entityResult.entity_name}" did not complete (upstream error) — this is not a confirmation the entity is absent. Re-run to verify.`,
+      );
+    }
+    if (sanctionsNotRun) {
+      inputWarnings.push(
+        "Sanctions/PEP screen did not complete (upstream error). Re-run to complete it — the borrower is not screened-clear.",
+      );
+    }
     const looksLikeEntity = /\b(LLC|L\.L\.C|Inc|Incorporated|Corp|Corporation|Ltd|Limited|LP|LLP|Trust|Co|Company)\b\.?/i.test(borrower_name);
     if (looksLikeEntity) {
       inputWarnings.push(
@@ -576,7 +603,12 @@ export async function runValidationPipeline(
       activeLitigation.length > 0 ||
       sanctionsHit ||
       (gcResult && gcResult.license_status !== "active");
-    const hasInfoFlags = entityResult.flags.length > 0 || dismissedLitigation.length > 0;
+    // An incomplete check is not a clean result — it can't make a borrower
+    // "verified". Treat incompleteness as an info-level reason to drop to
+    // "partial" (needs attention / re-run) when nothing more severe is flagged.
+    const hasIncompleteChecks = litigationIncomplete || entityUnavailable || sanctionsNotRun;
+    const hasInfoFlags =
+      entityResult.flags.length > 0 || dismissedLitigation.length > 0 || hasIncompleteChecks;
     const overallStatus = hasActiveFlags ? "flagged" : hasInfoFlags ? "partial" : "verified";
 
     let confidenceScore = 50;
@@ -584,7 +616,9 @@ export async function runValidationPipeline(
     if (projectCount >= 10) confidenceScore += 20;
     else if (projectCount >= 5) confidenceScore += 15;
     else if (projectCount >= 1) confidenceScore += 10;
-    if (activeLitigation.length === 0) confidenceScore += 10;
+    // Only reward "no litigation" when the screen actually COMPLETED — an
+    // incomplete screen is not evidence of a clean borrower (finding #13).
+    if (!litigationIncomplete && activeLitigation.length === 0) confidenceScore += 10;
     if (!gcResult || gcResult.license_status === "active") confidenceScore += 5;
     if (sanctionsResult.result === "clear") confidenceScore += 5;
     if (entityResult.sos_status === "suspended" || entityResult.sos_status === "dissolved") confidenceScore -= 20;

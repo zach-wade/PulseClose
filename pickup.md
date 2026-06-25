@@ -34,7 +34,8 @@ Two realities, now much closer together:
   trust-killer (common-name false positives) is fixed at the source; the
   underwriting package is ingestible; GC validation spans 5 states on real data.
 
-Everything below is **live on `main`, deployed green**; migrations **00001–00047**;
+Everything below is **live on `main`, deployed green**; migrations **00001–00048**
+(00048 = litigation `not_run`, ⚠️ not yet pushed — deploy with the #13 fix);
 `npm run build` clean; `npx tsx scripts/verify-underwriting-engine.ts` +
 `npx tsx scripts/test-disambiguation.ts` (26 assertions) pass.
 
@@ -81,22 +82,32 @@ through the harness, then (B) actually walk a few real loans through the product
 UI to see the screens, the UX, and the real data — not the seeded demo.**
 
 ### A. Harness: re-run + loop more real loans, hunt new issues
-1. **Re-run the harness** to see the improved picture post-disambiguation/doc-ingest/GC:
-   `set -a; source .env.local; set +a; npx tsx scripts/calibrate-loan.ts`
-   The `GOLDEN[]` set has 6 loans (10228 Mark Morrison, 10287 Soverns, 10294
-   Bhuyan, 10295 Duwaji, 286-virginia Kafetzopoulos, 544-sunset Thomas Series).
-2. **Add more real loans** to `GOLDEN[]` from the trove and look for NEW gaps —
-   especially non-CA states now that GC spans WA/OR/FL/VA, and entity/track-record
-   behavior. Still queued from the file list: **905 N LBJ Dr** (signed 1003),
-   812 Tait St, 1518 Dolphin Ter (#8008173).
-3. **Build the field-by-field fidelity score** (still undone): for each loan, diff
-   what the pipeline produced (sizing, tier, investor placement) vs the file's
-   ACTUAL outcome (Nexys audit log / loan request). This turns "we ran it" into
-   "here's where we matched the human and where we didn't" — the real calibration
-   metric.
+**Done this session (2026-06-25):** re-ran the harness (disambiguation #7–#12 all
+hold — trust-killer stable); **added 3 real loans** (905-lbj TX, 812-tait MFR+GC,
+1310-armadale construction); **built the field-by-field fidelity score**. New
+findings #13–#17 logged in CALIBRATION-FINDINGS.md. **Golden set refactored into
+`scripts/golden-loans.ts`** (shared by both harnesses — no drift).
+
+1. ✅ **Re-ran the harness** + ✅ **FIXED finding #13** (the top trust bug): a
+   failed check (429) was indistinguishable from a clean check and litigation
+   *rewarded* it with +10 confidence. Now litigation emits a `not_run` sentinel
+   (migration **00048**), the pipeline withholds the bonus + drops to `partial` +
+   warns, the UI shows a "Did not complete" badge, the monitor reports
+   `rate_limited`, and the AI memo is told incomplete ≠ clear. Verified live: 429'd
+   loans now print "SCREEN INCOMPLETE." **⚠️ Migration 00048 must deploy WITH the
+   code** (a `not_run` insert needs the expanded CHECK or it throws).
+2. ◐ **Added 3 loans** (now 9 in `GOLDEN[]`). Still queued: 1518 Dolphin Ter
+   (#8008173, draw emails only — thin). Keep adding non-CA + MFR as the trove yields.
+3. ✅ **Field-by-field fidelity score built** (`scripts/fidelity-score.ts`):
+   `npx tsx scripts/fidelity-score.ts`. Engine reproduces the human on clean deals
+   (286-virginia +2%, LTV bridges −9/−13%); the 4 "exceeds" are all data/
+   classification issues (#14–#17), not engine math. Implied ICC buy-box: **LTV ~69%,
+   LTC ~83%, LTARV ~73%**. NEXT: tune `BUY_BOX` to that; add total-basis input for
+   in-progress refis; diff TIER + investor PLACEMENT (not just loan $) once audit
+   logs expose the actual tier.
 4. **Watch for remaining CALIBRATION-FINDINGS gaps:** #2 entity-anchored track
-   record (owner-name search still fragile; address-list deed-verify + doc-ingest
-   help but confirm); #3 Regrid geo-trial (decision: retire vs pay — see below).
+   record (owner-name search still fragile — confirmed again: 0 props for
+   Morrison/Bhuyan/Duwaji/Series); #3 Regrid geo-trial (retire — see below).
 
 ### B. Walk real loans through the actual product UI (the new ask)
 This is different from the harness (which calls adapters directly, no DB/UI). To
@@ -154,7 +165,7 @@ every screen:
 
 - **Repo:** `/Users/zachwade/code/active/pulseclose` · **Prod:** https://app.pulseclose.com
 - **Vercel:** `buildfolios-projects-e8f9d80e/pulseclose` · **Supabase:** `oazwscmgyqknwatqgtyc`
-- **GitHub:** https://github.com/zach-wade/PulseClose · migrations **00001–00047**
+- **GitHub:** https://github.com/zach-wade/PulseClose · migrations **00001–00048**
 - **Underwriter test org:** `27296b6b-87f2-4b71-9e84-2c71f652449c` · logins
   `uw@`/`solo@`/`fund@test.pulseclose.com` pw `Test1234!`
 - **Westbrook seeded demo:** `/dashboard/validations/44444444-4444-4444-8444-444444444444`

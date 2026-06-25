@@ -281,8 +281,8 @@ Other Distressed/Foreclosed: ${distressed}
 Experience Tier (visible portfolio only): ${input.experience_tier} (1=10+ properties, 2=5-9, 3=1-4, 4=none visible)
 
 --- LITIGATION SCREENING (federal courts via CourtListener) ---
-${input.litigation_results.map((l) => `${l.search_type}: ${l.result}${l.result === "found" ? ` — ${l.details ?? "No details"} (Case: ${l.case_number ?? "N/A"})` : ""}`).join("\n")}
-Note: Coverage is federal only (bankruptcy + federal civil). State-court matters (mechanic's liens, contract disputes, most foreclosures) are not searched. Treat dismissed/terminated cases as informational, not as active risk.
+${input.litigation_results.map((l) => `${l.search_type}: ${l.result}${l.result === "found" ? ` — ${l.details ?? "No details"} (Case: ${l.case_number ?? "N/A"})` : l.result === "not_run" ? ` — ${l.details ?? "screen did not complete"}` : ""}`).join("\n")}
+Note: Coverage is federal only (bankruptcy + federal civil). State-court matters (mechanic's liens, contract disputes, most foreclosures) are not searched. Treat dismissed/terminated cases as informational, not as active risk. IMPORTANT: if any line shows "not_run", that screen did NOT complete — do not state the borrower is litigation-clear; say the litigation screen is incomplete and must be re-run.
 
 ${sanctionsBlock}
 

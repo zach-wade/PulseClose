@@ -70,7 +70,10 @@ export interface LitigationSearchRequest {
 export interface LitigationRecord {
   search_type: "bankruptcy" | "foreclosure" | "lawsuit" | "lis_pendens";
   entity_name: string;
-  result: "clear" | "found";
+  // "not_run" = the screen could not complete (rate-limit / upstream error) —
+  // distinct from "clear" (ran, found nothing). Mirrors SanctionsScreenResult's
+  // "not_run". An incomplete screen must NOT read as, or score as, a clean one.
+  result: "clear" | "found" | "not_run";
   details: string | null;
   case_number: string | null;
   source: string;

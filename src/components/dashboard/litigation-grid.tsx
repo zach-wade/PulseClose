@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Scale, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
+import { Scale, CheckCircle2, XCircle, ExternalLink, AlertTriangle } from "lucide-react";
 import type { LitigationCheck } from "./shared-types";
 import { extractCourtListenerDetails } from "@/lib/adapters/extract";
 
@@ -42,23 +42,31 @@ export function LitigationGrid({ data }: { data: LitigationCheck[] }) {
             const cl = extractCourtListenerDetails(lc.raw_response);
             const isActive = cl?.isActive ?? false;
             const isFound = lc.result === "found";
+            const isNotRun = lc.result === "not_run";
 
             return (
               <div
                 key={lc.id}
                 className={`rounded-md border p-3 ${
-                  isFound && isActive
-                    ? "border-destructive/40 bg-destructive/5"
-                    : isFound
-                      ? "border-amber-300/40 bg-amber-50/50"
-                      : "border-border"
+                  isNotRun
+                    ? "border-amber-400/50 bg-amber-50/60"
+                    : isFound && isActive
+                      ? "border-destructive/40 bg-destructive/5"
+                      : isFound
+                        ? "border-amber-300/40 bg-amber-50/50"
+                        : "border-border"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium capitalize">
                     {lc.search_type.replace("_", " ")}
                   </p>
-                  {lc.result === "clear" ? (
+                  {isNotRun ? (
+                    <Badge variant="secondary" className="gap-1 border-amber-400/60 text-amber-700">
+                      <AlertTriangle className="h-3 w-3" />
+                      Did not complete
+                    </Badge>
+                  ) : lc.result === "clear" ? (
                     <Badge variant="default" className="gap-1">
                       <CheckCircle2 className="h-3 w-3" />
                       Clear

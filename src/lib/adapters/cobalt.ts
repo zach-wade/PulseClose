@@ -413,39 +413,64 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
       }
 
       try {
-        const { bankruptcy, lawsuits } = await searchLitigationCourtListener(req, courtListenerToken);
+        const { bankruptcy, lawsuits, failedNames } = await searchLitigationCourtListener(
+          req,
+          courtListenerToken,
+        );
+        const incomplete = failedNames.length > 0;
 
         // Build results: real data for bankruptcy + lawsuits, stub for county-level records
         const records: LitigationRecord[] = [];
 
-        // Bankruptcy — real CourtListener data
-        if (bankruptcy.length > 0) {
-          records.push(...bankruptcy);
-        } else {
-          records.push({
-            search_type: "bankruptcy",
-            entity_name: req.entity_name || req.borrower_name,
-            result: "clear",
-            details: null,
-            case_number: null,
-            source: "CourtListener RECAP Archive",
-            raw_response: { _adapter: "courtlistener", _result: "no_records" },
-          });
-        }
+        // Always keep any real hits we DID find.
+        if (bankruptcy.length > 0) records.push(...bankruptcy);
+        if (lawsuits.length > 0) records.push(...lawsuits);
 
-        // Lawsuits — real CourtListener data
-        if (lawsuits.length > 0) {
-          records.push(...lawsuits);
-        } else {
+        if (incomplete) {
+          // The screen did not complete for at least one name (rate-limit /
+          // upstream error). NEVER assert "clear" on an incomplete screen —
+          // emit a single "not_run" sentinel so the pipeline can mark the
+          // pillar incomplete, withhold the "no litigation" confidence bonus,
+          // and tell the reviewer to re-run. (Finding #13.)
           records.push({
             search_type: "lawsuit",
             entity_name: req.entity_name || req.borrower_name,
-            result: "clear",
-            details: null,
+            result: "not_run",
+            details: `Litigation screen incomplete — could not search ${failedNames
+              .map((n) => `"${n}"`)
+              .join(", ")} (rate-limited or upstream error). Re-run to complete.`,
             case_number: null,
             source: "CourtListener RECAP Archive",
-            raw_response: { _adapter: "courtlistener", _result: "no_records" },
+            raw_response: {
+              _adapter: "courtlistener",
+              _result: "incomplete",
+              _failed_names: failedNames,
+            },
           });
+        } else {
+          // Screen completed. Emit honest "clear" sentinels for empty buckets.
+          if (bankruptcy.length === 0) {
+            records.push({
+              search_type: "bankruptcy",
+              entity_name: req.entity_name || req.borrower_name,
+              result: "clear",
+              details: null,
+              case_number: null,
+              source: "CourtListener RECAP Archive",
+              raw_response: { _adapter: "courtlistener", _result: "no_records" },
+            });
+          }
+          if (lawsuits.length === 0) {
+            records.push({
+              search_type: "lawsuit",
+              entity_name: req.entity_name || req.borrower_name,
+              result: "clear",
+              details: null,
+              case_number: null,
+              source: "CourtListener RECAP Archive",
+              raw_response: { _adapter: "courtlistener", _result: "no_records" },
+            });
+          }
         }
 
         // Foreclosure + lis pendens: not searched (county-level, no API yet)
@@ -453,8 +478,28 @@ function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
 
         return records;
       } catch (err) {
-        console.error("CourtListener litigation search failed, falling back to stub:", err);
-        return stubAdapter.searchLitigation(req);
+        // Total failure of the litigation search. Do NOT fall back to stub data
+        // in production — fake "clear"/"found" demo rows presented as a real
+        // screen is the exact false-clean this fix removes. Return a "not_run"
+        // sentinel instead. (The no-token path above still uses the stub for
+        // local/dev where no live screen is expected.)
+        console.error("CourtListener litigation search failed — marking screen not_run:", err);
+        return [
+          {
+            search_type: "lawsuit",
+            entity_name: req.entity_name || req.borrower_name,
+            result: "not_run",
+            details:
+              "Litigation screen could not run (upstream error). Re-run to complete the federal court search.",
+            case_number: null,
+            source: "CourtListener RECAP Archive",
+            raw_response: {
+              _adapter: "courtlistener",
+              _result: "error",
+              _message: err instanceof Error ? err.message : String(err),
+            },
+          },
+        ];
       }
     },
 

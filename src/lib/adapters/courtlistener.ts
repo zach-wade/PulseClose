@@ -142,7 +142,13 @@ function mapDocketToRecord(
 export async function searchLitigationCourtListener(
   req: LitigationSearchRequest,
   token: string,
-): Promise<{ bankruptcy: LitigationRecord[]; lawsuits: LitigationRecord[] }> {
+): Promise<{
+  bankruptcy: LitigationRecord[];
+  lawsuits: LitigationRecord[];
+  // Names whose search threw (rate-limit / upstream error). Non-empty => the
+  // screen is INCOMPLETE: an empty result set cannot be asserted as "clear".
+  failedNames: string[];
+}> {
   const searchNames = [req.borrower_name];
   if (req.entity_name && req.entity_name !== req.borrower_name) {
     searchNames.push(req.entity_name);
@@ -150,6 +156,7 @@ export async function searchLitigationCourtListener(
 
   const bankruptcyResults: LitigationRecord[] = [];
   const lawsuitResults: LitigationRecord[] = [];
+  const failedNames: string[] = [];
 
   for (const name of searchNames) {
     try {
@@ -204,9 +211,12 @@ export async function searchLitigationCourtListener(
       });
     } catch (err) {
       console.error(`CourtListener search failed for "${name}":`, err);
-      // Don't throw — return what we have and let other search types run
+      // Don't throw — return what we have and let other search types run, but
+      // RECORD the failure so the caller knows the screen is incomplete and must
+      // not present an empty result as "clear".
+      failedNames.push(name);
     }
   }
 
-  return { bankruptcy: bankruptcyResults, lawsuits: lawsuitResults };
+  return { bankruptcy: bankruptcyResults, lawsuits: lawsuitResults, failedNames };
 }
