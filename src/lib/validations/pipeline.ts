@@ -259,6 +259,24 @@ export async function runValidationPipeline(
       resolveGc(),
     ]);
 
+    // Coverage-miss telemetry — a GC was supplied but we couldn't validate its
+    // state (no ingested dataset, not CA-scrapeable). Drives data-driven
+    // prioritization of which state to ingest next. Fire-and-forget.
+    if ((gcResult?.raw_response as { _not_automated?: boolean } | null)?._not_automated) {
+      void supabase
+        .from("gc_coverage_misses")
+        .insert({
+          org_id: orgId,
+          validation_id: validationId,
+          gc_state: (gc_state || entity_state || "").toUpperCase() || null,
+          had_license_number: Boolean(gc_license_number),
+          gc_name: gc_name || null,
+        })
+        .then(({ error }) => {
+          if (error) console.warn(`[pipeline] gc_coverage_miss log failed:`, error.message);
+        });
+    }
+
     const cobaltResults = (entityResult.raw_response as
       | { results?: Array<{ officers?: Array<{ name?: string }> }> }
       | null)?.results;

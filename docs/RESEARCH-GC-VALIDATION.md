@@ -53,9 +53,14 @@ per-state before adding.
 
 Bulk-ingest built and live for **WA / OR / FL** (~346k licenses):
 - Table: `public.contractor_licenses` (migration 00046), public-read reference data.
-- Scripts: `scripts/ingest-contractor-{wa,or,fl}.ts` (+ shared `_contractor-ingest.ts`).
-  WA `data.wa.gov` Socrata (158,933), OR `data.oregon.gov` Socrata (45,394),
-  FL `CONSTRUCTIONLICENSE_1.csv` (142,082). Re-run to refresh (idempotent upsert).
+- Ingest: config-driven registry `scripts/contractor-sources.ts` + generic runner
+  `scripts/ingest-contractors.ts [STATE|all]` (+ shared `_contractor-ingest.ts`).
+  Adding a state = one registry entry (URL + field mapper). WA `data.wa.gov`
+  Socrata (158,933), OR `data.oregon.gov` Socrata (45,394), FL
+  `CONSTRUCTIONLICENSE_1.csv` (142,082). Re-run to refresh (idempotent upsert).
+- Coverage misses: `gc_coverage_misses` (migration 00047) logs every GC supplied
+  in an uncovered state → `select gc_state, count(*) … group by gc_state` ranks
+  which state to ingest next.
 - Lookup: `src/lib/gc/lookup.ts` — by license # (exact) or unambiguous name match;
   the pipeline tries the DB first, then the CSLB scrape (CA), then not_automated.
 - `GC_AUTOMATED_STATES` now = CA, WA, OR, FL.
