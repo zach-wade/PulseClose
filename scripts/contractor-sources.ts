@@ -7,11 +7,18 @@
 
 import { normStatus, normName, isoDate, type ContractorRow } from "./_contractor-ingest";
 
+// How often the upstream source refreshes — drives which scheduled job runs it.
+// Adding a state with a `refresh` value auto-joins the matching cron (the runner
+// filters by it); no schedule edit needed. Map source cadence → our buckets:
+// WA is 3×/day and OR daily → "daily"; FL weekly and VA ~weekly → "weekly".
+export type RefreshCadence = "daily" | "weekly";
+
 export interface SocrataSource {
   state: string;
   source: string;
   kind: "socrata";
   url: string;
+  refresh: RefreshCadence;
   map: (r: Record<string, unknown>) => ContractorRow | null;
 }
 export interface DelimitedSource {
@@ -21,6 +28,7 @@ export interface DelimitedSource {
   urls: string[];          // one or more files (VA splits Class A/B/C into separate files)
   delimiter: string;       // "," (FL) | "\t" (VA)
   header: boolean;         // skip the first row?
+  refresh: RefreshCadence;
   map: (r: string[]) => ContractorRow | null;
 }
 export type StateSource = SocrataSource | DelimitedSource;
@@ -31,6 +39,7 @@ const WA: SocrataSource = {
   source: "wa_lni",
   kind: "socrata",
   url: "https://data.wa.gov/resource/m8qx-ubtq.json",
+  refresh: "daily", // L&I updates 3x/day
   map(r) {
     const s = (k: string) => (typeof r[k] === "string" ? (r[k] as string).trim() : null);
     const license = s("contractorlicensenumber");
@@ -60,6 +69,7 @@ const OR: SocrataSource = {
   source: "or_ccb",
   kind: "socrata",
   url: "https://data.oregon.gov/resource/g77e-6bhs.json",
+  refresh: "daily", // CCB open data daily
   map(r) {
     const s = (k: string) => (typeof r[k] === "string" ? (r[k] as string).trim() : null);
     const license = s("license_number");
@@ -101,6 +111,7 @@ const FL: DelimitedSource = {
   urls: ["https://www2.myfloridalicense.com/sto/file_download/extracts/CONSTRUCTIONLICENSE_1.csv"],
   delimiter: ",",
   header: false,
+  refresh: "weekly", // DBPR weekly
   map(f) {
     const g = (i: number) => (f[i] ?? "").trim();
     const license = g(20) || g(12);
@@ -140,6 +151,7 @@ const VA: DelimitedSource = {
   urls: ["2701", "2705a", "2705b", "2705c"].map((c) => `${VA_BASE}/${c}__crnt.txt`),
   delimiter: "\t",
   header: true,
+  refresh: "weekly", // DPOR every 5 business days
   map(f) {
     const g = (i: number) => (f[i] ?? "").trim();
     const license = g(2);

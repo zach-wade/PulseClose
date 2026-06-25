@@ -1,0 +1,63 @@
+# Scheduled refresh of the contractor_licenses reference table from official
+# state bulk datasets. Runs the existing tsx ETL (no serverless timeout — these
+# files are large, e.g. WA ~160k rows). The set of states run is DATA-DRIVEN
+# from the source registry's `refresh` cadence (scripts/contractor-sources.ts):
+# adding a state with `refresh: "daily" | "weekly"` auto-joins the matching
+# schedule — no edit to this file needed.
+#
+# REQUIRED REPO SECRETS (Settings → Secrets and variables → Actions):
+#   NEXT_PUBLIC_SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+# Until those are set, the scheduled runs no-op with an auth error (harmless).
+
+name: Refresh contractor licenses
+
+on:
+  schedule:
+    - cron: "0 9 * * *"    # daily 09:00 UTC → sources with refresh: "daily" (WA, OR)
+    - cron: "0 10 * * 1"   # Mondays 10:00 UTC → sources with refresh: "weekly" (FL, VA)
+  workflow_dispatch:
+    inputs:
+      cadence:
+        description: "Which sources to refresh"
+        type: choice
+        options: [all, daily, weekly]
+        default: all
+
+concurrency:
+  group: refresh-contractor-licenses
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Determine cadence
+        id: cad
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "cadence=${{ github.event.inputs.cadence }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 10 * * 1" ]; then
+            echo "cadence=weekly" >> "$GITHUB_OUTPUT"
+          else
+            echo "cadence=daily" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Ingest contractor licenses
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          C="${{ steps.cad.outputs.cadence }}"
+          echo "Refreshing cadence: $C"
+          if [ "$C" = "all" ]; then
+            npx tsx scripts/ingest-contractors.ts all
+          else
+            npx tsx scripts/ingest-contractors.ts --due "$C"
+          fi

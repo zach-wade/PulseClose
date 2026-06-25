@@ -65,11 +65,19 @@ Bulk-ingest built and live for **WA / OR / FL** (~346k licenses):
   the pipeline tries the DB first, then the CSLB scrape (CA), then not_automated.
 - `GC_AUTOMATED_STATES` now = CA, WA, OR, FL.
 
-**Follow-ups:** (1) **CA bulk migration** — CA stays on the CSLB per-license
-scrape; the free master-list download URL isn't statically discoverable (JS
-portal) and the clean path is the paid Full File/Update File FTP service — a
-vendor-$ decision. (2) A **refresh cron** for the three scripts (WA 3×/day, OR
-daily, FL weekly) — currently run on demand.
+**Refresh: automated, registry-driven.** Each source declares a `refresh`
+cadence (`daily` | `weekly`) in the registry. `.github/workflows/refresh-contractor-licenses.yml`
+runs `ingest-contractors.ts --due <cadence>` on schedule (daily 09:00 UTC for
+WA/OR; Mondays 10:00 UTC for FL/VA) — and on `workflow_dispatch`. **Adding a
+state with a `refresh` value auto-joins the matching schedule; no workflow edit.**
+GitHub Actions (not Vercel cron) because the files are large (WA ~160k) and would
+blow a serverless timeout. ⚠️ Requires repo secrets `NEXT_PUBLIC_SUPABASE_URL`
+and `SUPABASE_SERVICE_ROLE_KEY` (Settings → Secrets → Actions) — until set, the
+scheduled runs no-op with an auth error.
+
+**Follow-up:** **CA bulk migration** — CA stays on the CSLB per-license scrape;
+the free master-list download URL isn't statically discoverable (JS portal) and
+the clean path is the paid Full File/Update File FTP service — a vendor-$ decision.
 
 ## State enumeration (deep-research 2026-06-25) — what's ingestible
 

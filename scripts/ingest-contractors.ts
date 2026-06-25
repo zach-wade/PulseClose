@@ -36,11 +36,22 @@ async function runSource(supabase: ReturnType<typeof getClient>, src: StateSourc
 }
 
 async function main() {
-  const arg = (process.argv[2] ?? "all").toLowerCase();
-  const targets =
-    arg === "all" ? SOURCES : SOURCES.filter((s) => s.state.toLowerCase() === arg);
+  // Usage: ingest-contractors.ts [all | <STATE> | --due <daily|weekly>]
+  // --due filters by each source's refresh cadence so the scheduled jobs run
+  // exactly what's due — adding a state with a `refresh` value auto-joins it.
+  const args = process.argv.slice(2).map((a) => a.toLowerCase());
+  let targets: StateSource[];
+  const dueIdx = args.indexOf("--due");
+  if (dueIdx !== -1) {
+    const cadence = args[dueIdx + 1];
+    targets = SOURCES.filter((s) => s.refresh === cadence);
+    console.log(`Refresh cadence "${cadence}": ${targets.map((s) => s.state).join(", ") || "(none)"}`);
+  } else {
+    const arg = args[0] ?? "all";
+    targets = arg === "all" ? SOURCES : SOURCES.filter((s) => s.state.toLowerCase() === arg);
+  }
   if (targets.length === 0) {
-    console.error(`No source for "${arg}". Registered: ${SOURCES.map((s) => s.state).join(", ")}`);
+    console.error(`No matching source. Registered: ${SOURCES.map((s) => `${s.state}(${s.refresh})`).join(", ")}`);
     process.exit(1);
   }
   const supabase = getClient();
