@@ -11,8 +11,13 @@ import {
 import { checkRateLimit } from "@/lib/rate-limit";
 import { runValidationPipeline } from "@/lib/validations/pipeline";
 
-// Allow up to 60s for vendor API calls + AI analysis
-export const maxDuration = 60;
+// The invocation budget is SHARED between the synchronous diligence pipeline
+// (entity/track/litigation/GC/sanctions vendor calls + retries/backoff, ~40-60s)
+// AND the deferred after() enrichment (Realie deed-verify + the Claude memo).
+// At 60s the sync phase starved after(), so the AI memo never generated on fresh
+// validations (#23). 300s gives after() room to finish the memo after the
+// response returns. (The detail page also polls ~3min as a backstop.)
+export const maxDuration = 300;
 
 // GET /api/validations — list all validations for the user's org
 export async function GET() {
