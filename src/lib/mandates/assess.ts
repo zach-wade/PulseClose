@@ -32,8 +32,14 @@ export interface MandateAssessment {
 interface ValidationDiligence {
   risk_tier: Tier;
   sos_active: boolean;
+  /** Entity check errored (e.g. 429) — unverified, not a confirmed "not active". */
+  sos_unavailable: boolean;
   has_active_litigation: boolean;
+  /** Litigation screen could not complete — cannot be asserted clear. */
+  litigation_incomplete: boolean;
   sanctions_hit: boolean;
+  /** Sanctions screen could not complete — cannot be asserted clear. */
+  sanctions_incomplete: boolean;
   experience_tier: number | null;
   confidence_score: number | null;
   has_inactive_gc: boolean;
@@ -58,7 +64,7 @@ async function loadValidationDiligence(
     supabase.from("risk_factors").select("severity, excluded").eq("validation_id", validationId),
     supabase
       .from("entity_checks")
-      .select("sos_status")
+      .select("sos_status, raw_response")
       .eq("validation_id", validationId)
       .order("check_date", { ascending: false })
       .limit(1)
@@ -66,7 +72,7 @@ async function loadValidationDiligence(
     supabase.from("litigation_checks").select("result, raw_response").eq("validation_id", validationId),
     supabase
       .from("sanctions_checks")
-      .select("result")
+      .select("result, matches")
       .eq("validation_id", validationId)
       .order("check_date", { ascending: false })
       .limit(1)
@@ -83,11 +89,47 @@ async function loadValidationDiligence(
   ]);
 
   const risk_tier = deriveTier((factorsRes.data ?? []) as unknown as RiskFactor[]);
-  const sos_active = entityRes.data?.sos_status === "active";
-  const has_active_litigation = (litigationRes.data ?? []).some(
-    (l) => l.result === "found" && !(l.raw_response as Record<string, unknown> | null)?.date_terminated,
+
+  // The mandate gates must read diligence the same way the risk factors do —
+  // through the disambiguation + list-type classification + not-run layers —
+  // never raw results (finding #18). A name-only "possible" litigation match, an
+  // exclusion-list "sanctions" entry, or a rate-limited entity check must NOT be
+  // asserted as a confirmed negative against the borrower.
+  const sos_status = entityRes.data?.sos_status ?? null;
+  const sos_active = sos_status === "active";
+  // A 429 / upstream error is NOT a confirmation the entity is absent — it's an
+  // unverified check that should make the mandate conditional, not auto-fail.
+  const sos_unavailable = Boolean(
+    (entityRes.data?.raw_response as { _error?: boolean } | null)?._error,
   );
-  const sanctions_hit = sanctionsRes.data?.result === "potential_match";
+
+  const litRows = litigationRes.data ?? [];
+  // Only a CONFIRMED active federal case (corroborated by a second identifier)
+  // trips the active-litigation gate — mirrors factors.ts `active_fed_litigation`.
+  // "possible"/"weak"/name-only matches are review items, never a gate breach.
+  const has_active_litigation = litRows.some((l) => {
+    if (l.result !== "found") return false;
+    const raw = l.raw_response as Record<string, unknown> | null;
+    if (raw?.date_terminated) return false;
+    const confidence = (raw?._disambiguation as { confidence?: string } | undefined)?.confidence;
+    return confidence === "confirmed";
+  });
+  // An incomplete litigation screen (a not_run sentinel) cannot be asserted clear.
+  const litigation_incomplete = litRows.some((l) => l.result === "not_run");
+
+  // Sanctions: only a CONFIRMED match on an actual sanction/PEP list (not a
+  // SAM/FINRA/medical exclusion, not a name-only possible) trips the gate —
+  // mirrors factors.ts `sanctions_hit`. Read the matches, not just `result`.
+  const sanctionsMatches = (sanctionsRes.data?.matches ?? []) as Array<{
+    category?: string;
+    confidence?: string;
+  }>;
+  const isScreeningRelevant = (m: { category?: string }) =>
+    m.category == null || m.category === "sanction" || m.category === "pep";
+  const sanctions_hit = sanctionsMatches.some(
+    (m) => isScreeningRelevant(m) && m.confidence === "confirmed",
+  );
+  const sanctions_incomplete = sanctionsRes.data?.result === "not_run";
   const has_inactive_gc = (gcRes.data ?? []).some((g) => g.license_status && g.license_status !== "active");
 
   const eligibilityByInvestor = new Map<string, "pass" | "conditional" | "fail">();
@@ -104,8 +146,11 @@ async function loadValidationDiligence(
   return {
     risk_tier,
     sos_active,
+    sos_unavailable,
     has_active_litigation,
+    litigation_incomplete,
     sanctions_hit,
+    sanctions_incomplete,
     experience_tier: validation.experience_tier ?? null,
     confidence_score: validation.confidence_score ?? null,
     has_inactive_gc,
@@ -132,18 +177,47 @@ export function assessGates(
   investorId: string,
 ): { result: MandateResult; failures: MandateFailureV1[] } {
   const failures: MandateFailureV1[] = [];
+  // Reasons that make a verdict CONDITIONAL (needs re-run / review) rather than a
+  // hard FAIL — e.g. a check that could not complete. We must not auto-fail a
+  // borrower on a check that never ran (finding #18).
+  const conditionalReasons: MandateFailureV1[] = [];
+  let conditional = false;
 
   if (gates.max_risk_tier && TIER_RANK[dil.risk_tier] > TIER_RANK[gates.max_risk_tier]) {
     failures.push({ gate: "max_risk_tier", message: `Risk tier ${dil.risk_tier} exceeds the allowed ${gates.max_risk_tier}.` });
   }
   if (gates.require_sos_active && !dil.sos_active) {
-    failures.push({ gate: "require_sos_active", message: "Entity is not active in Secretary of State records." });
+    if (dil.sos_unavailable) {
+      conditional = true;
+      conditionalReasons.push({
+        gate: "require_sos_active",
+        message: "Entity status could not be verified — the SOS lookup did not complete (e.g. rate limit). Re-run before relying on this verdict; this is not a confirmation the entity is inactive.",
+      });
+    } else {
+      failures.push({ gate: "require_sos_active", message: "Entity is not active in Secretary of State records." });
+    }
   }
-  if (gates.disallow_active_litigation && dil.has_active_litigation) {
-    failures.push({ gate: "disallow_active_litigation", message: "Active federal litigation found." });
+  if (gates.disallow_active_litigation) {
+    if (dil.has_active_litigation) {
+      failures.push({ gate: "disallow_active_litigation", message: "Confirmed active federal litigation found." });
+    } else if (dil.litigation_incomplete) {
+      conditional = true;
+      conditionalReasons.push({
+        gate: "disallow_active_litigation",
+        message: "Litigation screen did not complete — re-run before relying on this verdict.",
+      });
+    }
   }
-  if (gates.disallow_sanctions_hit && dil.sanctions_hit) {
-    failures.push({ gate: "disallow_sanctions_hit", message: "Potential sanctions / PEP match found." });
+  if (gates.disallow_sanctions_hit) {
+    if (dil.sanctions_hit) {
+      failures.push({ gate: "disallow_sanctions_hit", message: "Confirmed sanctions / PEP match found." });
+    } else if (dil.sanctions_incomplete) {
+      conditional = true;
+      conditionalReasons.push({
+        gate: "disallow_sanctions_hit",
+        message: "Sanctions/PEP screen did not complete — re-run before relying on this verdict.",
+      });
+    }
   }
   if (
     gates.max_experience_tier != null &&
@@ -165,7 +239,6 @@ export function assessGates(
     failures.push({ gate: "require_gc_active", message: "A general contractor on this deal does not hold an active license." });
   }
 
-  let conditional = false;
   if (gates.require_eligibility_pass) {
     const elig = dil.eligibilityByInvestor.get(investorId);
     if (elig === undefined) {
@@ -174,11 +247,16 @@ export function assessGates(
       failures.push({ gate: "require_eligibility_pass", message: "Deal is ineligible for this investor under the current terms." });
     } else if (elig === "conditional") {
       conditional = true;
+      conditionalReasons.push({ gate: "require_eligibility_pass", message: "Deal is conditionally eligible for this investor." });
     }
   }
 
+  // A hard breach is a FAIL regardless of conditional notes. Otherwise, an
+  // incomplete/unverified check makes the verdict CONDITIONAL (carry the reasons
+  // so the reviewer knows what to re-run) — never a silent pass.
   if (failures.length > 0) return { result: "fail", failures };
-  return { result: conditional ? "conditional" : "pass", failures: [] };
+  if (conditional) return { result: "conditional", failures: conditionalReasons };
+  return { result: "pass", failures: [] };
 }
 
 /**

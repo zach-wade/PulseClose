@@ -249,3 +249,68 @@ LTARV avg 73% (max 87%)** — that IS ICC's real policy.
 for construction), add a total-basis input for in-progress refis, and — when the
 audit logs expose it — diff the engine's TIER and investor PLACEMENT against the
 file's actual, not just the loan amount.
+
+## Plan B (2026-06-25) — real loans walked through the LIVE product UI
+
+Drove 3 real loans through prod end-to-end as the underwriter org
+(`scripts/drive-real-loan.ts` + `scripts/drive-loan-tabs.ts`; screenshots in
+`ux-review/real-loan/`): 286-virginia (happy path), 10287-soverns (non-CA), 10228
+(common-name disambiguation). NOT the seeded Westbrook. What works + what's rough:
+
+**✅ What's working on real data:**
+- **Finding #13 fix is live and honest in prod.** All three entity lookups hit a
+  Cobalt 429; the UI shows an INPUT WARNING ("did not complete (upstream error) —
+  this is not a confirmation the entity is absent. Re-run to verify"), an SOS
+  "CHECK FAILED" chip, and "Entity lookup failed: Cobalt rate limited (429)" — never
+  a false "not found."
+- **Disambiguation renders.** 10228 shows "Possible litigation match (review)" with
+  the common-name explanation; the track-record deed-verify pill shows the verified
+  flip on 286-virginia. The Validate→Evaluate→Hand-off stepper + drill-downs exist.
+
+**🔴 18. The capital-provider MANDATE bypasses disambiguation + classification +
+not-run — the trust-killer on the wedge surface.** `buildDiligence`
+(`src/lib/mandates/assess.ts:86-90`) reads RAW results:
+  - `has_active_litigation` = any `result === "found"` — ignores
+    `raw_response._disambiguation.confidence`, so 10228's **1 name-only "possible"**
+    match (19 filtered unlikely) trips the gate **"Active federal litigation found."**
+  - `sanctions_hit` = `result === "potential_match"` — ignores list-type
+    classification, so **exclusion-list noise** (SAM/FINRA/medical) trips
+    **"Potential sanctions / PEP match found"** (fired on Kafetzopoulos, whose only
+    hit was a weak exclusion entry).
+  - `sos_active` = `=== "active"` — a 429'd entity check → **"Entity is not active in
+    Secretary of State records"** (the #13 bug, one layer up: a failed check becomes
+    a failing verdict).
+  This is the exact common-name false-positive Noah killed the auto-score over,
+  reappearing in the most strategically important surface (the mandate = the
+  distribution wedge). **Fix:** mirror the risk-factor logic — only `confirmed`
+  litigation trips the active-litigation gate; only a real `sanction`/`pep` category
+  match at qualifying confidence trips the sanctions gate; a failed/`not_run` check
+  is "could not verify," never an auto-fail. **HIGH priority — fix next.**
+- **🟠 19. Cobalt entity 429 in production under modest concurrency** (3 back-to-back
+  runs). The adapter's 2s backoff + cached fallback isn't enough; needs real
+  retry/backoff or a queue. #13 makes it honest, but the pillar is unusable when it
+  fires — and it cascades into the mandate (#18) and confidence score.
+- **🟡 20. The "Deal" tab on the validation detail is empty** with no "size this
+  deal" CTA — sizing lives in the Evaluate stepper, so the tab is a dead-end.
+- **🟡 21. Header "Verified" badge contradicts the body** — the detail header shows
+  green "Verified" while the Borrowers LIST (correctly) shows "Flagged," the entity
+  check FAILED, and the mandate says "Does not meet." The header badge doesn't
+  reflect the partial/flagged state.
+- **🟡 22. Entity risk-factor + handoff copy mis-describes a 429.** The `entity_status`
+  factor / handoff reads "Entity could not be located in the secretary of state
+  database — verify spelling and jurisdiction" when the lookup actually 429'd. Should
+  say "lookup failed — re-run," distinct from a true not-located.
+- **🟡 23. AI memo did not generate** for the fresh validations ("No memo" in the
+  list, "AI Risk Assessment is generating…" on the detail). Confirm async lag vs a
+  generation failure on the new pipeline path.
+- **🔵 24/25. Lower-priority UX:** investor criteria render as raw JSON
+  (transparent but rough); the Sizing step needs NOI/cap inputs not carried from
+  Terms (doc-ingest should pre-fill). The "Deal" tab on the validation detail is an
+  empty dead-end (#20).
+
+**Full screen-by-screen review + prioritized fix list:**
+[PLAN-B-UI-REVIEW.md](PLAN-B-UI-REVIEW.md). The single sharpest signal: **Mark
+Morrison is NOT a critical flag in the Book (factors are disambiguation-aware) but
+FAILS 5 gates in the Mandate Console** — same data, opposite verdict, because the
+mandate path (#18) reads raw results. Mandate Console pass rate on the real loans:
+**33% (2 meet / 4 fail)**, with two clean distinctive-name borrowers among the fails.

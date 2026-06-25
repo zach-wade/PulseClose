@@ -52,6 +52,10 @@ export interface FactorEntityView {
   sos_status: string | null;
   flags: string[];
   last_filing_date: string | null;
+  // True when the SOS lookup itself ERRORED (e.g. a 429), as opposed to running
+  // and finding nothing. A failed check must not read as "entity not found"
+  // (finding #22). Optional so legacy callers/tests keep compiling.
+  lookup_error?: boolean;
   // C4 — additional fields for the address-consistency cross-check.
   // Optional so legacy callers (and tests) keep compiling.
   state?: string | null;
@@ -146,7 +150,12 @@ export function computeRiskFactors(input: ComputeFactorsInput): RiskFactor[] {
     let severity: FactorSeverity = "none";
     let explanation = `Entity is in good standing (SOS: ${status || "unknown"}).`;
 
-    if (status === "dissolved") {
+    if (input.entity.lookup_error) {
+      // The lookup ERRORED (rate-limit / upstream) — NOT a confirmation the
+      // entity is absent. Don't assert "not found / verify spelling" (finding #22).
+      severity = "minor";
+      explanation = "Entity/SOS lookup did not complete (upstream error, e.g. rate limit) — re-run to verify. This is not a confirmation the entity is absent.";
+    } else if (status === "dissolved") {
       severity = "critical";
       explanation = "Entity has been dissolved per the secretary of state.";
     } else if (status === "suspended") {

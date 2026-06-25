@@ -112,7 +112,21 @@ findings #13–#17 logged in CALIBRATION-FINDINGS.md. **Golden set refactored in
    record (owner-name search still fragile — confirmed again: 0 props for
    Morrison/Bhuyan/Duwaji/Series); #3 Regrid geo-trial (retire — see below).
 
-### B. Walk real loans through the actual product UI (the new ask)
+### B. Walk real loans through the actual product UI — ✅ DONE (2026-06-25)
+Drove 3 real loans through prod end-to-end + EVERY top-level screen, detail tab,
+the stepper, and the printable handoff (`scripts/drive-real-loan.ts` +
+`drive-loan-tabs.ts` + `drive-full-review.ts` + `drive-stepper.ts`; screenshots in
+`ux-review/real-loan/`). **Full screen-by-screen review: docs/PLAN-B-UI-REVIEW.md.**
+Findings #18–#25 in CALIBRATION-FINDINGS.md. **Headline — finding #18 (🔴 next fix):** the
+capital-provider MANDATE (`src/lib/mandates/assess.ts`) bypasses disambiguation +
+list-type classification + not-run handling — a name-only "possible" litigation
+match → "Active federal litigation found"; exclusion-list noise → "sanctions/PEP
+found"; a 429'd entity → "not active." The trust-killer reappearing on the wedge
+surface. Plus #19 (Cobalt 429 brittleness in prod), #20 (empty Deal tab), #21
+("Verified" badge contradicts "does not meet"). **✅ Confirmed working:** the #13
+not-run fix is live + honest in prod; disambiguation renders; deed-verify pill shows.
+
+<details><summary>Original Plan B steps (for reference)</summary>
 This is different from the harness (which calls adapters directly, no DB/UI). To
 SEE the experience, run a loan through the real product end-to-end and look at
 every screen:
@@ -133,6 +147,8 @@ every screen:
 
 > ⚠️ Use a REAL loan run through the live pipeline for this — NOT the seeded
 > Westbrook demo (it's hand-authored synthetic; never present it as vendor-pulled).
+
+</details>
 
 ### C. Lower-priority / decisions (see §Decisions for the user)
 - GC refresh cron needs 2 GitHub repo secrets to actually fire (below).

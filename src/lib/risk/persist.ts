@@ -54,7 +54,7 @@ export async function recomputeRiskFactorsForValidation(
   const [entityRes, trackRes, litigationRes, sanctionsRes, gcRes] = await Promise.all([
     supabase
       .from("entity_checks")
-      .select("sos_status, flags, last_filing_date, state, registered_agent")
+      .select("sos_status, flags, last_filing_date, state, registered_agent, raw_response")
       .eq("validation_id", validationId)
       .order("check_date", { ascending: false })
       .limit(1)
@@ -182,6 +182,9 @@ export async function recomputeRiskFactorsForValidation(
         last_filing_date: entityRes.data.last_filing_date,
         state: entityRes.data.state ?? null,
         registered_agent: entityRes.data.registered_agent ?? null,
+        lookup_error: Boolean(
+          (entityRes.data.raw_response as { _error?: boolean } | null)?._error,
+        ),
       }
     : null;
 

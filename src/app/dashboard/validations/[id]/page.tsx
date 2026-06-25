@@ -131,10 +131,13 @@ function statusFromTier(
   overallStatus: string,
 ): string {
   if (overallStatus === "pending") return "pending";
-  if (tier === "HIGH") return "flagged";
-  if (tier === "MEDIUM") return "partial";
-  if (tier === "LOW") return "verified";
-  return overallStatus;
+  const tierStatus =
+    tier === "HIGH" ? "flagged" : tier === "MEDIUM" ? "partial" : tier === "LOW" ? "verified" : overallStatus;
+  // Don't claim "Verified" while a check is INCOMPLETE (overall_status = partial)
+  // — that contradicts the list + the input warnings (#21). A tier-improving
+  // override (overall_status frozen at "flagged") can still pull the badge down.
+  if (tierStatus === "verified" && overallStatus === "partial") return "partial";
+  return tierStatus;
 }
 
 function ExperienceStars({ tier }: { tier: number | null }) {
@@ -706,8 +709,37 @@ export default function ValidationDetailPage() {
         </TabsContent>
 
         <TabsContent value="deal" className="space-y-6 pt-4">
-          {/* Borrower's recent evaluations — jump to deals already run. The
-              Deal analyzer itself opens via the next-step strip / header CTA. */}
+          {/* Always-actionable CTA so the tab is never a dead-end (#20): size
+              this borrower's loan in the Deal analyzer, pre-filled from here. */}
+          <Card className="border-info/30 bg-info/5">
+            <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Size + route this loan</p>
+                <p className="text-sm text-muted-foreground">
+                  Run this borrower through the Deal analyzer — eligibility across your investors, then sizing + AI judgment.
+                </p>
+              </div>
+              <Button
+                render={
+                  <Link
+                    href={{
+                      pathname: "/dashboard/evaluate",
+                      query: {
+                        borrower: data.borrower_name,
+                        state: data.entity_checks[0]?.state ?? "",
+                        experience: data.experience_tier ?? "",
+                        validation_id: data.id,
+                      },
+                    }}
+                  />
+                }
+              >
+                <Calculator className="mr-2 h-4 w-4" />
+                Size this deal
+              </Button>
+            </CardContent>
+          </Card>
+          {/* Borrower's recent evaluations — jump to deals already run. */}
           <BorrowerEvaluationsCard validationId={data.id} borrowerId={data.primary_borrower_id} />
         </TabsContent>
 

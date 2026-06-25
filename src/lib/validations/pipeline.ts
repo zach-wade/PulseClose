@@ -599,7 +599,9 @@ export async function runValidationPipeline(
     }
 
     const hasActiveFlags =
-      entityResult.sos_status !== "active" ||
+      // A 429'd / errored entity lookup is INCOMPLETE, not a hard "not active"
+      // flag — it drops to "partial" (incomplete) below, not "flagged" (#21).
+      (entityResult.sos_status !== "active" && !entityUnavailable) ||
       activeLitigation.length > 0 ||
       sanctionsHit ||
       (gcResult && gcResult.license_status !== "active");

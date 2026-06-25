@@ -91,34 +91,54 @@ async function cobaltSearchOnce(
   return data;
 }
 
-// Try live data with retry-on-429, then fall back to Cobalt's cached data
-// (`liveData=false`) if live keeps throttling. Cached data is usually within
-// days of live and is enough for entity verification.
+// Try live data with exponential-backoff-on-429, then fall back to Cobalt's
+// cached data (`liveData=false`) — also retried — if live keeps throttling.
+// Cached data is usually within days of live and is enough for entity
+// verification. Only after ALL attempts throttle do we surface the 429, so the
+// pipeline marks the entity check UNAVAILABLE (not a false "not found") — the
+// honest degrade (finding #19). Backoff has jitter to de-correlate concurrent
+// validations hitting the shared rate limit.
 async function cobaltSearch(
   entityName: string,
   state: string,
   apiKey: string,
 ): Promise<CobaltResponse> {
-  // Attempt 1: live, no wait
-  try {
-    return await cobaltSearchOnce(entityName, state, apiKey, true);
-  } catch (err) {
-    if (!(err instanceof CobaltRateLimitError)) throw err;
-    console.warn("Cobalt 429 on first live attempt — backing off 2s and retrying");
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const jitter = () => Math.floor(Math.random() * 400);
+
+  // Live attempts with exponential backoff (~0 / 0.5 / 1.5 / 3.5s + jitter).
+  const liveBackoffs = [500, 1500, 3500];
+  for (let attempt = 0; attempt <= liveBackoffs.length; attempt++) {
+    try {
+      return await cobaltSearchOnce(entityName, state, apiKey, true);
+    } catch (err) {
+      if (!(err instanceof CobaltRateLimitError)) throw err;
+      if (attempt < liveBackoffs.length) {
+        const wait = liveBackoffs[attempt] + jitter();
+        console.warn(`Cobalt 429 (live attempt ${attempt + 1}/${liveBackoffs.length + 1}) — backing off ${wait}ms`);
+        await sleep(wait);
+      }
+    }
   }
 
-  // Attempt 2: live, after 2s backoff
-  await new Promise((r) => setTimeout(r, 2000));
-  try {
-    return await cobaltSearchOnce(entityName, state, apiKey, true);
-  } catch (err) {
-    if (!(err instanceof CobaltRateLimitError)) throw err;
-    console.warn("Cobalt 429 on second live attempt — falling back to liveData=false (cached)");
+  // Cached fallback, retried once. Cobalt caches recent scrapes; this avoids
+  // another upstream state-SOS hit.
+  console.warn("Cobalt live throttled — falling back to cached (liveData=false)");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await cobaltSearchOnce(entityName, state, apiKey, false);
+    } catch (err) {
+      if (!(err instanceof CobaltRateLimitError)) throw err;
+      if (attempt === 0) {
+        console.warn("Cobalt 429 on cached attempt — backing off 1.5s and retrying once");
+        await sleep(1500 + jitter());
+      }
+    }
   }
 
-  // Attempt 3: cached. Cobalt caches recent scrapes; this avoids another
-  // upstream state-SOS hit. We accept slightly stale data over surfacing 429.
-  return cobaltSearchOnce(entityName, state, apiKey, false);
+  // Every attempt throttled — surface the rate-limit so the entity check is
+  // marked unavailable (honest), never a false "not found".
+  throw new CobaltRateLimitError();
 }
 
 async function pollForResult(
