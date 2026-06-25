@@ -117,14 +117,23 @@ Drove 3 real loans through prod end-to-end + EVERY top-level screen, detail tab,
 the stepper, and the printable handoff (`scripts/drive-real-loan.ts` +
 `drive-loan-tabs.ts` + `drive-full-review.ts` + `drive-stepper.ts`; screenshots in
 `ux-review/real-loan/`). **Full screen-by-screen review: docs/PLAN-B-UI-REVIEW.md.**
-Findings #18–#25 in CALIBRATION-FINDINGS.md. **Headline — finding #18 (🔴 next fix):** the
-capital-provider MANDATE (`src/lib/mandates/assess.ts`) bypasses disambiguation +
-list-type classification + not-run handling — a name-only "possible" litigation
-match → "Active federal litigation found"; exclusion-list noise → "sanctions/PEP
-found"; a 429'd entity → "not active." The trust-killer reappearing on the wedge
-surface. Plus #19 (Cobalt 429 brittleness in prod), #20 (empty Deal tab), #21
-("Verified" badge contradicts "does not meet"). **✅ Confirmed working:** the #13
-not-run fix is live + honest in prod; disambiguation renders; deed-verify pill shows.
+Findings #18–#25. **✅ FIXED + VERIFIED on real data this session (deployed):**
+- **#18** (🔴 the big one) — the MANDATE (`src/lib/mandates/assess.ts`) now reads
+  diligence through disambiguation/classification/not-run, mirroring the risk
+  factors. Verified: Morrison FAIL(5 gates incl. false litigation+sanctions+not-
+  active) → FAIL(1 legit gate); clean Soverns/Kafetzopoulos FAIL(3) → **CONDITIONAL**
+  (re-run). Console: 0 → **2 conditional**. (`scripts/verify-mandate-fix.ts`.)
+- **#19** — Cobalt exponential backoff + jitter + retried cached fallback. (Trial
+  QUOTA still exhausts → entity 429s anyway; vendor-$/queue follow-up.)
+- **#21** — 429'd entity → "partial" not "flagged"; badge no longer false-"Verified".
+- **#22** — entity copy distinguishes a 429 ("did not complete — re-run") from "not located".
+- **#20** — Deal tab leads with a "Size this deal" CTA.
+
+**Still open:** #19 Cobalt trial quota (vendor decision); **#23 AI memo** didn't
+generate on fresh validations (after()/serverless? — needs prod-log look); minor
+handoff sanctions info-line shows raw `potential_match`; #24/#25 polish.
+**✅ Already-working (re-confirmed):** #13 not-run honesty; disambiguation at
+factor/tier/Book level; deed-verify pill.
 
 <details><summary>Original Plan B steps (for reference)</summary>
 This is different from the harness (which calls adapters directly, no DB/UI). To

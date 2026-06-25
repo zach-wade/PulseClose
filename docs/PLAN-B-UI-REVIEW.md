@@ -71,7 +71,32 @@ differently.
    "not located in SOS." (`FactorEntityView.lookup_error`, set in `persist.ts`.)
 5. **✅ #20 FIXED — "Deal" tab** now leads with a "Size this deal" CTA into the
    analyzer (no longer an empty dead-end).
-6. **🟡 #23 — AI memo** "No memo / generating": to CONFIRM in the re-pass (async lag
-   vs generation failure; AI is enabled-by-default for the org).
+6. **🟡 #23 — AI memo** "No memo / generating": still showed "generating" on the
+   re-pass — likely the `after()` enrichment not completing in the serverless
+   lifecycle, or a generation error. OPEN — needs a prod-log look.
 7. **🔵 #24/#25 — deferred polish:** investor raw-JSON view; Sizing-step NOI/cap
    pre-fill from doc-ingest.
+
+## Re-pass verification (2026-06-25) — fixes confirmed on real data
+
+Deployed the fixes, re-ran the 3 loans through the live pipeline, and re-assessed
+the mandate (`scripts/verify-mandate-fix.ts` against the real persisted rows). The
+Mandate Console now shows the before/after side by side:
+
+| Borrower | Before | After | Why correct |
+|---|---|---|---|
+| Mark Morrison (common, Tier 4) | **FAIL · 5 gates** (incl. false "active litigation", "sanctions/PEP", "not active") | **FAIL · 1 gate** (experience tier) | Disambiguation false-positives gone; the one fail is legitimate (no verifiable track record). |
+| Christopher Soverns (clean, entity 429) | **FAIL · 3 gates** | **CONDITIONAL** (re-run) | A clean borrower with an incomplete check is no longer hard-failed. |
+| Nik Kafetzopoulos (clean, entity 429) | **FAIL · 3 gates** | **CONDITIONAL** (re-run) | Same. |
+
+Console summary went from **0 conditional / all-fail** to **2 meet · 2 conditional · 5
+fail**. Also confirmed live: **#22** entity copy now reads "lookup did not complete —
+re-run; not a confirmation the entity is absent" (was "could not be located — verify
+spelling"); **#21** pipeline marks a 429'd entity "partial" not "flagged"; **#20** the
+Deal tab leads with a "Size this deal" CTA.
+
+**Still open after the pass:** **#19** — the Cobalt *trial quota* is exhausted, so the
+entity pillar 429s regardless of the new backoff (a vendor-$/queue issue, not a code
+bug); **#23** — AI memo generation; a minor handoff "Litigation & sanctions" info line
+still prints the raw `potential_match` instead of the classified "1 exclusion-list
+(informational)".
