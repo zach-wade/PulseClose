@@ -25,7 +25,7 @@ Last reviewed: 2026-05-04. Owner: Zach Wade.
 | 6 | **OpenSanctions** | Sanctions/PEP screening | `OPENSANCTIONS_API_KEY` | **Trial — expires 2026-05-28** | Rotate trial keys; paid tier post-NPLA | OFAC SDN direct | See §6 |
 | 7 | **OFAC SDN direct** | Sanctions fallback (CSV) | None (Treasury endpoint) | Free | n/a | n/a (this IS the floor) | See §7 |
 | 8 | **CSLB** | CA contractor licenses | None (HTML scrape) | Free | n/a | "not_automated" surface for non-CA | See §8 |
-| 9 | **Anthropic Claude** | LLM (4 consumers; see PRIVACY-POSTURE.md) | `ANTHROPIC_API_KEY` | Pay-as-you-go (Claude Opus 4.7) | Rotate quarterly; ZDR by default | Per-org `ai_extraction_enabled=false` toggle | See §9 |
+| 9 | **Anthropic Claude** | LLM (consumers; see PRIVACY-POSTURE.md) | `ANTHROPIC_API_KEY` | Pay-as-you-go | Rotate quarterly; ZDR by default; **⚠️ AUDIT MODEL IDS at each Anthropic model-retirement date** — a retired id silently 404s every consumer (this broke the AI memo 2026-06-15→25, finding #23). Current ids: opus-4-8 / sonnet-4-6. | Per-org `ai_extraction_enabled=false` toggle | See §9 |
 | 10 | **Resend** | Transactional email | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Free tier (3K/mo) → paid | When volume exceeds 3K/mo | Skip silently (logged) | See §10 |
 | 11 | **Supabase** | Postgres + Auth + Storage + RLS | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Pro plan (project ref `oazwscmgyqknwatqgtyc`) | Annual; PITR retention TBD | None — full outage = full outage | See §11 |
 | 12 | **Vercel** | Hosting + autodeploy | (provided by platform) | Pro plan (`buildfolios-projects-e8f9d80e/pulseclose`) | Annual | `vercel deploy --prod --yes` (manual) | See §12 |

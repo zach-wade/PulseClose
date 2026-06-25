@@ -129,11 +129,23 @@ Findings #18–#25. **✅ FIXED + VERIFIED on real data this session (deployed):
 - **#22** — entity copy distinguishes a 429 ("did not complete — re-run") from "not located".
 - **#20** — Deal tab leads with a "Size this deal" CTA.
 
-**Still open:** #19 Cobalt trial quota (vendor decision); **#23 AI memo** didn't
-generate on fresh validations (after()/serverless? — needs prod-log look); minor
-handoff sanctions info-line shows raw `potential_match`; #24/#25 polish.
-**✅ Already-working (re-confirmed):** #13 not-run honesty; disambiguation at
-factor/tier/Book level; deed-verify pill.
+**✅ FIXED + VERIFIED in the 2026-06-25 build pass (all deployed):**
+- **#26 doc-ingest** — browser→Supabase direct upload (migration 00049, bucket 50MB)
+  so real packages go through; verified on 5.3M xlsx + 5.8M/8.1M PDFs (all 200,
+  clean extractions). Model → claude-sonnet-4-6.
+- **#1 Cobalt de-rent** — shared `sos_entities` cache (00050) + DB-first
+  `lookupEntityCached`; repeat/warm lookups cost $0. Free-state bulk ingest (FL/CA)
+  is the documented follow-up that populates the same table (needs SFTP/CALICO key).
+- **#29 fund persona** — server-side redirect to the Mandate Console
+  (`getUserProfile.org_type`, migration 00051). Verified: fund@ → /capital/mandates.
+- **#23 AI memo** — root cause was a **RETIRED model** (`claude-sonnet-4-20250514`,
+  retired 6/15) → every memo 404'd → null. Bumped all model strings to current
+  (opus-4-8 / sonnet-4-6); raised /api/validations budget to 300s. Verified: memo
+  generates in ~30s. **⚠️ migrations 00049–00051 applied to prod.**
+**Still open:** #19 Cobalt trial quota (vendor $ / key rotation); Cobalt free-state
+bulk ingest (FL/CA scripts); minor handoff sanctions info-line raw `potential_match`;
+#24/#25 polish. **✅ Re-confirmed working:** #13 not-run honesty; disambiguation;
+deed-verify pill.
 
 <details><summary>Original Plan B steps (for reference)</summary>
 This is different from the harness (which calls adapters directly, no DB/UI). To

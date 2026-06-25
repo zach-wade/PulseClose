@@ -71,10 +71,19 @@ differently.
    "not located in SOS." (`FactorEntityView.lookup_error`, set in `persist.ts`.)
 5. **✅ #20 FIXED — "Deal" tab** now leads with a "Size this deal" CTA into the
    analyzer (no longer an empty dead-end).
-6. **🟡 #23 — AI memo** "No memo / generating": still showed "generating" on the
-   re-pass — likely the `after()` enrichment not completing in the serverless
-   lifecycle, or a generation error. OPEN — needs a prod-log look.
-7. **🔵 #24/#25 — deferred polish:** investor raw-JSON view; Sizing-step NOI/cap
+6. **✅ #23 FIXED — AI memo used a RETIRED model.** The Story Mode memo called
+   `claude-sonnet-4-20250514` (Sonnet 4.0), which **retired 2026-06-15** — every
+   memo 404'd, was caught, and returned null (no memo on any fresh validation).
+   Bumped to `claude-sonnet-4-6`; swept the other legacy `…-4-5-20250929` call
+   sites (share photo/address/bank extract, investor PDF) too. Also raised
+   `/api/validations` maxDuration 60→300s (the heavy deed-verify+memo `after()`
+   path was budget-starved). **Verified:** a fresh validation's memo generates in
+   ~30s. *(Hygiene: add a model-retirement check to VENDOR-LEDGER — a retired model
+   id silently breaks every consumer.)*
+7. **✅ #29 FIXED — fund persona** routes to the Mandate Console (server-side
+   redirect; `getUserProfile` carries `org_type`). Verified: fund@ lands on
+   `/dashboard/capital/mandates`.
+8. **🔵 #24/#25 — deferred polish:** investor raw-JSON view; Sizing-step NOI/cap
    pre-fill from doc-ingest.
 
 ## Re-pass verification (2026-06-25) — fixes confirmed on real data
