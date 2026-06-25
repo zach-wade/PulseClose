@@ -42,7 +42,7 @@
 > implications, and [UX-PLAN.md](./UX-PLAN.md) for the coherent-product UX plan.
 
 **Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor
-data flowing. **42 migrations applied (00001–00042).**
+data flowing. **51 migrations applied (00001–00051).**
 
 **Shipped since the last snapshot (2026-06-22 → 06-23):**
 - **Underwriting Workbench (Module 10) + AI UW Copilot (Module 6)** — ported from
@@ -685,7 +685,7 @@ acquisition (organic web is not the demand engine for this ICP; capital-provider
 endorsement/mandate is). Three parallel analyses (UX audit, strategy/plan-gap,
 sourced market stress-test) converged: the build is right and converging; the
 docs, pricing, and first-run UX lagged. Actions taken: North Star extended to
-include sizing/judgment; status snapshot refreshed (42 migrations); post-NPLA
+include sizing/judgment; status snapshot refreshed (51 migrations); post-NPLA
 sequence added (above); [UX-PLAN.md](./UX-PLAN.md) created; pricing repackage
 spec'd (add $1,499 underwriting tier + metered fund tier); de-prioritized
 BatchData/C2, SEO, reputation stack, autonomous decisioning, CRE-broker GTM.

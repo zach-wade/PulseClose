@@ -1,180 +1,103 @@
-# PulseClose — Session Pickup & Execution Plan (2026-06-25, rev. FIDELITY phase II)
+# PulseClose — Session Pickup & Execution Plan (2026-06-25, rev. POST-CALIBRATION + BUILD-PASS)
 
-> **Self-contained handoff. A fresh session starts at §"The plan (start here)".**
-> Center of gravity (unchanged): **calibrate the real pipeline against real loans
-> until it's trustworthy** — the demo is seeded synthetic; the real product must
-> produce this on real deals. Since the last pickup, the big diligence gaps the
-> calibration surfaced are now **substantially closed** (disambiguation, doc-ingest
-> of the underwriting package, multi-state GC). **Next: re-run the harness on more
-> real loans to find what's LEFT, then actually walk a few real loans through the
-> product UI to see what the experience + data look like end-to-end.**
+> **Self-contained handoff. A fresh session can start at §"The plan (start here)".**
+> The two big arcs are now DONE: (1) **calibrate the real pipeline against real ICC
+> loans** until it's trustworthy, and (2) **walk real loans through the live product
+> UI** and fix what was rough. The engine reproduces ICC's actual decisions within
+> **~7%**, the diligence layer is honest (no false-cleans, no common-name
+> false-positives, even on the mandate/wedge surface), doc-ingest accepts real
+> packages, Cobalt is de-rented, and the AI memo + fund persona work. **Next is
+> feature work** (macro overlay, Cobalt free-state bulk ingest, tier/placement
+> fidelity) — see the plan.
 
 ## Read first (in order)
-1. **[docs/CALIBRATION-FINDINGS.md](docs/CALIBRATION-FINDINGS.md) — THE NORTH STAR.**
-   What the live pipeline did to real ICC loans + the ranked gaps. Findings
-   #1/#5/#7 (and effectively #4) are now FIXED; re-read to see what remains.
-2. [docs/RESEARCH-DISAMBIGUATION.md](docs/RESEARCH-DISAMBIGUATION.md) — OFAC/FFIEC-cited
-   basis for the screening disambiguation layer + the (now-shipped) build plan.
-3. [docs/RESEARCH-GC-VALIDATION.md](docs/RESEARCH-GC-VALIDATION.md) — the GC
-   coverage research + the state-by-state ingest map + refresh-cron design.
-4. [docs/VENDOR-CAPABILITY-MAP.md](docs/VENDOR-CAPABILITY-MAP.md) — vendor catalog,
-   live-key status, decisions.
-5. [STRATEGY.md](STRATEGY.md) · memory `MEMORY.md` (esp. `project_screening_disambiguation`,
-   `project_fidelity_pivot`).
+1. **[docs/CALIBRATION-FINDINGS.md](docs/CALIBRATION-FINDINGS.md)** — the fidelity
+   loop: what the live pipeline did to real ICC loans + the ranked gaps #1–#17
+   (most FIXED; statuses inline). The harness + fidelity-score north star.
+2. **[docs/PLAN-B-UI-REVIEW.md](docs/PLAN-B-UI-REVIEW.md)** — the real-loan UI
+   walkthrough: screen-by-screen review + findings #18–#29 with fix status +
+   the verified before/after on the mandate fix.
+3. [docs/RESEARCH-SOS-REPLACEMENT.md](docs/RESEARCH-SOS-REPLACEMENT.md) — how to
+   de-rent Cobalt (the SOS cache shipped; free-state bulk ingest is the follow-up).
+4. [docs/IDEAS.md](docs/IDEAS.md) — the macro/recession overlay + land/dev Template-9
+   enrichment (both have a 2026-06-25 build-now assessment; macro is "next").
+5. [docs/RESEARCH-DISAMBIGUATION.md](docs/RESEARCH-DISAMBIGUATION.md) ·
+   [docs/RESEARCH-GC-VALIDATION.md](docs/RESEARCH-GC-VALIDATION.md) ·
+   [docs/VENDOR-CAPABILITY-MAP.md](docs/VENDOR-CAPABILITY-MAP.md) · [STRATEGY.md](STRATEGY.md)
+   · memory `MEMORY.md`.
 
 ---
 
 ## Where we are — the headline (2026-06-25)
 
-Two realities, now much closer together:
-- **The engine is real and excellent** (unchanged): deterministic sizing + exit/
-  takeout + stabilization + interest reserve + per-investor best-execution +
-  mandate verdict. AI narrates, never sets the number/tier.
-- **The diligence data is now far more trustworthy** — this is the change. The
-  trust-killer (common-name false positives) is fixed at the source; the
-  underwriting package is ingestible; GC validation spans 5 states on real data.
+Everything below is **live on `main`, deployed green**; migrations **00001–00051**
+applied to prod; `npm run build` clean; `npx tsx scripts/test-disambiguation.ts`
+(26 assertions) + `npx tsx scripts/verify-underwriting-engine.ts` pass;
+`npx tsx scripts/fidelity-score.ts` = 5/7 within buy-box, **6.9% mean |Δ|**.
+All model ids current (**opus-4-8 / sonnet-4-6** only — no retired/legacy ids).
 
-Everything below is **live on `main`, deployed green**; migrations **00001–00048**
-(00048 = litigation `not_run`, ⚠️ not yet pushed — deploy with the #13 fix);
-`npm run build` clean; `npx tsx scripts/verify-underwriting-engine.ts` +
-`npx tsx scripts/test-disambiguation.ts` (26 assertions) pass.
+**The product, plainly:** a verification + underwriting gateway whose engine sizes +
+judges the loan and whose diligence layer independently verifies the borrower —
+both now trustworthy on real deals.
+- **Engine** (unchanged, excellent): deterministic sizing across LTV/LTC/LTARV/DSCR/
+  debt-yield + exit/takeout + stabilization + interest reserve + per-investor
+  best-execution + mandate verdict. AI narrates, never sets the number/tier.
+- **Diligence is now honest end-to-end:** common-name false-positives killed at the
+  source (disambiguation), exclusion-list "sanctions" classified out, a failed check
+  reads as "incomplete" not "clean" (#13), and the **mandate/wedge surface** applies
+  all of that too (#18). Doc-ingest accepts the real packages (#26). Cobalt is
+  de-rented by a shared cache (#1).
 
-**What changed since the last pickup (all shipped + on prod):**
-- **Screening disambiguation layer** (`src/lib/screening/disambiguation.ts`) — the
-  trust-killer fix. Name-only matches capped at "possible — review," never a
-  tier-dropping hit; "name appears common" on dispersed matches. Wired through
-  OpenSanctions + OFAC + CourtListener + risk factors + UI. Verified on loan 10228
-  (20 litigation → 1 possible + 19 unlikely) and a 6-loan distinctive-name set.
-- **List-type classification** (OFAC FAQ #5 §1) — only true `sanction`/`pep` hits
-  drive risk; SAM/FINRA/medical/disqualified-director *exclusions* are
-  informational. (Every "sanctions" match in the 6-loan set was actually an
-  exclusion-list entry — pure noise, now routed out of the tier.)
-- **Identifier surfacing + jurisdiction/DOB corroboration** — the matched entry's
-  DOB/POB/nationality render so a reviewer can clear a false positive; borrower
-  DOB (optional, transient, never persisted/never to AI) + country fed into the
-  OpenSanctions query + disambiguation subject.
-- **Litigation caption precision** — first-name-position matching ("Paul Mark
-  Morrison" ≠ "Mark Morrison"); weak/none = "not the named party" = filtered.
-- **Adjudication audit trail** — reuses `factor_overrides` (actor+time+reason) with
-  OFAC-FAQ framing on the `sanctions_review`/`litigation_review` factors.
-- **Doc-ingest of the underwriting package** (`/api/ingest/borrower-doc`) — now
-  extracts structured loan_amount/purchase/as-is/ARV/rehab/FICO/type/purpose (+
-  the existing entity/GC/addresses); a `DocIngest` drop zone in the deal-stepper
-  Terms step pre-fills the sizing workbench. Validated on a real ICC package.
-- **Multi-state GC validation** — `contractor_licenses` table (00046) + a
-  config-driven ingest registry (`scripts/contractor-sources.ts` +
-  `ingest-contractors.ts`) + DB-first `lookupGC` (`src/lib/gc/lookup.ts`). **~400k
-  licenses across CA(scrape)+WA/OR/FL/VA(bulk).** Coverage-miss telemetry
-  (`gc_coverage_misses`, 00047). Registry-driven refresh cron
-  (`.github/workflows/refresh-contractor-licenses.yml`, cadence per source).
-  Smart no-coverage UX ("no statewide GC license" for TX/NY/PA vs "automated").
-  Cobalt contractor API deliberately NOT adopted (redundant/structurally empty).
-- **Interest-reserve presentation** — now leads with GROSS, net as a labeled line.
-- **Deploy fix** — swapped `next/font/google` → bundled `geist` package (the
-  intermittent "Failed to fetch Geist Mono from Google Fonts" build failures).
+## Findings ledger (compact — detail in the two docs above)
+
+**Calibration (CALIBRATION-FINDINGS.md):** #1 common-name FP ✅ · #2 entity-anchored
+track record 🔶 OPEN (owner-name search fragile) · #3 Regrid geo-trial 🔶 (retire) ·
+#4 intake captures too little ✅ (doc-ingest) · #5 sanctions exclusion-noise ✅ ·
+#13 false-clean check ✅ · #14 loan-type classification ✅ · #15 construction
+LTARV-primary ✅ (fidelity buy-box; product picker still TODO) · #16 in-progress-refi
+basis ✅ (`costSpentToDate`) · #17 doc-ingest must target the appraisal/UW file ✅.
+
+**Plan B UI (PLAN-B-UI-REVIEW.md):** #18 mandate bypassed disambiguation ✅ (the big
+one — verified) · #19 Cobalt 429 resilience ✅ backoff (trial QUOTA still a vendor
+decision) · #20 empty Deal tab ✅ CTA · #21 header badge ✅ · #22 entity-429 copy ✅ ·
+#23 AI memo (RETIRED model) ✅ · #26 doc-ingest 4MB cap ✅ direct-to-storage ·
+#27 "10MB" copy ✅ · #29 fund persona → Mandate Console ✅ · #24/#25 raw-JSON
+investor view + sizing-step NOI prefill 🔵 deferred polish.
 
 ---
 
-## The plan (start here) — back to fidelity, then SEE the experience
+## The plan (start here) — feature work + the remaining calibration gaps
 
-**Goal this session: (A) find what's still broken by running more real loans
-through the harness, then (B) actually walk a few real loans through the product
-UI to see the screens, the UX, and the real data — not the seeded demo.**
+The two arcs (calibrate, walk-the-UI) are done. Pick the next thrust:
 
-### A. Harness: re-run + loop more real loans, hunt new issues
-**Done this session (2026-06-25):** re-ran the harness (disambiguation #7–#12 all
-hold — trust-killer stable); **added 3 real loans** (905-lbj TX, 812-tait MFR+GC,
-1310-armadale construction); **built the field-by-field fidelity score**. New
-findings #13–#17 logged in CALIBRATION-FINDINGS.md. **Golden set refactored into
-`scripts/golden-loans.ts`** (shared by both harnesses — no drift).
+### Highest-leverage candidates (pick one)
+1. **Macro / recession overlay (FRED)** — IDEAS.md flags this as the next feature:
+   free (FRED API), small (a handful of series → a macro-context block in the
+   Module 6 judgment + investor memo), differentiated (a Gundlach/Damodaran-style
+   read in a bridge memo), and exactly what Damon asked for (defensible LOIs/memos).
+   Applies to every memo, not one deal type. **No external blockers.**
+2. **Cobalt free-state bulk ingest (FL/CA)** — the SOS cache (#1) is shipped; this
+   eliminates Cobalt per-state by bulk-loading `sos_entities` (source != cobalt_cache).
+   Mirror the GC pattern: `scripts/sos-sources.ts` registry + `ingest-sos.ts`, FL
+   Sunbiz bulk (public SFTP) + CA CALICO API. **Needs:** FL SFTP works as `Public`;
+   **CA CALICO requires a (free) registered key — a USER signup at calicodev.sos.ca.gov.**
+3. **Tier + investor-placement fidelity** — extend `scripts/fidelity-score.ts` from
+   loan-$ to the full decision: diff the engine's TIER + investor PLACEMENT vs the
+   Nexys audit logs (10287/10294/10295 present). Turns "we sized right" into "we'd
+   have decided right." No external blockers.
 
-1. ✅ **Re-ran the harness** + ✅ **FIXED finding #13** (the top trust bug): a
-   failed check (429) was indistinguishable from a clean check and litigation
-   *rewarded* it with +10 confidence. Now litigation emits a `not_run` sentinel
-   (migration **00048**), the pipeline withholds the bonus + drops to `partial` +
-   warns, the UI shows a "Did not complete" badge, the monitor reports
-   `rate_limited`, and the AI memo is told incomplete ≠ clear. Verified live: 429'd
-   loans now print "SCREEN INCOMPLETE." **⚠️ Migration 00048 must deploy WITH the
-   code** (a `not_run` insert needs the expanded CHECK or it throws).
-2. ◐ **Added 3 loans** (now 9 in `GOLDEN[]`). Still queued: 1518 Dolphin Ter
-   (#8008173, draw emails only — thin). Keep adding non-CA + MFR as the trove yields.
-3. ✅ **Field-by-field fidelity score built + tuned** (`scripts/fidelity-score.ts`):
-   `npx tsx scripts/fidelity-score.ts`. After #15/#16 fixes: **5/7 within buy-box,
-   mean |Δ| 6.9%** (was 25.6%). Engine reproduces ICC's actual decisions; the lone
-   outlier is 10228 (87% LTARV — genuinely aggressive, correctly surfaced).
-   - ✅ **#15** — deal-type-aware buy-box (`buyBoxFor`): construction is
-     LTARV-primary (70%) with LTC loose (90%), not LTC-first.
-   - ✅ **#16** — engine gained `costSpentToDate` (SizingInputs + schema +
-     `/api/underwrite`) so in-progress refis (812-tait) size LTC on the true basis.
-   - NEXT: diff TIER + investor PLACEMENT (not just loan $) once audit logs expose
-     the actual tier; wire the governing-assumption picker into the product UI.
-4. **Watch for remaining CALIBRATION-FINDINGS gaps:** #2 entity-anchored track
-   record (owner-name search still fragile — confirmed again: 0 props for
-   Morrison/Bhuyan/Duwaji/Series); #3 Regrid geo-trial (retire — see below).
+### Remaining calibration gaps
+- **#2 entity-anchored track record** — owner-name search returns 0 for most real
+  borrowers (held-via-LLCs / common names). The address-list deed-verify path +
+  doc-ingest-of-addresses help; confirm + lean on entity-anchored search.
+- **Governing-assumption picker** (product-side of #15) — let construction deals
+  size LTARV-primary in the sizing workbench UI (the fidelity buy-box already does).
 
-### B. Walk real loans through the actual product UI — ✅ DONE (2026-06-25)
-Drove 3 real loans through prod end-to-end + EVERY top-level screen, detail tab,
-the stepper, and the printable handoff (`scripts/drive-real-loan.ts` +
-`drive-loan-tabs.ts` + `drive-full-review.ts` + `drive-stepper.ts`; screenshots in
-`ux-review/real-loan/`). **Full screen-by-screen review: docs/PLAN-B-UI-REVIEW.md.**
-Findings #18–#25. **✅ FIXED + VERIFIED on real data this session (deployed):**
-- **#18** (🔴 the big one) — the MANDATE (`src/lib/mandates/assess.ts`) now reads
-  diligence through disambiguation/classification/not-run, mirroring the risk
-  factors. Verified: Morrison FAIL(5 gates incl. false litigation+sanctions+not-
-  active) → FAIL(1 legit gate); clean Soverns/Kafetzopoulos FAIL(3) → **CONDITIONAL**
-  (re-run). Console: 0 → **2 conditional**. (`scripts/verify-mandate-fix.ts`.)
-- **#19** — Cobalt exponential backoff + jitter + retried cached fallback. (Trial
-  QUOTA still exhausts → entity 429s anyway; vendor-$/queue follow-up.)
-- **#21** — 429'd entity → "partial" not "flagged"; badge no longer false-"Verified".
-- **#22** — entity copy distinguishes a 429 ("did not complete — re-run") from "not located".
-- **#20** — Deal tab leads with a "Size this deal" CTA.
-
-**✅ FIXED + VERIFIED in the 2026-06-25 build pass (all deployed):**
-- **#26 doc-ingest** — browser→Supabase direct upload (migration 00049, bucket 50MB)
-  so real packages go through; verified on 5.3M xlsx + 5.8M/8.1M PDFs (all 200,
-  clean extractions). Model → claude-sonnet-4-6.
-- **#1 Cobalt de-rent** — shared `sos_entities` cache (00050) + DB-first
-  `lookupEntityCached`; repeat/warm lookups cost $0. Free-state bulk ingest (FL/CA)
-  is the documented follow-up that populates the same table (needs SFTP/CALICO key).
-- **#29 fund persona** — server-side redirect to the Mandate Console
-  (`getUserProfile.org_type`, migration 00051). Verified: fund@ → /capital/mandates.
-- **#23 AI memo** — root cause was a **RETIRED model** (`claude-sonnet-4-20250514`,
-  retired 6/15) → every memo 404'd → null. Bumped all model strings to current
-  (opus-4-8 / sonnet-4-6); raised /api/validations budget to 300s. Verified: memo
-  generates in ~30s. **⚠️ migrations 00049–00051 applied to prod.**
-**Still open:** #19 Cobalt trial quota (vendor $ / key rotation); Cobalt free-state
-bulk ingest (FL/CA scripts); minor handoff sanctions info-line raw `potential_match`;
-#24/#25 polish. **✅ Re-confirmed working:** #13 not-run honesty; disambiguation;
-deed-verify pill.
-
-<details><summary>Original Plan B steps (for reference)</summary>
-This is different from the harness (which calls adapters directly, no DB/UI). To
-SEE the experience, run a loan through the real product end-to-end and look at
-every screen:
-1. Log in as the underwriter test org (creds below). 
-2. **Intake** (`/dashboard/new`): drop a real loan package (Excel/PDF from the
-   trove) → watch doc-ingest pre-fill borrower/entity/GC/addresses; add the
-   optional DOB; submit → the live pipeline runs.
-3. **Validation detail** (`/dashboard/validations/[id]`): inspect every pillar
-   card with REAL data — entity, track record, litigation (the disambiguation
-   "possible — review" / "unlikely" badges), GC (now multi-state), sanctions
-   (sanctions/PEP vs collapsed exclusions), the Flags tile, why-this-rating.
-4. **Evaluate/underwrite** (`/dashboard/evaluate` → stepper): drop the package in
-   the Terms step → pre-filled sizing; run eligibility + sizing + judgment; look
-   at the interest-reserve (gross-led), best-execution, mandate verdict.
-5. **Capture what's good and what's rough** — this is a UX-quality pass on real
-   data. Note anything that reads as a black box, a false positive, an empty
-   pillar, or a confusing number. Feed findings back into CALIBRATION-FINDINGS.
-
-> ⚠️ Use a REAL loan run through the live pipeline for this — NOT the seeded
-> Westbrook demo (it's hand-authored synthetic; never present it as vendor-pulled).
-
-</details>
-
-### C. Lower-priority / decisions (see §Decisions for the user)
-- GC refresh cron needs 2 GitHub repo secrets to actually fire (below).
-- Regrid retire-vs-pay; CA bulk-FTP migration; per-license GC adapters
-  (NV/NC/TN/UT/GA) when miss-telemetry shows the volume.
+### Minor / polish
+- Handoff "Litigation & sanctions" info-line still prints raw `potential_match`
+  (the verdict/mandate is fixed; this is the informational display line).
+- #24 investor criteria render as raw JSON; #25 sizing step NOI/cap not pre-filled
+  from doc-ingest.
 
 ---
 
@@ -182,22 +105,28 @@ every screen:
 
 - **The spine:** deterministic engine sizes + tiers; **AI narrates, never sets the
   number or the tier**; human decides. Keeps us out of ECOA/fair-lending.
-- **Disambiguation rule (now codified):** a name-only match (no DOB/address/
-  distinctive name) is capped at **"possible — review,"** never a hit; weak/none
-  = "not the named party" = filtered noise; only `sanction`/`pep` list types drive
-  risk (not SAM/FINRA/medical exclusions). DOB is the promoter to "confirmed" and
-  is **transient — never persisted, never sent to AI.**
+- **Disambiguation rule (codified + enforced everywhere incl. the mandate):** a
+  name-only match (no DOB/address/distinctive name) is capped at **"possible —
+  review,"** never a hit; weak/none = "not the named party" = filtered; only
+  `sanction`/`pep` list types drive risk (not SAM/FINRA/medical exclusions). DOB is
+  the promoter to "confirmed" and is **transient — never persisted, never to AI.**
+- **A failed/incomplete check ≠ a clean check** (#13/#18). Litigation emits a
+  `not_run` sentinel; the mandate treats unverified diligence as **conditional
+  ("re-run")**, never an auto-fail. Mirror this for any new diligence consumer.
 - **Noah's trust rules:** *"can't trust the output without the inputs"* (drill-down,
   no black box); **a single false positive destroys trust**; *"the less you ask the
   borrower, the better"* (→ doc-ingest, not forms).
 - **Damon's gate:** *"get real people, real users in here."* Results = hours saved
-  per deal. Distribution = **capital-provider endorsement.**
+  per deal. Distribution = **capital-provider endorsement** (the mandate is the wedge).
 - **Hard boundary:** rehab spend / ARV / NOI / true ownership % are **package-ingest,
-  never API** (research-confirmed). Doc-ingest is how they get in.
+  never API**. Doc-ingest (now real-package-capable) is how they get in.
 - **GC coverage reality:** no nationwide API; TX/NY/PA/NJ/MA/CO have **no statewide
-  GC license** (don't chase them — the UI says so). Bulk-ingest is the durable path.
-- **The demo (Westbrook) is seeded, not live** — the calibration loop + a real-loan
-  UI walkthrough are the path to a *real* demo.
+  GC license** (the UI says so). Bulk-ingest is the durable path.
+- **⚠️ Model-retirement hygiene:** Anthropic models retire on dates; a retired id
+  silently 404s every consumer (this broke the AI memo, #23). All ids are current
+  now (opus-4-8 / sonnet-4-6); audit at each retirement date (VENDOR-LEDGER §9).
+- **The demo (Westbrook) is seeded, not live** — never present it as vendor-pulled.
+  A real-loan run through the live pipeline is the path to a *real* demo.
 
 ---
 
@@ -205,50 +134,58 @@ every screen:
 
 - **Repo:** `/Users/zachwade/code/active/pulseclose` · **Prod:** https://app.pulseclose.com
 - **Vercel:** `buildfolios-projects-e8f9d80e/pulseclose` · **Supabase:** `oazwscmgyqknwatqgtyc`
-- **GitHub:** https://github.com/zach-wade/PulseClose · migrations **00001–00048**
-- **Underwriter test org:** `27296b6b-87f2-4b71-9e84-2c71f652449c` · logins
+- **GitHub:** https://github.com/zach-wade/PulseClose · migrations **00001–00051**
+  (latest: 00049 documents-bucket-50MB, 00050 sos_entities cache, 00051 org_type)
+- **Underwriter test org:** `27296b6b-87f2-4b71-9e84-2c71f652449c` · **Fund org:**
+  `0aada23e-56f5-47ce-b400-a872be3daaf1` (org_type=fund) · logins
   `uw@`/`solo@`/`fund@test.pulseclose.com` pw `Test1234!`
 - **Westbrook seeded demo:** `/dashboard/validations/44444444-4444-4444-8444-444444444444`
-- **Real loan trove:** `~/Downloads` (5.3G: loan apps, Nexys audit logs, appraisals)
-  + `~/code/clients/consulting/clients/insignia-capital/data/` (loan-request xlsx).
-  Audit logs: `Loan Audit Log - 10287/10294/10295.csv`. Packages:
-  `286 Virginia Pl - ICC - Loan Request.xlsx`, `_544 Sunset Ave - ICC - Loan Request - 3.9.26.xlsx`.
+- **Real loan trove:** `~/Downloads` (loan apps, Nexys audit logs, appraisals) +
+  `~/code/clients/consulting/clients/insignia-capital/data/` (loan-request xlsx).
+  Packages used: `286 Virginia Pl…xlsx`, `_544 Sunset Ave…xlsx`,
+  `812 Tait St…Financing Request…pdf`, `905 N Lbj Dr…Signed…pdf`,
+  `icc_loan_10201…1310 Armadale…Signed…pdf`. Audit logs: `Loan Audit Log - 10287/10294/10295.csv`.
 
 **Commands**
 ```bash
 npm run build                                   # sanity-check before push
-npx tsx scripts/verify-underwriting-engine.ts   # engine checks
 npx tsx scripts/test-disambiguation.ts          # 26 disambiguation assertions
-set -a; source .env.local; set +a; npx tsx scripts/calibrate-loan.ts   # the fidelity harness
-npx tsx scripts/ingest-contractors.ts [WA|OR|FL|VA|all|--due daily|--due weekly]  # GC bulk refresh
-# Re-seed demo: ORG_ID=27296b6b… npx tsx scripts/seed-sample-investors.ts
-#   then … PERSONA=underwriter npx tsx scripts/seed-persona-data.ts
-git push origin main                            # autodeploy; vercel ls pulseclose | head -5 to confirm
+npx tsx scripts/verify-underwriting-engine.ts   # engine checks (incl. costSpentToDate)
+npx tsx scripts/fidelity-score.ts               # engine vs ICC outcomes (5/7, 6.9% Δ)
+set -a; source .env.local; set +a; npx tsx scripts/calibrate-loan.ts   # live diligence harness (9 golden loans)
+npx tsx scripts/ingest-contractors.ts [WA|OR|FL|VA|all|--due daily]    # GC bulk refresh
+git push origin main                            # autodeploy; `vercel ls pulseclose | head -3` to confirm
 ```
+*UI walkthrough harnesses (drive prod, screenshots → `ux-review/`):* `scripts/drive-real-loan.ts`,
+`drive-loan-tabs.ts`, `drive-full-review.ts`, `drive-stepper.ts`, `drive-docingest.ts`,
+`drive-persona.ts`; `scripts/verify-mandate-fix.ts` re-assesses mandates.
 
-**Live key status:** Cobalt/RentCast/OpenSanctions/CourtListener ✅ (prod).
-Regrid = geo-limited trial (403 most areas) — fallback only, likely retire.
-Cobalt **contractor** trial exhausted (we did NOT adopt it).
+**Live key status:** RentCast/OpenSanctions/CourtListener ✅ (prod). **Cobalt = TRIAL
+QUOTA EXHAUSTED in prod** → entity lookups 429 (the cache + backoff degrade honestly;
+de-rent via free-state ingest or a paid/rotated key). User has a rotatable Cobalt
+trial key for demos (not in prod env). Regrid = geo-limited trial (retire).
 
 ---
 
 ## Decisions for the user (open)
-- **GitHub repo secrets** for the GC refresh cron: add `NEXT_PUBLIC_SUPABASE_URL`
-  + `SUPABASE_SERVICE_ROLE_KEY` (Settings → Secrets → Actions). Until then the
-  scheduled ingest no-ops harmlessly; the data is already loaded.
-- **Regrid:** retire (lean on Realie + RentCast + address-list deed-verify) vs pay
-  for coverage. Recommendation: retire — it blocks nothing critical.
-- **CA GC bulk migration:** move CA off the CSLB scrape onto the paid Full File FTP
-  (stability) — vendor-$ decision. Scrape works today.
+- **Cobalt:** rotate trial keys for demos vs. pay (~$1k/mo for 1k) vs. build the
+  free-state bulk ingest (FL/CA) to eliminate per-state cost. Rec: ship FL/CA ingest
+  (the cache architecture is already in place), keep Cobalt as the long-tail fallback.
+- **CA CALICO key:** free signup at calicodev.sos.ca.gov needed for the CA SOS ingest.
+- **GitHub repo secrets** for the GC refresh cron: `NEXT_PUBLIC_SUPABASE_URL` +
+  `SUPABASE_SERVICE_ROLE_KEY` (Settings → Secrets → Actions). Data is already loaded;
+  the scheduled ingest no-ops until set.
+- **Regrid:** retire (lean on Realie + RentCast + address-list deed-verify). Rec: retire.
+- **CA GC bulk migration:** move CA off the CSLB scrape onto the paid Full File FTP — vendor-$.
 
 ## Deferred / queued (NOT lost)
-- **Per-license GC adapters** (NV/NC/TN/UT/GA) — build when miss-telemetry shows
-  deal flow. **AZ** bulk exists but is Cloudflare-gated (needs a solver).
-- **Field-by-field fidelity score** in the harness (item A.3 above).
-- Side-by-side **sizing scenarios** + governing-assumption picker; **ZHVI haircut +
-  Oakhurst >$3M cap** engine wiring; **full Fund tenant** (org type + RLS +
-  cross-originator sharing — gated on the rep-and-warranty question).
-- **Liens/judgments** (TLOxp/LexisNexis, FCRA-gated); **HouseCanary** AVM upgrade;
-  **Sayari/Middesk** ownership graph — when each becomes the bottleneck.
-- **Promote-to-confirmed** is wired for sanctions (DOB); litigation can't promote
-  (no DOB in court records) — that's expected.
+- **Full Fund tenant** (cross-originator RLS + sharing) — gated on the
+  rep-and-warranty question; the org_type marker + fund home (#29) are the foundation.
+- **Land/development Template-9 enrichment** (BLS/Census) — deferred behind the macro
+  overlay (narrower, more derived-metric work). See IDEAS.md.
+- **Per-license GC adapters** (NV/NC/TN/UT/GA) when miss-telemetry shows volume; **AZ**
+  bulk is Cloudflare-gated. **Liens/judgments** (TLOxp/LexisNexis, FCRA-gated);
+  **HouseCanary** AVM; **Sayari/Middesk** ownership graph — when each is the bottleneck.
+- **ZHVI haircut + Oakhurst >$3M cap** engine wiring (encoded in the buy-box doc, not
+  yet firing). **Promote-to-confirmed:** wired for sanctions (DOB); litigation can't
+  (no DOB in court records) — expected.

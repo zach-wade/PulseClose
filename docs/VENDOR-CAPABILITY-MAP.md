@@ -17,11 +17,15 @@
 | ~~ATTOM~~ | ❌ removed | Dead key; replaced by RentCast. Env var deleted local + prod. |
 
 ## What our EXISTING vendors can pull (full catalog)
-- **Cobalt Intelligence** — we use SOS entity only. ALSO sells (all vendor-doc-sourced):
-  **Contractor-license verification — but only ~5 states (CA/FL/NY/TX/OR)**; UCC
-  filings (11 states); court judgments (NY State + Miami-Dade only); **TIN/EIN
-  IRS match**. None is nationwide. *Cobalt itself: "No single API covers all 50
-  states for contractor licensing."*
+- **Cobalt Intelligence** — we use SOS entity only. **DE-RENTED (2026-06-25):** the
+  pipeline now hits a shared `sos_entities` cache (DB-first `src/lib/sos/lookup.ts`,
+  migration 00050) before paying Cobalt, and free-state bulk ingest (FL/CA/…) will
+  populate the same table so bulk-loaded states never hit Cobalt. **⚠️ prod Cobalt
+  trial quota is exhausted → entity lookups 429** (cache + backoff degrade honestly).
+  Replacement strategy: [RESEARCH-SOS-REPLACEMENT.md](RESEARCH-SOS-REPLACEMENT.md).
+  Cobalt ALSO sells (vendor-doc-sourced, NOT adopted): contractor-license verification
+  (~5 states); UCC filings (11 states); court judgments (NY State + Miami-Dade only);
+  TIN/EIN IRS match. None nationwide.
 - **Realie** — owner/property search (deed/sale history, grantor chain, AVM).
   Calibration caveat: **owner-NAME search 404'd on a common name** — fragile.
 - **RentCast** (replaced ATTOM) — `/properties` record + sale history; AVM

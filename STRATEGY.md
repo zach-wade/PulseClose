@@ -68,7 +68,7 @@ the work now is to point the positioning, pricing, and first-run UX at it
 ## Where we are today (2026-06-23)
 
 Live at `app.pulseclose.com`, multi-tenant SaaS, Stripe billing, real
-vendor data, production-stable through **42 migrations (00001–00042)**.
+vendor data, production-stable through **51 migrations (00001–00051)**.
 NPLA Atlantic City (2026-06-22/23) just happened — the forcing function
 is now behind us; execution shifts to the post-NPLA sequence.
 

@@ -9,7 +9,7 @@ the formalized version of what that register sketches.
 Maintained alongside `docs/PRIVACY-POSTURE.md` (sub-processor list — what
 data each vendor receives) and `pickup.md` (live operational notes).
 
-Last reviewed: 2026-05-04. Owner: Zach Wade.
+Last reviewed: 2026-06-25. Owner: Zach Wade.
 
 ---
 
@@ -17,7 +17,7 @@ Last reviewed: 2026-05-04. Owner: Zach Wade.
 
 | # | Vendor | Purpose | Env var(s) | Pricing/Tier | Renewal/Rotation | Fallback | Incident playbook |
 |---|---|---|---|---|---|---|---|
-| 1 | **Cobalt Intelligence** | SOS entity scraping (50 states) | `COBALT_INTELLIGENCE_API_KEY` | Per-call (volume-tiered) | Rotate ~2026-06-10 for NPLA capacity | None — entity validation fails | See §1 |
+| 1 | **Cobalt Intelligence** | SOS entity scraping (50 states) | `COBALT_INTELLIGENCE_API_KEY` | Per-call (trial quota exhausted in prod) | Rotate keys; de-rent via sos_entities cache + free-state ingest | `sos_entities` cache; else entity marked UNAVAILABLE → partial/conditional | See §1 |
 | 2 | **Realie** | Property + deed-chain (primary) | `REALIE_API_KEY` | Per-call premium | Annual (TBD) | Regrid | See §2 |
 | 3 | **Regrid** | Property fallback | `REGRID_API_TOKEN` | Per-call | Annual (TBD) | Stub adapter (demo data) | See §3 |
 | 4 | **RentCast** | Sale-history enrichment | `RENTCAST_API_KEY` | Per-call | Annual (TBD) | Skip enrichment, return Regrid as-is | See §4 |
@@ -43,11 +43,13 @@ Last reviewed: 2026-05-04. Owner: Zach Wade.
 formation date, registered agent, officers, filing history. We do not run
 our own SOS scrapers.
 
-**Where it's called:** `src/lib/adapters/cobalt.ts` (the file is also our
-adapter orchestrator — re-exports Realie/Regrid/ATTOM/etc. through one
-factory). 30s fetch timeout (`AbortSignal.timeout(30000)`). `cobaltSearch()`
-implements internal retry: live → 2s backoff → live retry → fall to
-`liveData=false` (Cobalt's own cache).
+**Where it's called:** the pipeline routes entity lookups through DB-first
+`src/lib/sos/lookup.ts` → `lookupEntityCached` (shared `sos_entities` cache,
+00050) and only calls Cobalt on a miss, writing resolved results back (de-rent,
+2026-06-25). The adapter itself is `src/lib/adapters/cobalt.ts` (also the
+orchestrator — re-exports Realie/Regrid/etc.). 30s fetch timeout. `cobaltSearch()`
+retries with exponential backoff + jitter (4 live attempts) then a retried
+`liveData=false` cached attempt before surfacing the 429 honestly.
 
 **Pricing:** Per-call, volume-tiered. Some states (CA in particular) are
 the slowest; TX / DE require long-poll via `retryId` (`pollForResult()`,
@@ -57,10 +59,13 @@ the slowest; TX / DE require long-poll via `retryId` (`pollForResult()`,
 Cobalt accounts for NPLA demo-day capacity (`pickup.md` Open decisions #4).
 Implementation TBD: round-robin in `cobalt.ts` or env-swap pre-demo.
 
-**Fallback:** None at the vendor layer — if Cobalt is fully down,
-`lookupEntity()` returns a `not_found` shaped result with a flag
-"Entity lookup failed: …" and `_error: true` in `raw_response`. The risk
-factor `entity_status` shows "manual verification recommended".
+**Fallback:** the `sos_entities` cache + (future) free-state bulk ingest (FL/CA)
+are the de-rent path. If Cobalt is down AND the entity isn't cached,
+`lookupEntity()` returns a `not_found`-shaped result with `_error: true` in
+`raw_response` — the pipeline marks the entity UNAVAILABLE (not "not found"),
+drops overall_status to `partial`, and the mandate treats it as CONDITIONAL
+(re-run), never an auto-fail (#13/#22/#18). **prod trial quota is exhausted →
+Cobalt 429s** until a key is rotated or free-state ingest lands.
 
 **Incident playbook:**
 1. Verify health: `curl -s -m 60 -H "x-api-key: $COBALT_INTELLIGENCE_API_KEY" "https://apigateway.cobaltintelligence.com/v1/search?searchQuery=Apple&state=CA&liveData=true"`
@@ -269,7 +274,7 @@ Manual verification is the documented analyst step.
 (`src/lib/ai/check-enabled.ts`) BEFORE the SDK call. Fail-CLOSED: lookup
 errors return `false`.
 
-**Pricing:** Pay-as-you-go (Claude Opus 4.7). `max_tokens: 4096` minimum
+**Pricing:** Pay-as-you-go (Claude Opus 4.8 / Sonnet 4.6). `max_tokens: 4096` minimum
 on all four consumers (ROADMAP cross-cutting principle 11 — truncation
 defense).
 

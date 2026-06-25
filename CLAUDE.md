@@ -99,8 +99,10 @@ src/
     underwriting/             # sizing.ts (loan sizing engine) + per-investor.ts + judgment.ts (AI UW copilot) + facts.ts
     analytics/                # PostHog client + server capture (no-op without keys)
     litigation/               # extract + materialize
+    gc/                       # lookup.ts (DB-first contractor_licenses → CSLB fallback)
+    sos/                      # lookup.ts (DB-first sos_entities cache → Cobalt fallback — de-rents Cobalt)
 supabase/
-  migrations/                 # 42 migrations (00001-00042); latest: 00040 uw_models, 00041 org trial, 00042 trial-email flags
+  migrations/                 # 51 migrations (00001-00051); recent: 00046 contractor_licenses, 00048 litigation not_run, 00049 documents-bucket-50MB, 00050 sos_entities cache, 00051 org_type
 wordpress/                    # Marketing-site content + publish scripts (separate from app)
 docs/                         # All strategic + operational docs
 scripts/                      # ETL / cleanup / verification (FDIC ingest, ZHVI refresh, cleanup-broken-validations, etc.)
