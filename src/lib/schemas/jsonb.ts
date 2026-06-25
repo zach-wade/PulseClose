@@ -456,6 +456,7 @@ export const uwSizingInputsV1 = z.object({
   purchasePrice: z.number(),
   rehabBudget: z.number().optional(),
   closingCosts: z.number().optional(),
+  costSpentToDate: z.number().optional(), // finding #16 — basis for in-progress refis
   currentNOI: z.number(),
   stabilizedNOI: z.number().optional(),
   goingInCapRate: z.number(),

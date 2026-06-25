@@ -22,16 +22,26 @@
 import { underwrite, type SizingInputs } from "../src/lib/underwriting/sizing";
 import { GOLDEN, type GoldenCase } from "./golden-loans";
 
-// ── The documented calibration buy-box ──────────────────────────────────────
-// A representative bridge/construction lender's leverage caps. These are the
-// caps the fidelity score sizes against; where an ACTUAL loan exceeds them, that's
-// the calibration signal (ICC's policy is hotter, or the deal had compensating
-// factors). Tune these as the implied-leverage table below reveals ICC's true caps.
-const BUY_BOX = {
-  maxLTV: 0.75, // of as-is value (stabilized / value-add of existing improvements)
-  maxLTC: 0.8, // of total project cost (purchase/basis + rehab)
-  maxLoanToARV: 0.7, // of after-repair / stabilized value (construction / heavy value-add)
-};
+// ── The documented calibration buy-box (tuned to ICC's implied policy) ───────
+// The implied-leverage table from the first run revealed ICC's real caps, so the
+// buy-box is now DEAL-TYPE-AWARE (finding #15 — construction is LTARV-governed,
+// with LTC a loose secondary, NOT LTC-first). Where an actual loan still exceeds
+// these, it's a genuine outlier worth a human note (e.g. 10228 at 87% LTARV).
+type BuyBox = { maxLTV?: number; maxLTC?: number; maxLoanToARV?: number };
+function buyBoxFor(g: GoldenCase): BuyBox {
+  if (skipAsIsLTV(g)) {
+    // Ground-up / heavy-rehab / in-progress refi: as-is LTV is meaningless;
+    // LTARV governs (~70%), LTC is a loose ceiling (~90%).
+    return { maxLoanToARV: 0.7, maxLTC: 0.9 };
+  }
+  if (g.truth.arv != null) {
+    // Value-add of an existing, improved property: as-is LTV applies, LTARV
+    // governs the upside, LTC a moderate ceiling.
+    return { maxLTV: 0.75, maxLoanToARV: 0.7, maxLTC: 0.85 };
+  }
+  // Stabilized / purchase bridge (no rehab/ARV): a single as-is LTV cap.
+  return { maxLTV: 0.7 };
+}
 const CAP_RATE = 0.06; // synthetic cap to drive exact as-is/ARV through the NOI-based engine
 const UNDER_REQUEST = 0.85; // actual below 85% of engine max => borrower under-requested
 const OVER_TOL = 1.02; // actual above 102% of engine max => exceeds the buy-box
@@ -39,18 +49,21 @@ const OVER_TOL = 1.02; // actual above 102% of engine max => exceeds the buy-box
 const usd = (n: number | null | undefined) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
 
-// A ground-up / rehab-dominant deal where as-is is BARE LAND or a teardown (not
-// improved value): applying an as-is LTV cap is meaningless, so we skip it and
-// size on LTC + LTARV only. This deliberately does NOT trust the stated
-// loan_purpose — a loan tagged "refinance" but with rehab >= as-is is really a
-// ground-up (calibration finding from loan 10228), so we key off the economics:
-//   (a) explicit construction purpose with as-is < half of ARV (land basis), OR
-//   (b) rehab budget >= as-is value (the build, not the dirt, is the deal).
-function isGroundUp(g: GoldenCase): boolean {
+// Should we skip the as-is LTV cap? It's meaningless when as-is is bare land /
+// a teardown, OR when "as-is" is a STALE pre-improvement value (a refi of an
+// in-progress build, where lots of capital is already sunk). In all three the
+// stabilized value (LTARV) governs. Deliberately does NOT trust the stated
+// loan_purpose — keys off the economics (findings #14 + #16):
+//   (a) construction purpose with as-is < half of ARV (land basis), OR
+//   (b) rehab budget >= as-is value (the build, not the dirt, is the deal), OR
+//   (c) significant capital already spent vs. as-is (stale as-is value).
+function skipAsIsLTV(g: GoldenCase): boolean {
   const t = g.truth;
   if (t.loan_purpose === "construction" && t.as_is_value != null && t.arv != null && t.as_is_value < 0.5 * t.arv)
     return true;
   if (t.rehab_budget != null && t.as_is_value != null && t.rehab_budget >= t.as_is_value) return true;
+  if (t.cost_spent_to_date != null && t.as_is_value != null && t.cost_spent_to_date >= 0.25 * t.as_is_value)
+    return true;
   return false;
 }
 
@@ -82,11 +95,13 @@ function score(g: GoldenCase): Row {
   if (t.arv == null && (t.rehab_budget != null || t.loan_purpose === "construction")) missing.push("arv");
   if (t.rehab_budget == null && (t.arv != null || t.loan_purpose === "construction")) missing.push("rehab");
 
-  const cost = (t.purchase_price ?? t.as_is_value ?? 0) + (t.rehab_budget ?? 0);
-  const ground = isGroundUp(g);
+  const spentToDate = t.cost_spent_to_date ?? 0;
+  const cost = (t.purchase_price ?? t.as_is_value ?? 0) + spentToDate + (t.rehab_budget ?? 0);
+  const skipLTV = skipAsIsLTV(g);
+  const bb = buyBoxFor(g);
 
   // implied leverage of the actual loan
-  const ltv = t.as_is_value && !ground ? actual / t.as_is_value : null;
+  const ltv = t.as_is_value && !skipLTV ? actual / t.as_is_value : null;
   const ltc = cost > 0 ? actual / cost : null;
   const ltarv = t.arv ? actual / t.arv : null;
 
@@ -95,15 +110,17 @@ function score(g: GoldenCase): Row {
     name: g.loan_id,
     purchasePrice: t.purchase_price ?? t.as_is_value ?? 0,
     rehabBudget: t.rehab_budget ?? 0,
+    costSpentToDate: spentToDate, // finding #16 — honest LTC basis for in-progress refis
     currentNOI: (t.as_is_value ?? 0) * CAP_RATE,
     goingInCapRate: CAP_RATE,
     stabilizedNOI: t.arv != null ? t.arv * CAP_RATE : undefined,
     exitCapRate: t.arv != null ? CAP_RATE : undefined,
     rate: 0.095,
-    // apply only the caps the deal supports; skip as-is LTV for ground-up land
-    maxLTV: t.as_is_value && !ground ? BUY_BOX.maxLTV : undefined,
-    maxLTC: cost > 0 ? BUY_BOX.maxLTC : undefined,
-    maxLoanToARV: t.arv != null ? BUY_BOX.maxLoanToARV : undefined,
+    // apply only the caps this deal type supports (buyBoxFor); skip as-is LTV
+    // for ground-up land / stale-as-is in-progress refis.
+    maxLTV: t.as_is_value && !skipLTV ? bb.maxLTV : undefined,
+    maxLTC: cost > 0 ? bb.maxLTC : undefined,
+    maxLoanToARV: t.arv != null ? bb.maxLoanToARV : undefined,
   };
 
   let engineMax: number | null = null;
@@ -137,7 +154,7 @@ function score(g: GoldenCase): Row {
 
 function main() {
   console.log("PulseClose fidelity score — deterministic sizing engine vs. real ICC loan outcomes");
-  console.log(`Buy-box: LTV ${pct(BUY_BOX.maxLTV)} (as-is) · LTC ${pct(BUY_BOX.maxLTC)} · LTARV ${pct(BUY_BOX.maxLoanToARV)}\n`);
+  console.log("Buy-box (deal-type-aware): stabilized → LTV 70% · value-add → LTV 75%/LTARV 70%/LTC 85% · ground-up/in-progress → LTARV 70%/LTC 90% (no as-is LTV)\n");
 
   const rows = GOLDEN.map(score);
 
@@ -195,8 +212,8 @@ function main() {
   console.log(`Implied LTV   (as-is):  avg ${pct(avg(ltvVals))} · max ${pct(max(ltvVals))}`);
   console.log(`Implied LTC   (cost):   avg ${pct(avg(ltcVals))} · max ${pct(max(ltcVals))}`);
   console.log(`Implied LTARV (stab.):  avg ${pct(avg(ltarvVals))} · max ${pct(max(ltarvVals))}`);
-  console.log("\n→ These implied-leverage maxima ARE ICC's real buy-box. Tune BUY_BOX above to match,");
-  console.log("  then any remaining 'exceeds' is a true outlier worth a human note.");
+  console.log("\n→ The deal-type buy-box (buyBoxFor) is tuned to these implied maxima.");
+  console.log("  Any remaining 'exceeds' is a true outlier worth a human note (e.g. 10228 at 87% LTARV).");
 }
 
 main();

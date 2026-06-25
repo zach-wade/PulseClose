@@ -98,6 +98,7 @@ type UnderwriteBody = Partial<DealParams> & {
   term_months?: number | null;
   amortization_months?: number | null;
   closing_costs?: number | null;
+  cost_spent_to_date?: number | null; // capital already sunk (in-progress refi) — finding #16
   max_ltv?: number | null; // decimal or percent
   max_ltc?: number | null;
   max_ltarv?: number | null;
@@ -163,6 +164,7 @@ export async function POST(request: Request) {
     purchasePrice,
     rehabBudget: num(body.rehab_budget),
     closingCosts: num(body.closing_costs),
+    costSpentToDate: num(body.cost_spent_to_date),
     currentNOI,
     stabilizedNOI: num(body.stabilized_noi),
     goingInCapRate,

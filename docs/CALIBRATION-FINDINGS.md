@@ -217,18 +217,27 @@ LTARV avg 73% (max 87%)** — that IS ICC's real policy.
     (`rehab >= as-is` → ground-up, skip as-is LTV), not the label. **The product's
     sizing UX needs the same rule:** infer the governing basis from the numbers,
     don't let the user's "purpose" dropdown pick the wrong constraint set.
-15. **🟠 ICC's construction leverage runs hotter than a textbook 80% LTC, and is
-    really LTARV-governed.** 544-sunset sized to LTC 89% (vs 80% buy-box) but LTARV
-    is a comfortable 65%; 286-virginia ran LTARV 71%. On completed/near-complete
-    builds the binding constraint ICC actually uses is **LTARV (~70%), with LTC as a
-    loose secondary (~85–90%)** — not the other way round. This is what the queued
-    **governing-assumption picker** is for: let construction deals size LTARV-primary.
-16. **🟠 Partially-complete projects break cost-basis sizing.** 812-tait shows LTV
-    118% / LTC 116% — pure artifacts: the file's "rehab" is the $143k *cost-to-
-    complete*, but ~$3.3M was already spent, so the true basis is ~$9.9M. The only
-    honest constraint is **LTARV 66.9% — dead within policy** (matches the OM's
-    stated 66.87%). Sizing needs a **"total project basis incl. spent-to-date"**
-    input for refi-of-in-progress deals, or it must fall back to LTARV-only.
+15. **✅ ADDRESSED (2026-06-25) — ICC's construction leverage runs hotter than a
+    textbook 80% LTC, and is really LTARV-governed.** 544-sunset sized to LTC 89%
+    (vs 80% buy-box) but LTARV is a comfortable 65%; 286-virginia ran LTARV 71%. On
+    completed/near-complete builds the binding constraint ICC actually uses is
+    **LTARV (~70%), with LTC as a loose secondary (~85–90%)** — not the other way
+    round. **Resolution:** the fidelity buy-box is now **deal-type-aware**
+    (`buyBoxFor`): ground-up/in-progress → LTARV 70% + LTC 90% (no as-is LTV);
+    value-add → LTV 75%/LTARV 70%/LTC 85%; stabilized → LTV 70%. 544-sunset now
+    sizes −1% (within); the engine reproduces ICC within **6.9% mean |Δ|** (was
+    25.6%), 5/7 within. The product equivalent is the queued **governing-assumption
+    picker** (let construction deals size LTARV-primary).
+16. **✅ FIXED (2026-06-25) — Partially-complete projects break cost-basis sizing.**
+    812-tait showed LTV 118% / LTC 116% — pure artifacts: the file's "rehab" is the
+    $143k *cost-to-complete*, but ~$3.3M was already spent, so the true basis is
+    ~$9.9M. **Resolution:** the sizing engine gained an additive
+    **`costSpentToDate`** input (`SizingInputs` + `uwSizingInputsV1` schema +
+    `/api/underwrite` `cost_spent_to_date`); `totalProjectCost` now includes it, so
+    LTC sizes on the honest basis. The fidelity score also skips the (stale) as-is
+    LTV when significant capital is already sunk. 812-tait now sizes **−4% (LTARV-
+    bound, within)** — matching the OM's stated 66.87%. Engine regression test
+    extended with 3 `costSpentToDate` assertions.
 17. **🔴 The application / closed-doc package alone is insufficient sizing truth —
     the appraisal/UW file is required.** 1310-armadale (post-close package) carries
     no as-is/ARV/FICO; 905-lbj (signed 1003) states no purchase price/as-is/FICO.

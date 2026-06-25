@@ -182,4 +182,24 @@ if (failures > 0) {
   console.error(`\n❌ ${failures} check(s) failed.\n`);
   process.exit(1);
 }
+console.log("\nCost-spent-to-date basis (finding #16 — in-progress refi):");
+// Same deal but $3M already sunk into the build. LTC basis must grow by $3M,
+// so the LTC-permitted loan grows by 0.7 * $3M = $2.1M, and total cost reflects it.
+const rSpent = underwrite({ ...SAMPLE_DEAL, costSpentToDate: 3_000_000 });
+check(
+  "total project cost includes spent-to-date ($15.5M)",
+  near(rSpent.totalProjectCost, 15_500_000),
+  `got ${rSpent.totalProjectCost}`,
+);
+const ltcOf = (res: typeof r) => res.constraints.find((c) => c.key === "LTC")!.maxLoan;
+check(
+  "LTC-permitted loan rises by 0.7 × $3M = $2.1M",
+  near(ltcOf(rSpent) - ltcOf(r), 2_100_000),
+  `got Δ ${ltcOf(rSpent) - ltcOf(r)}`,
+);
+check(
+  "omitting costSpentToDate is unchanged (backward-compatible)",
+  near(underwrite(SAMPLE_DEAL).totalProjectCost, r.totalProjectCost),
+);
+
 console.log("\n✅ All underwriting-engine checks passed.\n");

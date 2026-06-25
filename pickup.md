@@ -98,13 +98,16 @@ findings #13–#17 logged in CALIBRATION-FINDINGS.md. **Golden set refactored in
    code** (a `not_run` insert needs the expanded CHECK or it throws).
 2. ◐ **Added 3 loans** (now 9 in `GOLDEN[]`). Still queued: 1518 Dolphin Ter
    (#8008173, draw emails only — thin). Keep adding non-CA + MFR as the trove yields.
-3. ✅ **Field-by-field fidelity score built** (`scripts/fidelity-score.ts`):
-   `npx tsx scripts/fidelity-score.ts`. Engine reproduces the human on clean deals
-   (286-virginia +2%, LTV bridges −9/−13%); the 4 "exceeds" are all data/
-   classification issues (#14–#17), not engine math. Implied ICC buy-box: **LTV ~69%,
-   LTC ~83%, LTARV ~73%**. NEXT: tune `BUY_BOX` to that; add total-basis input for
-   in-progress refis; diff TIER + investor PLACEMENT (not just loan $) once audit
-   logs expose the actual tier.
+3. ✅ **Field-by-field fidelity score built + tuned** (`scripts/fidelity-score.ts`):
+   `npx tsx scripts/fidelity-score.ts`. After #15/#16 fixes: **5/7 within buy-box,
+   mean |Δ| 6.9%** (was 25.6%). Engine reproduces ICC's actual decisions; the lone
+   outlier is 10228 (87% LTARV — genuinely aggressive, correctly surfaced).
+   - ✅ **#15** — deal-type-aware buy-box (`buyBoxFor`): construction is
+     LTARV-primary (70%) with LTC loose (90%), not LTC-first.
+   - ✅ **#16** — engine gained `costSpentToDate` (SizingInputs + schema +
+     `/api/underwrite`) so in-progress refis (812-tait) size LTC on the true basis.
+   - NEXT: diff TIER + investor PLACEMENT (not just loan $) once audit logs expose
+     the actual tier; wire the governing-assumption picker into the product UI.
 4. **Watch for remaining CALIBRATION-FINDINGS gaps:** #2 entity-anchored track
    record (owner-name search still fragile — confirmed again: 0 props for
    Morrison/Bhuyan/Duwaji/Series); #3 Regrid geo-trial (retire — see below).

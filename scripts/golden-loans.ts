@@ -33,7 +33,8 @@ export interface GoldenCase {
     as_is_value?: number;
     purchase_price?: number; // only when distinct from as_is_value
     arv?: number;
-    rehab_budget?: number;
+    rehab_budget?: number; // remaining / cost-to-complete
+    cost_spent_to_date?: number; // capital already sunk (in-progress refi) — finding #16
     loan_amount?: number;
     fico?: number;
     loan_purpose?: string;
@@ -214,7 +215,8 @@ export const GOLDEN: GoldenCase[] = [
     truth: {
       as_is_value: 6_600_000, // implied by 1st-TD payoff; no formal as-is appraisal in the OM
       arv: 11_663_761, // stabilized / as-completed value (4.75% cap on pro-forma NOI)
-      rehab_budget: 143_645, // cost-to-complete (~$3.3M of a $3.4M budget already spent)
+      rehab_budget: 143_645, // cost-to-complete remaining
+      cost_spent_to_date: 3_256_195, // already spent of the $3.4M renovation budget
       loan_amount: 7_800_000,
       loan_purpose: "refinance",
       property_type: "multifamily",

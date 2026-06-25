@@ -22,8 +22,14 @@ export interface SizingInputs {
 
   // acquisition + project cost
   purchasePrice: number;
-  rehabBudget?: number; // value-add / capex
+  rehabBudget?: number; // value-add / capex (remaining / cost-to-complete)
   closingCosts?: number; // acquisition closing + financing costs
+  // Capital already sunk into the project before this loan (a refinance of an
+  // in-progress build/value-add). Without it, LTC sizes on too small a basis and
+  // reports a nonsensically high leverage on a deal that's actually conservative
+  // — calibration finding #16 (loan 812-tait: $3.3M already spent, only $143k
+  // cost-to-complete, so cost-basis LTC read 116% while LTARV was a clean 67%).
+  costSpentToDate?: number;
 
   // income
   currentNOI: number; // in-place / going-in NOI
@@ -103,7 +109,11 @@ export function mortgageConstant(annualRate: number, amortizationMonths?: number
 export function underwrite(d: SizingInputs): SizingResult {
   const rehab = d.rehabBudget ?? 0;
   const closing = d.closingCosts ?? 0;
-  const totalProjectCost = d.purchasePrice + rehab + closing;
+  const spentToDate = d.costSpentToDate ?? 0;
+  // LTC basis = original acquisition + all capital deployed (spent-to-date) +
+  // remaining rehab + closing. Including spent-to-date keeps LTC honest on a
+  // refi of an in-progress project (finding #16).
+  const totalProjectCost = d.purchasePrice + spentToDate + rehab + closing;
 
   const asIsValue = d.currentNOI / d.goingInCapRate;
   const stabilizedValue =
