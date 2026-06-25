@@ -98,9 +98,9 @@ export async function upsertBatch(
 }
 
 // Parse delimited text into rows of fields. Handles quoted fields with embedded
-// commas and "" escapes (FL DBPR / CSLB extracts). Assumes no embedded newlines
-// inside quotes (true for these address-style datasets).
-export function parseCsv(text: string): string[][] {
+// delimiters and "" escapes (FL DBPR / CSLB CSV; VA DPOR is tab-delimited).
+// Assumes no embedded newlines inside quotes (true for these datasets).
+export function parseDelimited(text: string, delimiter = ","): string[][] {
   return text
     .split(/\r?\n/)
     .filter((l) => l.length > 0)
@@ -113,7 +113,7 @@ export function parseCsv(text: string): string[][] {
         if (c === '"') {
           if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
           else inQ = !inQ;
-        } else if (c === "," && !inQ) {
+        } else if (c === delimiter && !inQ) {
           out.push(cur); cur = "";
         } else cur += c;
       }

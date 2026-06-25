@@ -12,12 +12,12 @@
 //     and adds ~zero over bulk-ingest, so we did NOT adopt it.
 
 // States with GC license validation live today. CA via the CSLB scrape;
-// WA/OR/FL via the ingested contractor_licenses table (official bulk data).
-export const GC_AUTOMATED_STATES = ["CA", "WA", "OR", "FL"] as const;
+// WA/OR/FL/VA via the ingested contractor_licenses table (official bulk data).
+export const GC_AUTOMATED_STATES = ["CA", "WA", "OR", "FL", "VA"] as const;
 
 // States whose data we ingest in bulk (no per-request vendor call). CA stays on
 // the scrape for now (bulk-CA download is a follow-up — see RESEARCH doc).
-export const GC_BULK_INGEST_STATES = ["WA", "OR", "FL"] as const;
+export const GC_BULK_INGEST_STATES = ["WA", "OR", "FL", "VA"] as const;
 
 // States with NO statewide GC license — verification is municipal/registration
 // only, so a state license check isn't possible regardless of vendor.

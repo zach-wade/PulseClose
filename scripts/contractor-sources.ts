@@ -14,14 +14,16 @@ export interface SocrataSource {
   url: string;
   map: (r: Record<string, unknown>) => ContractorRow | null;
 }
-export interface CsvSource {
+export interface DelimitedSource {
   state: string;
   source: string;
-  kind: "csv";
-  url: string;
+  kind: "delimited";
+  urls: string[];          // one or more files (VA splits Class A/B/C into separate files)
+  delimiter: string;       // "," (FL) | "\t" (VA)
+  header: boolean;         // skip the first row?
   map: (r: string[]) => ContractorRow | null;
 }
-export type StateSource = SocrataSource | CsvSource;
+export type StateSource = SocrataSource | DelimitedSource;
 
 // ── WA — L&I Socrata (m8qx-ubtq), PDDL public domain, 3x/day ──────────────────
 const WA: SocrataSource = {
@@ -92,11 +94,13 @@ const FL_TYPE_DESC: Record<string, string> = {
   RB: "Registered Building Contractor",
   RR: "Registered Residential Contractor",
 };
-const FL: CsvSource = {
+const FL: DelimitedSource = {
   state: "FL",
   source: "fl_dbpr",
-  kind: "csv",
-  url: "https://www2.myfloridalicense.com/sto/file_download/extracts/CONSTRUCTIONLICENSE_1.csv",
+  kind: "delimited",
+  urls: ["https://www2.myfloridalicense.com/sto/file_download/extracts/CONSTRUCTIONLICENSE_1.csv"],
+  delimiter: ",",
+  header: false,
   map(f) {
     const g = (i: number) => (f[i] ?? "").trim();
     const license = g(20) || g(12);
@@ -123,4 +127,43 @@ const FL: CsvSource = {
   },
 };
 
-export const SOURCES: StateSource[] = [WA, OR, FL];
+// ── VA — DPOR Board for Contractors regulant lists, tab-delimited .txt, free,
+// refreshed every 5 business days. Class A/B/C split across files; all are
+// "__crnt" (current = active) lists. 20-col header. Path: "Regulant List".
+// Cols: 2 CERTIFICATE#  3 INDIVIDUAL NAME  4 BUSINESS NAME  8 CITY  9 STATE
+// 10 ZIP  15 EXPIRATION  16 CERTIFICATION  17 RANK(A/B/C)  18 SPECIALTY
+const VA_BASE = "https://www.dpor.virginia.gov/sites/default/files/Records%20and%20Documents/Regulant%20List";
+const VA: DelimitedSource = {
+  state: "VA",
+  source: "va_dpor",
+  kind: "delimited",
+  urls: ["2701", "2705a", "2705b", "2705c"].map((c) => `${VA_BASE}/${c}__crnt.txt`),
+  delimiter: "\t",
+  header: true,
+  map(f) {
+    const g = (i: number) => (f[i] ?? "").trim();
+    const license = g(2);
+    const name = g(4) || g(3);
+    if (!license || !name) return null;
+    const rank = g(17);
+    const specialty = g(18);
+    return {
+      state: "VA",
+      license_number: license,
+      business_name: name,
+      normalized_name: normName(name),
+      license_type: [rank ? `Class ${rank}` : null, specialty || null].filter(Boolean).join(" — ") || null,
+      // "__crnt" files are the current/active regulant lists.
+      status: "active",
+      status_raw: rank || null,
+      effective_date: isoDate(g(16)),
+      expiration_date: isoDate(g(15)),
+      city: g(8) || null,
+      zip: g(10) || null,
+      source: "va_dpor",
+      raw: { rank, specialty, occupation: g(1), individual: g(3) },
+    };
+  },
+};
+
+export const SOURCES: StateSource[] = [WA, OR, FL, VA];

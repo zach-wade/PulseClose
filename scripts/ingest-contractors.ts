@@ -8,7 +8,7 @@
 // Idempotent — (state, license_number) PK upserts. Adding a state is a one-entry
 // change in contractor-sources.ts; no new script.
 
-import { getClient, upsertBatch, fetchSocrata, parseCsv, type ContractorRow } from "./_contractor-ingest";
+import { getClient, upsertBatch, fetchSocrata, parseDelimited, type ContractorRow } from "./_contractor-ingest";
 import { SOURCES, type StateSource } from "./contractor-sources";
 
 async function runSource(supabase: ReturnType<typeof getClient>, src: StateSource): Promise<void> {
@@ -19,11 +19,17 @@ async function runSource(supabase: ReturnType<typeof getClient>, src: StateSourc
     mapped = rows.map(src.map).filter((x): x is ContractorRow => x !== null);
     console.log(`Mapped ${mapped.length}/${rows.length}; upserting…`);
   } else {
-    const res = await fetch(src.url, { signal: AbortSignal.timeout(180000) });
-    if (!res.ok) throw new Error(`${src.state} download ${res.status}`);
-    const rows = parseCsv(await res.text());
-    mapped = rows.map(src.map).filter((x): x is ContractorRow => x !== null);
-    console.log(`Downloaded ${rows.length} rows; mapped ${mapped.length}; upserting…`);
+    // One or more delimited files (VA splits Class A/B/C across files).
+    const allRows: string[][] = [];
+    for (const url of src.urls) {
+      const res = await fetch(url, { signal: AbortSignal.timeout(180000) });
+      if (!res.ok) { console.warn(`  ${url.split("/").pop()} → ${res.status}, skipping`); continue; }
+      const rows = parseDelimited(await res.text(), src.delimiter);
+      allRows.push(...(src.header ? rows.slice(1) : rows));
+      console.log(`  ${url.split("/").pop()}: ${rows.length} rows`);
+    }
+    mapped = allRows.map(src.map).filter((x): x is ContractorRow => x !== null);
+    console.log(`Downloaded ${allRows.length} rows; mapped ${mapped.length}; upserting…`);
   }
   const { upserted, skipped } = await upsertBatch(supabase, mapped);
   console.log(`Done. ${src.state}: ${upserted} upserted, ${skipped} skipped.`);

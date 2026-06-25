@@ -71,6 +71,38 @@ portal) and the clean path is the paid Full File/Update File FTP service — a
 vendor-$ decision. (2) A **refresh cron** for the three scripts (WA 3×/day, OR
 daily, FL weekly) — currently run on demand.
 
+## State enumeration (deep-research 2026-06-25) — what's ingestible
+
+Ranked the priority construction-lending states. The take: bulk-ingestible
+*general-contractor* data is rarer than it looks — many high-volume states have
+no statewide GC license, and several Socrata datasets that exist (CO, TX) don't
+cover GCs.
+
+| State | Statewide GC license? | Source | Class |
+|---|---|---|---|
+| WA | ✅ | data.wa.gov Socrata | **BULK ✓ ingested** |
+| OR | ✅ | data.oregon.gov Socrata | **BULK ✓ ingested** |
+| FL | ✅ | DBPR CSV | **BULK ✓ ingested** |
+| **VA** | ✅ Class A/B/C | DPOR tab-delimited .txt (2701/2705a/b/c), free, 5-biz-day | **BULK ✓ ingested (53,725)** |
+| CA | ✅ | CSLB master-list (free) / Full File (paid) | bulk pending; on scrape today |
+| AZ | ✅ (ROC) | ROC "Posting List" CSV — **Cloudflare-gated** (needs a JS-challenge solver) | bulk-but-blocked |
+| NC | ✅ (NCLBGC) | per-license portal only | per-license |
+| TN | ✅ (≥$25k) | Tableau dashboard, no bulk | per-license |
+| NV | ✅ (NSCB) | lookup tools only | per-license |
+| UT | ✅ (DOPL B100/R100) | bulk exists but **paid**, no free API | per-license |
+| GA | ✅ (state board) | bulk path unresolved | per-license |
+| CO | ❌ municipal | DORA Socrata exists but **no GC type** | n/a (no GC license) |
+| TX | ❌ municipal | TDLR Socrata is **trade-only** | n/a |
+| NJ | ❌ | HIC registration only | n/a |
+| MA | ❌ | dual CSL + HIC, no unified GC | n/a |
+
+**Ingest order acted on:** added **VA** (clean free bulk). **AZ** is bulk but
+Cloudflare-gated — deferred until a headless/CF-solver fetch is worth building.
+Next tier = per-license adapters for NV/NC/TN/UT/GA (on-demand by license #,
+like CSLB) — build when the coverage-miss telemetry shows the deal flow.
+
+**Coverage now:** CA (scrape) + WA/OR/FL/VA (bulk) — **400k+ licenses**.
+
 ## Recommendation
 
 1. **Do NOT pay for the Cobalt contractor API.** Its live contractor states
