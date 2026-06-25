@@ -66,7 +66,7 @@ export function sizeInterestReserve(d: InterestReserveInputs): InterestReserveRe
   const summary =
     netReserve <= 0
       ? `In-place income covers debt service over ${months} mo — no interest reserve required.`
-      : `Reserve ≈ $${Math.round(netReserve).toLocaleString()} (${(reserveAsPctOfLoan * 100).toFixed(1)}% of loan) to carry ${months} mo of debt service net of in-place income.`;
+      : `Gross reserve ≈ $${Math.round(grossReserve).toLocaleString()} (full debt service over ${months} mo); net ≈ $${Math.round(netReserve).toLocaleString()} (${(reserveAsPctOfLoan * 100).toFixed(1)}% of loan) if in-place income services debt.`;
 
   return { monthlyDebtService, reserveMonths: months, grossReserve, noiOffset, netReserve, reserveAsPctOfLoan, summary };
 }

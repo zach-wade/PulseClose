@@ -897,9 +897,13 @@ function StepSizing({
             {sizing.interestReserve && sizing.interestReserve.netReserve > 0 && (
               <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
                 <p className="text-sm font-semibold">Interest reserve — carry to stabilization</p>
+                {/* Lead with GROSS — the full debt service over the period, which
+                    is the number a lender actually funds. Net (less projected
+                    in-place income) is the realistic secondary line; leading with
+                    net read as confusingly small next to monthly DS. */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Field label="Net reserve needed" value={usd(sizing.interestReserve.netReserve)} big />
-                  <Field label="% of loan" value={ratioPct(sizing.interestReserve.reserveAsPctOfLoan)} />
+                  <Field label="Reserve (full debt service)" value={usd(sizing.interestReserve.grossReserve)} big />
+                  <Field label="Net if in-place income services debt" value={usd(sizing.interestReserve.netReserve)} />
                   <Field label="Monthly debt service" value={usd(sizing.interestReserve.monthlyDebtService)} />
                   <Field label="Reserve period" value={`${sizing.interestReserve.reserveMonths} mo`} />
                 </div>
