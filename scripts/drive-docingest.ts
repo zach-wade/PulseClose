@@ -14,8 +14,9 @@ const OUT = "ux-review/real-loan";
 const HOME = os.homedir();
 
 const FILES = [
-  { label: "905-lbj-pdf-3.3M", path: `${HOME}/Downloads/905 N Lbj Dr - ICC - Loan App & Disclosures - Signed-1779305204078.pdf` },
   { label: "286-virginia-xlsx-5.3M", path: `${HOME}/code/clients/consulting/clients/insignia-capital/data/286 Virginia Pl - ICC - Loan Request.xlsx` },
+  { label: "812-tait-pdf-5.8M", path: `${HOME}/Downloads/812 Tait St - Financing Request Package.pdf` },
+  { label: "1310-armadale-pdf-8.1M", path: `${HOME}/Downloads/icc_loan_10201_document_1310 Armadale Ave - ICC - Loan Doc Pkg - Signed-1765839407872.pdf` },
 ];
 
 async function login(page: Page) {

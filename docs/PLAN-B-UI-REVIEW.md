@@ -117,17 +117,15 @@ the doc-ingested underwriting half real?": **yes.**
 - **544 Sunset (loan-request, via CSV):** loan **$4,239,490 (exact file match)**,
   purchase $2.2M, ARV $6.48M, FICO 731 — spot-on.
 
-**🔴 #26 — The 4MB upload cap blocks the real packages.** The actual ICC files are
-5.3M (286 xlsx) / 5.7M (544 xlsx) / 5.8M (812 Tait) / 8.1M (1310 Armadale). All
-return **HTTP 413 "File too large (max 4MB)"** — only the 3.3M PDF fit. The route
-comment names the fix: **signed direct-to-Supabase upload** (like the upload-photo
-route) to bypass Vercel's 4.5MB serverless body cap, then process from storage. This
-is the #1 doc-ingest gap — until fixed, real packages can't be dropped in as-is.
-**(Workaround proven: converting the xlsx → CSV (89KB/41KB) sails through and extracts
-perfectly — so the parser is fine; it's purely the upload transport.)**
+**✅ #26 FIXED (2026-06-25) — The 4MB cap was Vercel's serverless body limit.** Now the
+browser uploads the file STRAIGHT to the documents bucket (bypassing Vercel), and the
+API reads it from storage via the admin client (migration 00049 raised the bucket to
+50MB for appraisals; route guards PDFs >24MB for Claude's 32MB cap; temp object
+deleted immediately after read). **Verified live on the previously-413'ing files:**
+286-virginia xlsx (5.3M), 812-tait PDF (5.8M), and the **8.1M / 140-page** 1310-armadale
+PDF all return HTTP 200 with clean extractions (model bumped to claude-sonnet-4-6).
 
-**🟡 #27 — "Max 10MB" UI copy** (`doc-ingest.tsx`) contradicts the 4MB API cap — fix
-the copy (or raise the limit via #26).
+**✅ #27 FIXED — "Max 10MB" copy → "up to 50MB."**
 
 ## Per-persona pass (2026-06-25) — Task 2
 
