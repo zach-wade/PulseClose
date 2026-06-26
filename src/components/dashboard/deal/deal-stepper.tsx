@@ -17,6 +17,7 @@ import { useReducer, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Term } from "@/components/ui/term";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -728,26 +729,39 @@ function StepSizing({
             </select>
           </div>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">House sizing constraints (defaulted from matched investors; override as needed)</p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <NumField id="uw_mltv" label="Max LTV %" value={s.max_ltv} onChange={(v) => set("max_ltv", v)} />
-            <NumField id="uw_mltc" label="Max LTC %" value={s.max_ltc} onChange={(v) => set("max_ltc", v)} />
-            <NumField id="uw_mltarv" label="Max LTARV %" value={s.max_ltarv} onChange={(v) => set("max_ltarv", v)} />
-            <NumField id="uw_dscr" label="Min DSCR" step="0.05" value={s.min_dscr} onChange={(v) => set("min_dscr", v)} />
-            <NumField id="uw_dy" label="Min debt yield %" step="0.1" value={s.min_debt_yield} onChange={(v) => set("min_debt_yield", v)} />
+        {/* Progressive disclosure (UX-REDESIGN §10 #3): the 10 advanced caps +
+            exit/takeout inputs default from the matched investors, so a basic
+            user never has to touch them. Collapsed by default → the sizing step
+            opens as ~8 core economics fields, not an 18-field wall. Children stay
+            mounted (just hidden), so values + the size computation are unaffected. */}
+        <details className="group rounded-md border border-border/60 bg-muted/20">
+          <summary className="flex cursor-pointer list-none select-none items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground">
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            Advanced — house caps + exit/takeout (defaulted from your matched investors; open to override)
+          </summary>
+          <div className="space-y-4 px-3 pb-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">House sizing constraints (defaulted from matched investors; override as needed)</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <NumField id="uw_mltv" label="Max LTV %" value={s.max_ltv} onChange={(v) => set("max_ltv", v)} />
+                <NumField id="uw_mltc" label="Max LTC %" value={s.max_ltc} onChange={(v) => set("max_ltc", v)} />
+                <NumField id="uw_mltarv" label="Max LTARV %" value={s.max_ltarv} onChange={(v) => set("max_ltarv", v)} />
+                <NumField id="uw_dscr" label="Min DSCR" step="0.05" value={s.min_dscr} onChange={(v) => set("min_dscr", v)} />
+                <NumField id="uw_dy" label="Min debt yield %" step="0.1" value={s.min_debt_yield} onChange={(v) => set("min_debt_yield", v)} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Exit / takeout assumptions (the permanent loan that repays the bridge — you govern the exit)</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <NumField id="uw_term" label="Bridge term (mo)" value={s.term_months} onChange={(v) => set("term_months", v)} placeholder="24" />
+                <NumField id="uw_tltv" label="Perm max LTV %" value={s.takeout_max_ltv} onChange={(v) => set("takeout_max_ltv", v)} placeholder="70" />
+                <NumField id="uw_tdscr" label="Perm min DSCR" step="0.05" value={s.takeout_min_dscr} onChange={(v) => set("takeout_min_dscr", v)} placeholder="1.25" />
+                <NumField id="uw_trate" label="Perm rate % (blank = est.)" step="0.05" value={s.takeout_rate} onChange={(v) => set("takeout_rate", v)} placeholder="auto" />
+                <NumField id="uw_stab" label="Months to stabilize" value={s.months_to_stabilize} onChange={(v) => set("months_to_stabilize", v)} placeholder="18" />
+              </div>
+            </div>
           </div>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Exit / takeout assumptions (the permanent loan that repays the bridge — you govern the exit)</p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <NumField id="uw_term" label="Bridge term (mo)" value={s.term_months} onChange={(v) => set("term_months", v)} placeholder="24" />
-            <NumField id="uw_tltv" label="Perm max LTV %" value={s.takeout_max_ltv} onChange={(v) => set("takeout_max_ltv", v)} placeholder="70" />
-            <NumField id="uw_tdscr" label="Perm min DSCR" step="0.05" value={s.takeout_min_dscr} onChange={(v) => set("takeout_min_dscr", v)} placeholder="1.25" />
-            <NumField id="uw_trate" label="Perm rate % (blank = est.)" step="0.05" value={s.takeout_rate} onChange={(v) => set("takeout_rate", v)} placeholder="auto" />
-            <NumField id="uw_stab" label="Months to stabilize" value={s.months_to_stabilize} onChange={(v) => set("months_to_stabilize", v)} placeholder="18" />
-          </div>
-        </div>
+        </details>
 
         <div className="flex justify-end">
           <Button onClick={onSize} disabled={running}>{running ? "Sizing…" : "Size loan"}</Button>
@@ -786,11 +800,11 @@ function StepSizing({
               </div>
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-sm pt-2 border-t border-border/50">
-              <Field label="LTV (as-is)" value={ratioPct(sizing.ltv)} />
-              <Field label="LTC" value={ratioPct(sizing.ltc)} />
-              <Field label="DSCR in-place" value={mult(sizing.dscrCurrent)} />
-              <Field label="DSCR stab." value={mult(sizing.dscrStabilized)} />
-              <Field label="Debt yield" value={ratioPct(sizing.debtYieldCurrent)} />
+              <Field label={<Term term="LTV">LTV (as-is)</Term>} value={ratioPct(sizing.ltv)} />
+              <Field label={<Term>LTC</Term>} value={ratioPct(sizing.ltc)} />
+              <Field label={<Term term="DSCR">DSCR in-place</Term>} value={mult(sizing.dscrCurrent)} />
+              <Field label={<Term term="DSCR">DSCR stab.</Term>} value={mult(sizing.dscrStabilized)} />
+              <Field label={<Term>Debt yield</Term>} value={ratioPct(sizing.debtYieldCurrent)} />
               <Field label="Equity mult." value={mult(sizing.equityMultiple)} />
             </div>
             {deal.perInvestor && deal.perInvestor.length > 0 && (
@@ -1125,7 +1139,7 @@ function StepHandoff({ deal }: { deal: Deal }) {
 
 // ── small shared presentational helpers ─────────────────────────────────────
 
-function Field({ label, value, big }: { label: string; value: string; big?: boolean }) {
+function Field({ label, value, big }: { label: React.ReactNode; value: string; big?: boolean }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
