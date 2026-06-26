@@ -74,37 +74,49 @@ approved verdict-first redesign.
 
 ---
 
-## The plan (start here) — BUILD the verdict-first redesign
+## The plan — verdict-first redesign ✅ COMPLETE (all 6 steps live + verified)
 
-The feature trio + calibration + UI-walk are done. **The primary thrust now is the
-approved verdict-first UX redesign** (spec: `UX-REDESIGN-PLAN.md §11`; mockup:
-`docs/mockups/detail-redesign.html`; principles: §11.2 — read before building any
-surface). The core idea: **lead every surface with the answer (verdict + one-line
-why + 5-pillar status + one action); collapse the full report behind one disclosure.**
+The approved verdict-first UX redesign (spec: `UX-REDESIGN-PLAN.md §11`) is **fully
+built, live on prod, and visually verified** (`drive-verdict-pass.ts` = 11/11). Every
+surface now leads with the answer (verdict + one-line why + 5-pillar status + one
+action) from the ONE `computeVerdict()`; the full report sits behind one disclosure.
 
-**Build order (§11.5 — each step gated by `npm run build` + a visual-verify pass on
-prod via `scripts/drive-verdict-pass.ts`):**
-1. ✅ **DONE** — **Shared primitives.** `src/lib/validation/verdict.ts`
-   (`computeVerdict()` + `extractPillars()` — the **single source of truth**, mirrors
-   the pipeline's per-pillar completion logic) + `src/components/validation/`
-   (status tokens color+icon+shape · `<VerdictHero>` · `<PillarQuad>` · `<DeltaChip>` ·
-   `<Counterfactual>` · evidence `<Drawer>`). `scripts/verify-verdict.ts` = 20 assertions.
-2. ✅ **DONE — live + verified.** **Detail page** assembled answer-first: verdict hero
-   leads, the entire prior page demoted under a "Full report" disclosure; pillars drill
-   to the Evidence tab. **Achilles Verified-on-429 bug FIXED** (hero reads "Needs review";
-   confirmed on prod via `drive-verdict-pass.ts`, 7/7). DeltaChip not yet wired (needs a
-   prior-run tier lookup — deferred, renders nothing rather than a fake "first run").
-3. **← NEXT. Borrowers list** — verdict chips per row (reuse `computeVerdict()` so list +
-   detail never disagree). **Needs list-API enrichment:** `/api/validations` is
-   `select("*")` (row cols only, no joined pillar tables) — add the pillar-completion
-   signals (or a denormalized verdict) so `extractPillars()` can run there.
-4. **Deal stepper** result surfaces — money-tile header (max loan · binding
-   constraint · tier) + constraint table w/ binding row highlighted + counterfactual.
-5. **Handoff PDF** — BLUF lead (verdict + binding constraint + tier first).
-6. **Capital / Portfolio / Fund** — verdict rollups from the same util.
+**Build order (§11.5) — all done:**
+1. ✅ **Shared primitives.** `src/lib/validation/verdict.ts` (`computeVerdict()` +
+   `extractPillars()` — single source of truth) + `src/components/validation/`
+   (status tokens · `<VerdictHero>` · `<PillarQuad>` · `<DeltaChip>` · `<VerdictChip>` ·
+   `<Counterfactual>` · evidence `<Drawer>`). `verify-verdict.ts` = 20 assertions.
+2. ✅ **Detail page** answer-first; **Achilles 429 bug FIXED** (reads "Needs review").
+3. ✅ **Lists.** `verdict-batch.ts` (`computeVerdictsForValidations` — 7 batched reads,
+   any row count, + `prior_tier`); `/api/validations`, `/api/borrowers/[id]/validations`,
+   `/api/validations/[id]` enriched. `<VerdictChip>` on the dashboard + borrower rows;
+   **DeltaChip now wired** (real ▲/▼ vs last run from `prior_tier`).
+4. ✅ **Deal stepper** sizing result: money-tile header + binding-row highlight + per-row
+   headroom + counterfactual ("relax X and Y binds next at $Z").
+5. ✅ **Handoff BLUF** in PDF + Excel (`doc.verdict` via the same util).
+6. ✅ **Portfolio** verdict mix (verdict_counts, latest-per-borrower). Mandate console is
+   already verdict-shaped. (Full **Fund cross-originator** tenant is the separate Phase-2
+   build, gated on the rep-and-warranty question — NOT part of §11.5.)
 
 > **Consistency is load-bearing:** every verdict on every surface comes from the one
-> `computeVerdict()`. Inconsistent verdicts destroy trust faster than missing ones.
+> `computeVerdict()`. Verified live across detail · list · portfolio · handoff.
+
+## Coverage + E2E (added 2026-06-26)
+- **Coverage map shipped:** `/dashboard/coverage` (code-driven, reads live keys) +
+  [docs/COVERAGE.md](docs/COVERAGE.md) + `src/lib/coverage/map.ts`. **SOS free now:**
+  CO/NY (Socrata live), FL (Sunbiz bulk, 3,167 rows), CA (CALICO — **key pending**).
+  **GC live:** CA (CSLB scrape), WA/OR/FL/VA (bulk, ~400k). TX/NY/PA = no statewide GC.
+  Everything else SOS → Cobalt (trial exhausted).
+- **FL is the one state with BOTH SOS + GC free today** — the clean E2E target.
+- **E2E proven** (`scripts/e2e-fl-loan.ts`, validation `d2d96f8d`): real FL entity
+  resolved from `fl_sunbiz` cache (`_error=false`, NOT a 429) + real FL GC active (DBPR
+  #CGC000127); litigation "No federal cases" despite 20 raw name-only matches
+  (disambiguation working); single flag = mandate does-not-meet. Verdict-first hero
+  rendered it correctly on prod.
+- **To run REAL ICC loans (likely CA):** set the **CALICO key** (free, pending) → CA gets
+  full SOS+GC. Until then CA SOS 429s → correctly reads "Needs review." CO/NY entities
+  validate live now (no GC). Regrid property trial is geo-limited (403 outside trial
+  areas) — lean on Realie for track record.
 
 ### Known bug — ✅ FIXED in step 2 (it's why the redesign exists)
 - **Verified-on-429 (Achilles).** The status badge read **"Verified"** even when the
