@@ -1,19 +1,24 @@
-# PulseClose — Session Pickup & Execution Plan (2026-06-26, rev. UX-REDESIGN-APPROVED)
+# PulseClose — Session Pickup & Execution Plan (2026-06-26, rev. REDESIGN-DONE)
 
-> **Self-contained handoff. A fresh session can start at §"The plan (start here)".**
-> Three arcs are DONE: (1) **calibrate** the engine + diligence against real ICC
-> loans until trustworthy, (2) **walk real loans through the live UI** and fix what
-> was rough, (3) ship a **feature trio** (Cobalt de-rent · FRED macro overlay ·
-> pricing/reserve fidelity) AND run a full **UX coherence audit → an APPROVED
-> verdict-first redesign**. **The next thrust is BUILDING that redesign** — the spec
-> is in `docs/UX-REDESIGN-PLAN.md §11`; start at §"The plan" below.
+> **Self-contained handoff. The verdict-first redesign is DONE + live + verified.**
+> **The next two threads (start a fresh session on either):**
+> 1. **UX polish** → [docs/UX-POLISH-BACKLOG.md](docs/UX-POLISH-BACKLOG.md) — 5 small
+>    independent items (handoff verbs · investor buy-box · sizing prefill · glossary ·
+>    mandate tokens). No key needed.
+> 2. **Persona E2E with real loans** → [docs/PERSONA-E2E-PLAN.md](docs/PERSONA-E2E-PLAN.md)
+>    — one real ICC loan per persona (Underwriter / Solo / Fund) through live prod.
+>
+> Done arcs: calibrate · UI-walk · feature trio · **verdict-first redesign (all 6 steps,
+> §11.5)** · **coverage map** (`/dashboard/coverage` + `COVERAGE.md`) · **free SOS expansion**
+> (NY live DOS API, doc-ingest formation-state) — see "Shipped" + §"The plan".
 
 ## Read first (in order)
-1. **[docs/UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md) §11** (verdict-first
-   redesign — competitor research, the 14 principles, the APPROVED detail-page
-   spec + `computeVerdict()` logic, platform-wide rollout, build sequence) **and §10**
-   (coherence map). **Open [docs/mockups/detail-redesign.html](docs/mockups/detail-redesign.html)
-   — the APPROVED mockup (3 states).** ← THIS IS THE NEXT BUILD.
+1. **[docs/UX-POLISH-BACKLOG.md](docs/UX-POLISH-BACKLOG.md)** + **[docs/PERSONA-E2E-PLAN.md](docs/PERSONA-E2E-PLAN.md)**
+   — the two active threads (above). Then **[docs/UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md) §11**
+   (the now-SHIPPED verdict-first spec + `computeVerdict()` logic — reference for any new surface).
+1b. **SOS coverage:** [docs/COVERAGE.md](docs/COVERAGE.md) (at-a-glance, code-driven from
+   `src/lib/coverage/map.ts`) + [docs/RESEARCH-SOS-50-STATE.md](docs/RESEARCH-SOS-50-STATE.md)
+   (the free-50-state plan: open-data leaks + the "walled SPA ≠ walled API" finding).
 2. **[docs/CALIBRATION-FINDINGS.md](docs/CALIBRATION-FINDINGS.md)** — the fidelity
    north star (gaps #1–#17, statuses inline; the `fidelity-score.ts` harness).
 3. **[docs/PLAN-B-UI-REVIEW.md](docs/PLAN-B-UI-REVIEW.md)** — the real-loan UI
@@ -68,9 +73,22 @@ approved verdict-first redesign.
 6. **THE VERDICT-FIRST REDESIGN — researched, approved, specced, and now BUILDING.** Full
    competitor research (KYB/decisioning · CRE/bridge LOS · credit-memo) → 14
    principles → an approved clickable mockup → `UX-REDESIGN-PLAN.md §11`.
-   **Steps 1-2 shipped this session:** the shared `computeVerdict()` primitives +
-   the answer-first detail page (Achilles 429 bug fixed, live-verified). Steps 3-6
-   (borrowers list · deal stepper · handoff BLUF · Capital/Portfolio/Fund rollups) remain.
+   **ALL 6 steps shipped + live-verified** (`drive-verdict-pass.ts` 11/11): primitives ·
+   answer-first detail (Achilles 429 fixed) · list verdict chips + delta · deal-stepper
+   money-tile + counterfactual · handoff BLUF (PDF+Excel) · portfolio verdict-mix.
+7. **Coverage map** — `/dashboard/coverage` (code-driven) + [docs/COVERAGE.md](docs/COVERAGE.md)
+   + `src/lib/coverage/map.ts`. Answers "where can we validate SOS + GC right now."
+8. **Free SOS expansion (this session):**
+   - **NY live DOS API fallback** (`sos-free.ts lookupNyDosLive`) — the Socrata dump *leaks*
+     (misses real active entities like "L Y I LLC"); the live publicInquiry API is a free
+     cookieless JSON POST (the "bot-wall" was a false alarm — SPA walled, API open). Proven on
+     ICC's **Sharon Nachman** loan: entity resolves active, $0, no Cobalt.
+   - **Doc-ingest formation-state fix** (`api/ingest/borrower-doc`): extracts *state of
+     formation* (not qualification) + exact legal name + foreign-qual flag. (Nexys has
+     formation state blank on 97% of ICC loans → doc-ingest is how it gets captured.)
+   - **Socrata tokenizer fix** (single-letter names like "L Y I" now query instead of no-op).
+   - **Finding:** ICC book is **69% CA by property** → CALICO is the dominant free unlock;
+     formation state ≠ property state (DE SPVs); plan in [docs/RESEARCH-SOS-50-STATE.md](docs/RESEARCH-SOS-50-STATE.md).
 
 ---
 
@@ -104,19 +122,18 @@ action) from the ONE `computeVerdict()`; the full report sits behind one disclos
 ## Coverage + E2E (added 2026-06-26)
 - **Coverage map shipped:** `/dashboard/coverage` (code-driven, reads live keys) +
   [docs/COVERAGE.md](docs/COVERAGE.md) + `src/lib/coverage/map.ts`. **SOS free now:**
-  CO/NY (Socrata live), FL (Sunbiz bulk, 3,167 rows), CA (CALICO — **key pending**).
-  **GC live:** CA (CSLB scrape), WA/OR/FL/VA (bulk, ~400k). TX/NY/PA = no statewide GC.
-  Everything else SOS → Cobalt (trial exhausted).
-- **FL is the one state with BOTH SOS + GC free today** — the clean E2E target.
-- **E2E proven** (`scripts/e2e-fl-loan.ts`, validation `d2d96f8d`): real FL entity
-  resolved from `fl_sunbiz` cache (`_error=false`, NOT a 429) + real FL GC active (DBPR
-  #CGC000127); litigation "No federal cases" despite 20 raw name-only matches
-  (disambiguation working); single flag = mandate does-not-meet. Verdict-first hero
-  rendered it correctly on prod.
-- **To run REAL ICC loans (likely CA):** set the **CALICO key** (free, pending) → CA gets
-  full SOS+GC. Until then CA SOS 429s → correctly reads "Needs review." CO/NY entities
-  validate live now (no GC). Regrid property trial is geo-limited (403 outside trial
-  areas) — lean on Realie for track record.
+  CO/NY (Socrata live + **NY live DOS API fallback** for the Socrata leak), FL (Sunbiz bulk),
+  CA (CALICO — **key pending**). **GC live:** CA (CSLB scrape), WA/OR/FL/VA (bulk, ~400k).
+  TX/NY/PA = no statewide GC. Other states SOS → Cobalt (trial exhausted) OR probe their
+  live-search XHR for an open API (the NY pattern — `RESEARCH-SOS-50-STATE.md`).
+- **Two real loans run E2E:** (1) FL synthetic-borrower (`e2e-fl-loan.ts`, `d2d96f8d`):
+  real FL entity from `fl_sunbiz` cache + real FL GC active — proved FL full coverage.
+  (2) **Real ICC NY loan — Sharon Nachman / "L Y I LLC"**: entity resolves **active via
+  `ny_dos_live`, $0, no Cobalt** (`03cb313d`); verdict is a legit mandate flag, not a 429.
+- **ICC book = 69% CA by property** (confirmed via `analyze-icc-coverage.ts` on the Nexys
+  export; formation state blank on 97% → property-state proxy). So **CALICO is the dominant
+  free unlock**. NY loans run free now; for other states probe the API or rotate Cobalt.
+  Regrid property trial is geo-limited (403) — lean on Realie for track record.
 
 ### Known bug — ✅ FIXED in step 2 (it's why the redesign exists)
 - **Verified-on-429 (Achilles).** The status badge read **"Verified"** even when the
