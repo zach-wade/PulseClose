@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Plus, Trash2, BarChart3, ShieldCheck } from "lucide-react";
 import { InvestorPerformanceCard } from "@/components/dashboard/investor-performance-card";
 import { InvestorCriteriaEditor } from "@/components/dashboard/investor-criteria-editor";
+import { Term } from "@/components/ui/term";
+import { formatCriterion } from "@/lib/investors/criteria-display";
 
 interface CriterionRow {
   criteria_key: string;
@@ -227,15 +229,18 @@ export default function InvestorsAdminPage() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                  {inv.criteria.map((c, i) => (
-                    <div key={i} className="rounded-md border p-2">
-                      <p className="font-medium">{c.criteria_key}</p>
-                      <pre className="text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all">
-                        {JSON.stringify(c.criteria_value, null, 2)}
-                      </pre>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  {inv.criteria.map((c, i) => {
+                    const d = formatCriterion(c.criteria_key, c.criteria_value);
+                    return (
+                      <div key={i} className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <span className="text-muted-foreground">
+                          {d.term ? <Term term={d.term}>{d.label}</Term> : d.label}
+                        </span>
+                        <span className="font-medium text-right">{d.value}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {/* A4 — at-a-glance performance strip per investor */}

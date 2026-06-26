@@ -7,9 +7,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck } from "lucide-react";
+import { MandateChip } from "@/components/validation/mandate-chip";
 
 interface Assessment {
   id: string;
@@ -20,12 +20,6 @@ interface Assessment {
   result: "pass" | "conditional" | "fail";
   failures: { gate: string; message: string }[];
   assessed_at: string;
-}
-
-function Verdict({ result }: { result: Assessment["result"] }) {
-  if (result === "pass") return <Badge className="bg-emerald-500/90 text-white">Meets standard</Badge>;
-  if (result === "conditional") return <Badge className="bg-amber-500/90 text-white">Meets w/ conditions</Badge>;
-  return <Badge variant="destructive">Does not meet</Badge>;
 }
 
 export function MandateAssessmentsCard({ validationId }: { validationId: string }) {
@@ -91,7 +85,7 @@ export function MandateAssessmentsCard({ validationId }: { validationId: string 
                   </ul>
                 )}
               </div>
-              <Verdict result={a.result} />
+              <MandateChip result={a.result} />
             </div>
           </div>
         ))}

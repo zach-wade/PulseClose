@@ -449,6 +449,23 @@ function StepTerms({
     apply("borrower_fico", num(d.fico));
     apply("borrower_name", d.borrower_name);
     apply("property_address", d.property_addresses?.[0]);
+    // Pre-fill the Sizing step's economics too (#25) — NOI / cap rate are
+    // package-only data the appraisal/pro-forma carries. Threaded straight into
+    // deal.sizing so opting into Sizing later shows them filled (the investor-cap
+    // defaults only touch LTV/LTC/LTARV/DSCR, so these survive). Derive going-in
+    // cap from NOI ÷ as-is when the doc states NOI but not a cap rate.
+    const setSize = (key: keyof SizingTerms, v: string | null | undefined) => {
+      if (v != null && v !== "") dispatch({ type: "setSizing", key, value: v });
+    };
+    const asIs = d.as_is_value ?? d.purchase_price;
+    const derivedGoingIn =
+      d.going_in_cap_rate == null && d.current_noi != null && asIs != null && asIs > 0
+        ? Number(((d.current_noi / asIs) * 100).toFixed(2))
+        : d.going_in_cap_rate;
+    setSize("current_noi", num(d.current_noi));
+    setSize("stabilized_noi", num(d.stabilized_noi));
+    setSize("going_in_cap", num(derivedGoingIn));
+    setSize("exit_cap", num(d.exit_cap_rate));
     // Property state from the first address ("…, Costa Mesa, CA 92627").
     const st = d.property_addresses?.[0]?.match(/\b([A-Z]{2})\b(?:\s+\d{5})?\s*$/)?.[1];
     apply("property_state", st);
@@ -613,9 +630,9 @@ function StepEligibility({
             </div>
             {(r.result === "pass" || r.result === "conditional") && (
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm pt-2 border-t border-border/50">
-                <Field label="Max LTV" value={loosePct(r.max_ltv)} />
-                <Field label="Max LTC" value={loosePct(r.max_ltc)} />
-                <Field label="Max LTARV" value={loosePct(r.max_ltarv)} />
+                <Field label={<>Max <Term>LTV</Term></>} value={loosePct(r.max_ltv)} />
+                <Field label={<>Max <Term>LTC</Term></>} value={loosePct(r.max_ltc)} />
+                <Field label={<>Max <Term>LTARV</Term></>} value={loosePct(r.max_ltarv)} />
                 <Field label="Rate" value={rate2(r.estimated_rate_pct)} />
                 <Field label="Points" value={r.estimated_points != null ? r.estimated_points.toFixed(2) : "—"} />
               </div>
@@ -715,10 +732,10 @@ function StepSizing({
       <CardContent className="space-y-5">
         {deal.steps.sizing === "stale" && <StaleBanner onRerun={onSize} running={running} />}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <NumField id="uw_noi" label="In-place NOI *" value={s.current_noi} onChange={(v) => set("current_noi", v)} placeholder="600000" />
-          <NumField id="uw_snoi" label="Stabilized NOI" value={s.stabilized_noi} onChange={(v) => set("stabilized_noi", v)} placeholder="1200000" />
-          <NumField id="uw_gcap" label="Going-in cap %" step="0.1" value={s.going_in_cap} onChange={(v) => set("going_in_cap", v)} />
-          <NumField id="uw_ecap" label="Exit cap %" step="0.1" value={s.exit_cap} onChange={(v) => set("exit_cap", v)} />
+          <NumField id="uw_noi" label={<><Term term="NOI">In-place NOI</Term> *</>} value={s.current_noi} onChange={(v) => set("current_noi", v)} placeholder="600000" />
+          <NumField id="uw_snoi" label={<Term term="NOI">Stabilized NOI</Term>} value={s.stabilized_noi} onChange={(v) => set("stabilized_noi", v)} placeholder="1200000" />
+          <NumField id="uw_gcap" label={<><Term term="going-in cap">Going-in cap</Term> %</>} step="0.1" value={s.going_in_cap} onChange={(v) => set("going_in_cap", v)} />
+          <NumField id="uw_ecap" label={<><Term term="exit cap">Exit cap</Term> %</>} step="0.1" value={s.exit_cap} onChange={(v) => set("exit_cap", v)} />
           <NumField id="uw_rate" label="Rate %" step="0.05" value={s.rate} onChange={(v) => set("rate", v)} />
           <NumField id="uw_amort" label="Amort. months (blank = IO)" value={s.amort_months} onChange={(v) => set("amort_months", v)} placeholder="IO" />
           <NumField id="uw_closing" label="Closing costs" value={s.closing_costs} onChange={(v) => set("closing_costs", v)} />
@@ -744,19 +761,19 @@ function StepSizing({
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">House sizing constraints (defaulted from matched investors; override as needed)</p>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <NumField id="uw_mltv" label="Max LTV %" value={s.max_ltv} onChange={(v) => set("max_ltv", v)} />
-                <NumField id="uw_mltc" label="Max LTC %" value={s.max_ltc} onChange={(v) => set("max_ltc", v)} />
-                <NumField id="uw_mltarv" label="Max LTARV %" value={s.max_ltarv} onChange={(v) => set("max_ltarv", v)} />
-                <NumField id="uw_dscr" label="Min DSCR" step="0.05" value={s.min_dscr} onChange={(v) => set("min_dscr", v)} />
-                <NumField id="uw_dy" label="Min debt yield %" step="0.1" value={s.min_debt_yield} onChange={(v) => set("min_debt_yield", v)} />
+                <NumField id="uw_mltv" label={<><Term>LTV</Term> max %</>} value={s.max_ltv} onChange={(v) => set("max_ltv", v)} />
+                <NumField id="uw_mltc" label={<><Term>LTC</Term> max %</>} value={s.max_ltc} onChange={(v) => set("max_ltc", v)} />
+                <NumField id="uw_mltarv" label={<><Term>LTARV</Term> max %</>} value={s.max_ltarv} onChange={(v) => set("max_ltarv", v)} />
+                <NumField id="uw_dscr" label={<>Min <Term>DSCR</Term></>} step="0.05" value={s.min_dscr} onChange={(v) => set("min_dscr", v)} />
+                <NumField id="uw_dy" label={<>Min <Term term="debt yield">debt yield</Term> %</>} step="0.1" value={s.min_debt_yield} onChange={(v) => set("min_debt_yield", v)} />
               </div>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Exit / takeout assumptions (the permanent loan that repays the bridge — you govern the exit)</p>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <NumField id="uw_term" label="Bridge term (mo)" value={s.term_months} onChange={(v) => set("term_months", v)} placeholder="24" />
-                <NumField id="uw_tltv" label="Perm max LTV %" value={s.takeout_max_ltv} onChange={(v) => set("takeout_max_ltv", v)} placeholder="70" />
-                <NumField id="uw_tdscr" label="Perm min DSCR" step="0.05" value={s.takeout_min_dscr} onChange={(v) => set("takeout_min_dscr", v)} placeholder="1.25" />
+                <NumField id="uw_tltv" label={<>Perm max <Term>LTV</Term> %</>} value={s.takeout_max_ltv} onChange={(v) => set("takeout_max_ltv", v)} placeholder="70" />
+                <NumField id="uw_tdscr" label={<>Perm min <Term>DSCR</Term></>} step="0.05" value={s.takeout_min_dscr} onChange={(v) => set("takeout_min_dscr", v)} placeholder="1.25" />
                 <NumField id="uw_trate" label="Perm rate % (blank = est.)" step="0.05" value={s.takeout_rate} onChange={(v) => set("takeout_rate", v)} placeholder="auto" />
                 <NumField id="uw_stab" label="Months to stabilize" value={s.months_to_stabilize} onChange={(v) => set("months_to_stabilize", v)} placeholder="18" />
               </div>
@@ -1185,7 +1202,7 @@ function NumField({
   step,
 }: {
   id: string;
-  label: string;
+  label: React.ReactNode;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;

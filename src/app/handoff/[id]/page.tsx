@@ -10,6 +10,12 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { buildHandoffDocument, type HandoffDocument } from "@/lib/handoff/builder";
+import {
+  sanctionsScreeningLabel,
+  litigationSummaryLabel,
+  litigationStatusLabel,
+  humanizeSearchType,
+} from "@/lib/handoff/screening-display";
 import { emitActivity } from "@/lib/events/emit";
 
 export const dynamic = "force-dynamic";
@@ -224,31 +230,25 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
           <tbody>
             <tr>
               <th>Sanctions / PEP</th>
-              <td>
-                {doc.sanctions
-                  ? `${doc.sanctions.result} (${doc.sanctions.match_count} match${doc.sanctions.match_count === 1 ? "" : "es"} across ${doc.sanctions.sources_searched.length} sources)`
-                  : "Not run"}
-              </td>
+              <td>{sanctionsScreeningLabel(doc.sanctions)}</td>
             </tr>
             <tr>
               <th>Federal litigation</th>
-              <td>
-                {doc.litigation.length === 0
-                  ? "Clear (CourtListener, federal courts)"
-                  : `${doc.litigation.filter((l) => l.status === "active").length} active, ${doc.litigation.filter((l) => l.status === "dismissed").length} dismissed`}
-              </td>
+              <td>{litigationSummaryLabel(doc.litigation)}</td>
             </tr>
           </tbody>
         </table>
-        {doc.litigation.length > 0 && (
+        {doc.litigation.some((l) => l.status !== null) && (
           <ul className="hf-list">
-            {doc.litigation.map((l, i) => (
-              <li key={i}>
-                <strong>{l.search_type}</strong> — {l.status ?? l.result}
-                {l.case_number && ` — ${l.case_number}`}
-                {l.details && `: ${l.details}`}
-              </li>
-            ))}
+            {doc.litigation
+              .filter((l) => l.status !== null)
+              .map((l, i) => (
+                <li key={i}>
+                  <strong>{humanizeSearchType(l.search_type)}</strong> — {litigationStatusLabel(l.status)}
+                  {l.case_number && ` — ${l.case_number}`}
+                  {l.details && `: ${l.details}`}
+                </li>
+              ))}
           </ul>
         )}
       </section>

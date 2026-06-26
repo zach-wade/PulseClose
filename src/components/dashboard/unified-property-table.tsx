@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Term } from "@/components/ui/term";
 import {
   Building2,
   ChevronDown,
@@ -590,7 +591,7 @@ function UnifiedRowDisplay({
               )}
               {details.ltvCurrent != null && (
                 <div>
-                  <span className="text-muted-foreground">Current LTV</span>
+                  <span className="text-muted-foreground">Current <Term>LTV</Term></span>
                   <p className="font-medium">{details.ltvCurrent.toFixed(1)}%</p>
                 </div>
               )}

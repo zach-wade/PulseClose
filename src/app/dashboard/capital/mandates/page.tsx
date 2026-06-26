@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldCheck, ArrowLeft, Lock } from "lucide-react";
+import { MandateChip, type MandateResult } from "@/components/validation/mandate-chip";
 
 interface MandateRollup {
   id: string;
@@ -35,12 +36,6 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
     </div>
   );
-}
-
-function ResultChip({ result }: { result: string }) {
-  if (result === "pass") return <Badge className="bg-success text-success-foreground text-[10px]">meets</Badge>;
-  if (result === "conditional") return <Badge className="bg-warning text-warning-foreground text-[10px]">conditional</Badge>;
-  return <Badge className="bg-destructive text-destructive-foreground text-[10px]">fails</Badge>;
 }
 
 export default function MandateConsolePage() {
@@ -117,7 +112,7 @@ export default function MandateConsolePage() {
                         </Link>
                         <div className="flex items-center gap-2 shrink-0">
                           {r.failure_count > 0 && <span className="text-xs text-muted-foreground">{r.failure_count} gate{r.failure_count === 1 ? "" : "s"}</span>}
-                          <ResultChip result={r.result} />
+                          <MandateChip result={r.result as MandateResult} variant="short" />
                         </div>
                       </div>
                     ))}

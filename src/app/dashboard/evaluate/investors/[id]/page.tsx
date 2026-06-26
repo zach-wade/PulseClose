@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { InvestorPerformanceCard } from "@/components/dashboard/investor-performance-card";
 import { MandatesManager } from "@/components/dashboard/mandates-manager";
+import { Term } from "@/components/ui/term";
+import { formatCriterion } from "@/lib/investors/criteria-display";
 
 // A4/A5 — Investor detail page. Pulls the criteria + performance card +
 // rate trend together in one place. The admin-list view at
@@ -119,22 +121,25 @@ export default function InvestorDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-            {investor.criteria.map((c, i) => (
-              <div key={i} className="rounded-md border p-2">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">{c.criteria_key}</p>
-                  {c.source === "pdf_parse" && (
-                    <Badge variant="outline" className="text-[10px]">
-                      PDF
-                    </Badge>
-                  )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+            {investor.criteria.map((c, i) => {
+              const d = formatCriterion(c.criteria_key, c.criteria_value);
+              return (
+                <div key={i} className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-muted-foreground">
+                    {d.term ? <Term term={d.term}>{d.label}</Term> : d.label}
+                  </span>
+                  <span className="flex items-center gap-2 font-medium text-right">
+                    {d.value}
+                    {c.source === "pdf_parse" && (
+                      <Badge variant="outline" className="text-[10px]">
+                        PDF
+                      </Badge>
+                    )}
+                  </span>
                 </div>
-                <pre className="text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all">
-                  {JSON.stringify(c.criteria_value, null, 2)}
-                </pre>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>

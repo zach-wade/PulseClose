@@ -84,6 +84,10 @@ export interface HandoffDocument {
     result: string;
     sources_searched: string[];
     match_count: number;
+    // Matches the disambiguation layer promoted to "confirmed" (a true hit).
+    // Name-only matches stay in match_count but never count here, so the
+    // handoff line can read "possible — review" instead of a raw enum.
+    confirmed_count: number;
   } | null;
 
   // Litigation
@@ -92,7 +96,9 @@ export interface HandoffDocument {
     result: string;
     case_number: string | null;
     details: string | null;
-    status: "active" | "dismissed" | null;
+    // "possible" = name-only match, capped at review by the disambiguation
+    // layer — never inflated to "active" (mirrors computeVerdict()).
+    status: "active" | "dismissed" | "possible" | null;
   }>;
 
   // Properties (ownership table — the heart of the handoff)
@@ -223,7 +229,7 @@ export async function buildHandoffDocument(
       .eq("validation_id", validationId),
     supabase
       .from("sanctions_checks")
-      .select("result, sources_searched, match_count")
+      .select("result, sources_searched, match_count, matches")
       .eq("validation_id", validationId)
       .order("check_date", { ascending: false })
       .limit(1)
@@ -501,16 +507,31 @@ export async function buildHandoffDocument(
           result: sanctionsRes.data.result,
           sources_searched: (sanctionsRes.data.sources_searched as string[]) ?? [],
           match_count: sanctionsRes.data.match_count ?? 0,
+          // Only matches the disambiguation layer confirmed are hits — mirrors
+          // computeVerdict()'s sanctions logic so the handoff line agrees with
+          // the BLUF verdict and the detail page.
+          confirmed_count: ((sanctionsRes.data.matches as Array<{ confidence?: string | null }> | null) ?? []).filter(
+            (m) => m.confidence === "confirmed",
+          ).length,
         }
       : null,
     litigation: (litigationRes.data ?? []).map((l) => {
-      const isActive = l.result === "found" && !(l.raw_response as Record<string, unknown> | null)?.date_terminated;
+      const raw = (l.raw_response as Record<string, unknown> | null) ?? {};
+      const confidence =
+        ((raw._disambiguation as { confidence?: string } | undefined)?.confidence) ?? "possible";
+      const terminated = !!raw.date_terminated;
+      // A name-only ("possible") match is capped at review and never reads as an
+      // active case — only a CONFIRMED, non-terminated docket is "active".
+      let status: "active" | "dismissed" | "possible" | null = null;
+      if (l.result === "found") {
+        status = confidence === "confirmed" ? (terminated ? "dismissed" : "active") : "possible";
+      }
       return {
         search_type: l.search_type,
         result: l.result,
         case_number: l.case_number,
         details: l.details,
-        status: l.result === "found" ? (isActive ? "active" : "dismissed") : null,
+        status,
       };
     }),
     properties,

@@ -62,6 +62,14 @@ interface IngestResult {
   arv: number | null;              // after-repair / completed value
   rehab_budget: number | null;     // construction / renovation budget
   fico: number | null;
+  // Income-property economics from the appraisal / pro-forma / rent roll / OM.
+  // Like the values above, these are package-only (never API-pullable) — pulling
+  // them here pre-fills the Sizing step's DSCR/debt-yield inputs (#25) so the UW
+  // confirms a few numbers instead of re-keying the whole pro-forma.
+  current_noi: number | null;      // in-place / going-in net operating income, USD/yr
+  stabilized_noi: number | null;   // projected stabilized NOI, USD/yr
+  going_in_cap_rate: number | null; // in-place cap rate, percent (e.g. 6.5)
+  exit_cap_rate: number | null;    // stabilized / exit cap rate, percent
   property_type: string | null;    // sfr | condo | multifamily | mixed_use | land | other
   loan_purpose: string | null;     // purchase | refinance | construction | bridge
   notes: string | null;
@@ -85,6 +93,10 @@ const PROMPT = `You are extracting loan-intake fields from a lender's borrower p
   "arv": number | null,                      // After-repair / completed / exit value, USD
   "rehab_budget": number | null,             // Construction or renovation budget, USD
   "fico": number | null,                     // Borrower credit score (a single number, e.g. 731)
+  "current_noi": number | null,              // In-place / going-in annual NOI, USD — from appraisal/pro-forma/rent roll
+  "stabilized_noi": number | null,           // Projected STABILIZED annual NOI, USD
+  "going_in_cap_rate": number | null,        // In-place cap rate as a PERCENT, e.g. 6.5 (not 0.065)
+  "exit_cap_rate": number | null,            // Stabilized / exit cap rate as a PERCENT, e.g. 5.5
   "property_type": "string | null",          // one of: sfr | condo | multifamily | mixed_use | land | other
   "loan_purpose": "string | null",           // one of: purchase | refinance | construction | bridge
   "notes": "string | null"                   // Anything else worth flagging in <200 chars
@@ -99,6 +111,8 @@ Rules:
 - entity_state and entity_qualification_state must be 2-letter postal codes, uppercase.
 - All monetary fields are PLAIN NUMBERS in USD — no "$", no commas, no text. E.g. 4239490 not "$4,239,490".
 - fico is a single integer; if a range like "740+" appears, use the floor (740).
+- current_noi / stabilized_noi are PLAIN annual USD numbers (no "$"/commas). Use the appraisal's or pro-forma's NOI line; if only monthly is given, annualize (×12). Leave null if no operating income is stated (e.g. a fix-and-flip with no rental income).
+- going_in_cap_rate / exit_cap_rate are PERCENTS as plain numbers — 6.5 means 6.5%, NOT 0.065. If a cap rate is written as a decimal (0.065), multiply by 100. Leave null if not stated.
 - property_type / loan_purpose must be one of the listed lowercase values, else null.
 - Don't invent data. If the doc has just an entity name with no obvious individual borrower, set borrower_name to null.
 - property_addresses: include up to 50 addresses (downstream verifier caps at 50). Prefer current/active holdings + recent flips; truncate older entries if the doc lists more.
@@ -345,6 +359,17 @@ export async function POST(request: Request) {
     parsed.arv = toNum(parsed.arv);
     parsed.rehab_budget = toNum(parsed.rehab_budget);
     parsed.fico = toNum(parsed.fico);
+    parsed.current_noi = toNum(parsed.current_noi);
+    parsed.stabilized_noi = toNum(parsed.stabilized_noi);
+    // Cap rates: normalize a decimal (0.065) the model slipped through into a
+    // percent (6.5); the sizing engine expects percents.
+    const toCapPct = (v: unknown): number | null => {
+      const n = toNum(v);
+      if (n == null) return null;
+      return n > 0 && n < 1 ? n * 100 : n;
+    };
+    parsed.going_in_cap_rate = toCapPct(parsed.going_in_cap_rate);
+    parsed.exit_cap_rate = toCapPct(parsed.exit_cap_rate);
     // Constrain enums to known values (else null) so downstream selects don't break.
     const PROP_TYPES = new Set(["sfr", "condo", "multifamily", "mixed_use", "land", "other"]);
     const PURPOSES = new Set(["purchase", "refinance", "construction", "bridge"]);

@@ -7,6 +7,12 @@
 
 import ExcelJS from "exceljs";
 import type { HandoffDocument, HandoffPropertyRow } from "./builder";
+import {
+  sanctionsScreeningLabel,
+  litigationSummaryLabel,
+  litigationStatusLabel,
+  humanizeSearchType,
+} from "./screening-display";
 
 const PRIMARY = "FF0F172A";        // Navy 950
 const ACCENT = "FF3B82F6";         // Blue 500
@@ -180,22 +186,15 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
   const lsHeader = cover.addRow(["Litigation & Sanctions"]);
   lsHeader.font = { size: 12, bold: true, color: { argb: ACCENT } };
   cover.mergeCells(`A${lsHeader.number}:B${lsHeader.number}`);
-  cover.addRow(["Sanctions / PEP", doc.sanctions
-    ? `${doc.sanctions.result} (${doc.sanctions.match_count} match${doc.sanctions.match_count === 1 ? "" : "es"} across ${doc.sanctions.sources_searched.length} sources)`
-    : "Not run"]);
-  if (doc.litigation.length === 0) {
-    cover.addRow(["Federal litigation", "Clear"]);
-  } else {
-    const active = doc.litigation.filter((l) => l.status === "active");
-    const dismissed = doc.litigation.filter((l) => l.status === "dismissed");
-    cover.addRow(["Active federal cases", active.length]);
-    cover.addRow(["Dismissed federal cases", dismissed.length]);
-    for (const l of doc.litigation) {
-      cover.addRow([
-        `  ${l.search_type} (${l.status ?? l.result})`,
-        `${l.case_number ?? "—"} ${l.details ?? ""}`.trim(),
-      ]);
-    }
+  cover.addRow(["Sanctions / PEP", sanctionsScreeningLabel(doc.sanctions)]);
+  cover.addRow(["Federal litigation", litigationSummaryLabel(doc.litigation)]);
+  // Per-case detail — only rows that actually matched (skip clean "no match"
+  // rows). A name-only "possible" reads as review, never a hit.
+  for (const l of doc.litigation.filter((l) => l.status !== null)) {
+    cover.addRow([
+      `  ${humanizeSearchType(l.search_type)} (${litigationStatusLabel(l.status)})`,
+      `${l.case_number ?? "—"} ${l.details ?? ""}`.trim(),
+    ]);
   }
   cover.addRow([]);
 

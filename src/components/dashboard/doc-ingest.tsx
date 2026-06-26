@@ -22,6 +22,12 @@ export interface IngestExtraction {
   arv: number | null;
   rehab_budget: number | null;
   fico: number | null;
+  // Income-property economics (appraisal / pro-forma) — pre-fill Sizing's
+  // DSCR/debt-yield inputs so the UW doesn't re-key the pro-forma.
+  current_noi: number | null;
+  stabilized_noi: number | null;
+  going_in_cap_rate: number | null;
+  exit_cap_rate: number | null;
   property_type: string | null;
   loan_purpose: string | null;
   notes: string | null;
