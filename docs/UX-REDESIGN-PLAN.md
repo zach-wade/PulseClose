@@ -326,3 +326,49 @@ what the pixels confirmed, what to adjust, and bugs found en route.
    `lower()`, so "Test Bridge Capital" → slug `-est-ridge-apital-…`. Cosmetic
    (uniqueness holds via id suffix) but wrong; swap the order. (Found seeding
    test orgs; not UX-blocking.)
+
+## 10. Coherence map (2026-06-26) — the "I don't understand it end-to-end" pass
+
+Re-audited the LIVE product (3 parallel readers: IA/nav, persona docs, the two
+heavy surfaces) after the owner — who built it — said it was overwhelming and he
+wasn't sure he understood it end to end. **If the builder can't hold the flow, no
+lender or capital partner can — and capital-provider endorsement is the only
+distribution channel, so legibility is the gate on distribution, not polish.**
+
+**Headline (confirms §0/§3):** it's not too many features — *the app doesn't tell
+the story that connects them.* Much of the redesign already shipped (job-shaped
+nav, the Deal stepper). The overwhelm is concentrated in a few fixable spots.
+
+### The product in plain language — three jobs, in order
+The whole product answers three questions about a bridge loan: **① Verify the
+borrower → ② Underwrite the deal → ③ Distribute to capital.** Everything in the
+app is one of those three. The engine sets the numbers; the AI narrates.
+- **① Verify** — borrower + property → 5 parallel checks → deterministic tier + AI
+  memo. *The solo lender can stop here.*
+- **② Underwrite** — Deal stepper: terms → eligibility → size (binding constraint)
+  → AI judgment (now incl. macro regime). *The underwriter lives here.*
+- **③ Distribute** — handoff (Excel/PDF) → route → **"meets [Fund]'s mandate"
+  stamp** → monitor → outcome. *The fund's reason to push it to originators.*
+
+### The three overwhelm hot-spots (not 30)
+1. **Validation detail page** — ~30 cards / 5 tabs, THREE competing "where am I"
+   cues (status badge + Verify→Evaluate→Handoff strip + 5-tab bar), the primary
+   CTA repeated 3×, up to 3 stacked alarm banners. Buries the verdict + next step.
+2. **Sizing step** — ~18 inputs + 7 result blocks of un-glossed CRE math, all
+   expanded at once. No progressive disclosure; a verify-only lender hits the wall.
+3. **Naming + jargon** — one concept wears ~4 names (Deals/Evaluate/Evaluate
+   Deal/Deal); "Book" is opaque; Mandate console + `/admin` are orphaned; CRE
+   jargon everywhere with no inline definitions.
+
+### Ranked fixes (most confusion collapsed first) — STATUS
+1. **One spine everywhere** (Verify → Underwrite → Distribute as the single
+   progress metaphor; delete duplicates on the detail page).
+2. **Verdict-first detail page** (lead with tier + one-line verdict + mandate
+   stamp promoted to top + ONE next action; collapse the 3 banners into one).
+3. **Progressive disclosure on Sizing** (~4 core numbers by default; depth behind
+   "Advanced").
+4. **One name per concept + fix orphans** ("Deals" everywhere; "Book"→"Portfolio";
+   Mandate console front door; link/drop `/admin`).
+5. **Inline glossary** (tooltips on the jargon; extend the "Completeness" pattern).
+
+*(Build status appended inline as each lands — see commits 2026-06-26.)*

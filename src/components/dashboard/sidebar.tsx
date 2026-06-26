@@ -18,11 +18,11 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-// Job-shaped IA (UX-REDESIGN-PLAN §1): the nav answers the lender's questions —
-// "who am I lending to?" (Borrowers), "size + route this loan" (Deals), "who
-// funds these + what must I meet?" (Capital), "watch the live loans" (Book) —
-// not a menu of modules. The borrower is the durable spine; validations, deals,
-// mandates, outcomes, and monitoring hang off it.
+// Job-shaped IA (UX-REDESIGN-PLAN §1 + §10): the nav answers the lender's
+// questions — "who am I lending to?" (Borrowers), "size + route this loan?"
+// (Deals), "who funds these + what must I meet?" (Capital), "watch the live
+// loans?" (Portfolio) — not a menu of modules. The borrower is the durable spine;
+// validations, deals, mandates, outcomes, and monitoring hang off it.
 const navItems = [
   {
     label: "Borrowers",
@@ -43,7 +43,7 @@ const navItems = [
     description: "Who funds these + what standards must I meet? — investors + mandates",
   },
   {
-    label: "Book",
+    label: "Portfolio",
     href: "/dashboard/portfolio",
     icon: BookOpen,
     description: "Watch the live loans — tier mix, outcomes, monitoring",

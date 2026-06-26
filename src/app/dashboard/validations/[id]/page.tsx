@@ -343,26 +343,10 @@ export default function ValidationDetailPage() {
             </p>
           </div>
         </div>
+        {/* Header holds SECONDARY actions only — the single primary next action
+            ("Evaluate against investors") lives in the next-step strip below, so
+            it isn't duplicated 3× across the page (UX-REDESIGN-PLAN §10). */}
         <div className="flex gap-2 flex-wrap justify-start sm:justify-end">
-          <Button
-            render={
-              <Link
-                href={{
-                  pathname: "/dashboard/evaluate",
-                  query: {
-                    borrower: data.borrower_name,
-                    state: data.entity_checks[0]?.state ?? "",
-                    experience: data.experience_tier ?? "",
-                    validation_id: data.id,
-                  },
-                }}
-              />
-            }
-            title="Evaluate this borrower's deal against your configured investors. Pre-fills borrower name, state, and experience tier; you supply loan-specific terms."
-          >
-            <Calculator className="mr-2 h-4 w-4" />
-            Evaluate against my investors
-          </Button>
           <Button
             variant="outline"
             onClick={() => window.open(`/validations/${data.id}/risk-methodology?print=1`, "_blank")}
@@ -574,7 +558,7 @@ export default function ValidationDetailPage() {
           <TabsTrigger value="evidence">Evidence</TabsTrigger>
           <TabsTrigger value="deal">Deal</TabsTrigger>
           <TabsTrigger value="handoff">Hand off</TabsTrigger>
-          <TabsTrigger value="book">Book</TabsTrigger>
+          <TabsTrigger value="book">Portfolio</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary" className="space-y-6 pt-4">
@@ -755,7 +739,7 @@ export default function ValidationDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <RouteToInvestorButton validationId={data.id} />
                 <Button variant="outline" size="sm" onClick={() => setTab("book")}>
-                  Watch it in Book
+                  Watch it in Portfolio
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setTab("book")}>

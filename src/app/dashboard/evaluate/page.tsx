@@ -73,7 +73,7 @@ function EvaluatePageInner() {
             <Calculator className="h-5 w-5 text-info" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Evaluate Deal</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Deals</h1>
             <p className="text-muted-foreground text-sm mt-1">
               One deal, five steps — eligibility across your investors, then optional sizing + AI judgment.
             </p>
