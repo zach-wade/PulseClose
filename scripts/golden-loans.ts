@@ -39,6 +39,10 @@ export interface GoldenCase {
     fico?: number;
     loan_purpose?: string;
     property_type?: string;
+    // Actual priced EXECUTION from the Nexys audit log (10228/10287/10294/10295) —
+    // the ground truth for pricing + interest-reserve fidelity (#3).
+    actual_rate?: number; // priced note rate (decimal, e.g. 0.0925)
+    interest_reserve?: number; // funded interest reserve $ at close (0 = current-pay/Dutch)
     soft?: ("as_is_value" | "arv" | "rehab_budget")[]; // implied, not appraised
     notes?: string;
   };
@@ -60,6 +64,8 @@ export const GOLDEN: GoldenCase[] = [
       arv: 2_850_000,
       rehab_budget: 2_114_441,
       loan_amount: 2_473_970,
+      actual_rate: 0.0925, // Nexys log 10228
+      interest_reserve: 271_801, // ~14 mo of carry — heavy-rehab construction reserve
       fico: 640,
       loan_purpose: "refinance",
       property_type: "sfr",
@@ -87,6 +93,8 @@ export const GOLDEN: GoldenCase[] = [
     truth: {
       as_is_value: 9_750_000,
       loan_amount: 6_630_000,
+      actual_rate: 0.095, // Nexys log 10287
+      interest_reserve: 0, // no funded reserve — current-pay / Dutch interest
       fico: 775,
       property_type: "sfr",
     },
@@ -106,6 +114,8 @@ export const GOLDEN: GoldenCase[] = [
     truth: {
       as_is_value: 7_950_000,
       loan_amount: 5_168_146,
+      actual_rate: 0.095, // Nexys log 10294
+      interest_reserve: 119_896, // ~3 mo of carry — purchase bridge reserve
       fico: 771,
       loan_purpose: "purchase",
       property_type: "condo",
@@ -125,6 +135,8 @@ export const GOLDEN: GoldenCase[] = [
     truth: {
       as_is_value: 2_658_000,
       loan_amount: 675_000,
+      actual_rate: 0.0899, // Nexys log 10295 — best-priced (low-LTV cash-out)
+      interest_reserve: 0, // no funded reserve — current-pay
       property_type: "sfr",
       loan_purpose: "cash_out_refinance",
       notes: "Small cash-out refi (25% LTV) — borrower requested far below max supportable.",

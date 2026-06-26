@@ -92,10 +92,19 @@ The two arcs (calibrate, walk-the-UI) are done. Pick the next thrust:
    USER signup at calicodev.sos.ca.gov → set `CALICO_API_KEY` in `.env.local` + Vercel.
    FL Sunbiz (SFTP fixed-width, has officers — the rich one) is the deferred follow-up
    (heaviest; needs an SFTP dep; doesn't touch current CA/TX review loans).
-3. **Tier + investor-placement fidelity** — extend `scripts/fidelity-score.ts` from
-   loan-$ to the full decision: diff the engine's TIER + investor PLACEMENT vs the
-   Nexys audit logs (10287/10294/10295 present). Turns "we sized right" into "we'd
-   have decided right." No external blockers.
+3. **Pricing + interest-reserve fidelity — SHIPPED 2026-06-25** (re-scoped from
+   "tier + placement"). FINDING: the Nexys logs carry **no risk tier** (`tierLevel:
+   null`) and **no competitive placement** (ICC funds its own `Insignia RTL`
+   program), so tier/placement aren't diffable. What IS in the logs — and now
+   validated — is priced **rate** + funded **interest reserve**. `fidelity-score.ts`
+   gained a PRICING + INTEREST-RESERVE section: the engine's calibrated default
+   reserve policy (heavy-rehab ~14 mo · purchase ~3 mo · stabilized/cash-out 0,
+   via the production `src/lib/underwriting/reserve.ts`) reproduces ICC's funded
+   reserves within **2.1% mean |Δ|**, and ICC's real pricing band is **9.0–9.5%
+   (avg 9.3%)** — the engine's 9.5% rate assumption sits at the top (conservative).
+   Actuals added to `golden-loans.ts` (10228/10287/10294/10295). True tier/placement
+   fidelity remains deferred until richer ground truth or a multi-investor fund
+   context exists.
 
 ### Remaining calibration gaps
 - **#2 entity-anchored track record** — owner-name search returns 0 for most real
