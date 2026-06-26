@@ -194,7 +194,12 @@ export async function judgeUnderwriting(
         Array.from(new Set(leftover)).slice(0, 10),
       );
     }
-    return unredacted as JudgmentResult;
+    // Attach the deterministic macro overlay AFTER redaction (it carries no PII /
+    // tokens) so the UI can show the indicator table as drill-down evidence
+    // behind the memo's regime read.
+    const result = unredacted as JudgmentResult;
+    result.macro = macro;
+    return result;
   } catch (err) {
     console.error("Underwriting judgment call failed:", err);
     return null;

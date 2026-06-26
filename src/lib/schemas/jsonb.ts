@@ -576,9 +576,27 @@ const uwDimensionReadV1 = z.object({
   flags: z.array(z.string()),
 });
 
+// Deterministic macro overlay (FRED) stamped onto the judgment server-side — the
+// drill-down evidence behind the memo's regime read (src/lib/macro/fred.ts).
+const uwMacroIndicatorV1 = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string(),
+  asOf: z.string().nullable(),
+  read: z.string(),
+  signal: z.enum(["supportive", "neutral", "caution", "warning"]),
+});
+export const uwMacroContextV1 = z.object({
+  asOf: z.string(),
+  regime: z.string(),
+  regimeBasis: z.string(),
+  indicators: z.array(uwMacroIndicatorV1),
+  source: z.string(),
+});
+
 // The shape Claude must return for the AI judgment. Validated post-parse so a
 // malformed model response can't poison the column (mirrors the ai_analysis
-// parser discipline). `model` + schema_version are stamped server-side.
+// parser discipline). `model` + schema_version + macro are stamped server-side.
 export const uwJudgmentV1 = z.object({
   schema_version: z.literal(1).default(1),
   headline: z.string(),
@@ -591,6 +609,7 @@ export const uwJudgmentV1 = z.object({
   }),
   memo: z.string(),
   model: z.string(),
+  macro: uwMacroContextV1.nullish(),
 });
 export type UwJudgmentV1 = z.infer<typeof uwJudgmentV1>;
 export const parseUwJudgmentV1 = safe(uwJudgmentV1);

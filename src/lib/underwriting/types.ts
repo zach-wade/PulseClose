@@ -7,6 +7,8 @@
 // recommendation. Structured so the UI can badge severities and surface
 // kill-flags without parsing prose (Noah's drill-down principle).
 
+import type { MacroContext } from "@/lib/macro/fred";
+
 // Damon's five positive framework dimensions (deal-killers are their own list).
 export type Dimension = "sponsor" | "economics" | "market" | "structure" | "exit";
 
@@ -29,6 +31,10 @@ export interface Judgment {
   fiveConcept: string; // Wade Intel 5-concept lens read (Subject/Conditions/Tasks/Events/Decisions)
   recommendation: { stance: Stance; rationale: string };
   memo: string; // prose memo for the PDF / UI
+  // Deterministic macro overlay (FRED) the judgment reasoned over. Stamped
+  // server-side (not from the model), so the UI can show the indicator table as
+  // drill-down evidence behind the memo's regime read. Null when no FRED key.
+  macro?: MacroContext | null;
 }
 
 // What the engine can't compute — qualitative inputs the judgment reasons over.

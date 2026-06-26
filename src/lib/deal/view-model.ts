@@ -121,6 +121,24 @@ export interface DimensionRead {
   flags: string[];
 }
 
+// Deterministic macro overlay (FRED) — mirrors src/lib/macro/fred.ts MacroContext,
+// declared locally to keep this module client-safe (the fred module is server-only).
+export interface MacroIndicator {
+  key: string;
+  label: string;
+  value: string;
+  asOf: string | null;
+  read: string;
+  signal: "supportive" | "neutral" | "caution" | "warning";
+}
+export interface MacroContext {
+  asOf: string;
+  regime: string;
+  regimeBasis: string;
+  indicators: MacroIndicator[];
+  source: string;
+}
+
 export interface Judgment {
   headline: string;
   framework: DimensionRead[];
@@ -129,6 +147,7 @@ export interface Judgment {
   recommendation: { stance: "pursue" | "pursue-with-conditions" | "pass"; rationale: string };
   memo: string;
   model: string;
+  macro?: MacroContext | null;
 }
 
 // ── Inputs ─────────────────────────────────────────────────────────────────
