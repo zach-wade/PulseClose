@@ -37,7 +37,16 @@ const SUPPORTED = new Set([
 interface IngestResult {
   borrower_name: string | null;
   borrower_entity_name: string | null;
+  // State of FORMATION (where the entity was organized), not where it's
+  // qualified to do business. This is what SOS validation keys on — getting it
+  // wrong (e.g. recording the CA foreign-qualification of a DE LLC) routes us to
+  // the wrong registry and reads as "Needs review" (the real ICC failure mode).
   entity_state: string | null;
+  // Foreign-qualification state, if the entity is qualified to do business in a
+  // DIFFERENT state than where it was formed (e.g. a DE LLC qualified in CA on a
+  // CA deal). Captured separately so we never confuse it with formation, and so
+  // we can flag "out-of-state entity" as an underwriting note.
+  entity_qualification_state: string | null;
   guarantor_name: string | null;
   gc_name: string | null;
   gc_license_number: string | null;
@@ -62,8 +71,9 @@ const PROMPT = `You are extracting loan-intake fields from a lender's borrower p
 
 {
   "borrower_name": "string | null",          // Individual principal / guarantor — typically a person
-  "borrower_entity_name": "string | null",   // The borrowing LLC / Corp / Trust (the vesting entity)
-  "entity_state": "string | null",           // 2-letter state where the entity is registered (e.g. "CA")
+  "borrower_entity_name": "string | null",   // The borrowing LLC / Corp / Trust (the vesting entity) — EXACT legal name
+  "entity_state": "string | null",           // 2-letter state of FORMATION (where the entity was organized), e.g. "DE"
+  "entity_qualification_state": "string | null", // 2-letter state the entity is QUALIFIED to do business in, if different from formation
   "guarantor_name": "string | null",         // Personal guarantor if different from borrower
   "gc_name": "string | null",                // General contractor name if specified
   "gc_license_number": "string | null",
@@ -82,7 +92,11 @@ const PROMPT = `You are extracting loan-intake fields from a lender's borrower p
 
 Rules:
 - Return only fields you can confidently extract. Use null for missing fields, [] for missing addresses.
-- entity_state must be the 2-letter postal code, uppercase.
+- entity_state is the state of FORMATION — where the entity was organized/incorporated, NOT where it operates or holds property. Find it in the entity-defining phrase "a ___ limited liability company / corporation", or on the Articles of Organization / Certificate of Formation / Certificate of Good Standing (these are issued BY the formation state). A Delaware LLC buying a California property is entity_state "DE", NOT "CA".
+- entity_qualification_state: only set this if the doc shows the entity is registered/qualified to do business in a DIFFERENT state than its formation (e.g. a DE LLC with a CA foreign-qualification / Statement of Foreign Qualification). Otherwise null.
+- Do NOT infer entity_state from the property address. If formation state isn't stated anywhere, return null (better null than a wrong guess that routes to the wrong registry).
+- borrower_entity_name must be the EXACT legal name as written on the Articles / Good Standing (punctuation and spacing matter for the registry lookup).
+- entity_state and entity_qualification_state must be 2-letter postal codes, uppercase.
 - All monetary fields are PLAIN NUMBERS in USD — no "$", no commas, no text. E.g. 4239490 not "$4,239,490".
 - fico is a single integer; if a range like "740+" appears, use the floor (740).
 - property_type / loan_purpose must be one of the listed lowercase values, else null.
@@ -301,7 +315,20 @@ export async function POST(request: Request) {
     }
     // Normalize state codes
     if (parsed.entity_state) parsed.entity_state = parsed.entity_state.toUpperCase().slice(0, 2);
+    if (parsed.entity_qualification_state)
+      parsed.entity_qualification_state = parsed.entity_qualification_state.toUpperCase().slice(0, 2);
     if (parsed.gc_state) parsed.gc_state = parsed.gc_state.toUpperCase().slice(0, 2);
+    // Flag an out-of-state entity (DE LLC qualified elsewhere) — useful UW
+    // signal, and a reminder that SOS validation runs against the FORMATION
+    // state (entity_state), not the qualification state.
+    if (
+      parsed.entity_state &&
+      parsed.entity_qualification_state &&
+      parsed.entity_state !== parsed.entity_qualification_state
+    ) {
+      const flag = `Out-of-state entity: formed in ${parsed.entity_state}, qualified in ${parsed.entity_qualification_state} (SOS check runs against ${parsed.entity_state}).`;
+      parsed.notes = parsed.notes ? `${flag} ${parsed.notes}` : flag;
+    }
     // Coerce monetary/numeric fields defensively — Claude occasionally returns
     // "$4,239,490" or "740+" despite the prompt. Strip to a clean number or null.
     const toNum = (v: unknown): number | null => {
