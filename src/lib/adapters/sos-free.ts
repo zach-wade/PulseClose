@@ -226,6 +226,86 @@ const NY: SocrataSOSSource = {
 
 const SOCRATA_SOURCES: Record<string, SocrataSOSSource> = { CO, NY };
 
+// ── NY DOS live entity search (publicInquiry API) ────────────────────────────
+// The Socrata "Active Corporations" export LEAKS — it's missing real, active NY
+// entities (confirmed: "L Y I LLC", active since 2012, absent from Socrata but
+// present here). This is the authoritative live database behind apps.dos.ny.gov/
+// publicInquiry. It's a plain cookieless JSON POST (the SPA renders blank headless,
+// but the API has no bot protection) and — unlike Socrata — returns a real
+// Active/Inactive status. Used as the NY fallback when Socrata misses.
+const NY_DOS_API = "https://apps.dos.ny.gov/PublicInquiryWeb/api/PublicInquiry/GetComplexSearchMatchingEntities";
+
+interface NyDosEntity {
+  entityName?: string;
+  dosID?: string;
+  initialFilingDate?: string;
+  county?: string;
+  entityType?: string;
+  entityStatus?: string; // "Active" | "Inactive"
+  jurisdiction?: string;
+  entityTypeCategory?: string;
+}
+
+function mapNyDosStatus(s?: string): SOSLookupResult["sos_status"] {
+  const v = (s ?? "").toLowerCase();
+  if (v === "active") return "active";
+  if (v === "inactive") return "dissolved"; // NY collapses dissolved/merged/cancelled → Inactive
+  return "not_found";
+}
+
+async function lookupNyDosLive(req: SOSLookupRequest): Promise<SOSLookupResult | null> {
+  const res = await fetch(NY_DOS_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://apps.dos.ny.gov",
+      Referer: "https://apps.dos.ny.gov/publicInquiry/",
+    },
+    body: JSON.stringify({
+      searchValue: req.entity_name,
+      searchByTypeIndicator: "EntityName",
+      searchExpressionIndicator: "Contains",
+      entityStatusIndicator: "AllStatuses",
+      entityTypeIndicator: ["Corporation", "LimitedLiabilityCompany", "LimitedPartnership", "LimitedLiabilityPartnership"],
+      listPaginationInfo: { listStartRecord: 1, listEndRecord: 50 },
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    console.warn(`[sos-free] NY DOS live ${res.status} for "${req.entity_name}" — falling back`);
+    return null;
+  }
+  const data = (await res.json()) as { requestStatus?: string; entitySearchResultList?: NyDosEntity[] };
+  const cands = (data.entitySearchResultList ?? []).map((e) => ({ ...e, _name: e.entityName ?? "" }));
+  const best = pickBest(cands, req.entity_name);
+  if (!best) return null;
+  const status = mapNyDosStatus(best.entityStatus);
+  if (status === "not_found") return null;
+  const flags: string[] = [];
+  if (status !== "active") flags.push(`Entity status: ${best.entityStatus ?? "inactive"}`);
+  if (best.entityName && !namesMatchCanonically(best.entityName, req.entity_name))
+    flags.push(`Registered name "${best.entityName}" differs from search "${req.entity_name}"`);
+  return {
+    entity_name: best.entityName ?? req.entity_name,
+    state: "NY",
+    entity_type: best.entityType ?? best.entityTypeCategory ?? null,
+    sos_status: status,
+    formation_date: isoDate(best.initialFilingDate),
+    last_filing_date: null,
+    registered_agent: null, // not in the search result; a detail call (by dosID) could add it later
+    source_url: "https://apps.dos.ny.gov/publicInquiry/",
+    flags,
+    raw_response: {
+      _source: "ny_dos_live",
+      _dos_id: best.dosID ?? null,
+      county: best.county ?? null,
+      jurisdiction: best.jurisdiction ?? null,
+      status_raw: best.entityStatus ?? null,
+      results: [{ officers: [] }],
+    },
+  };
+}
+
 // Articles + entity suffixes to drop when building the SQL pre-filter so it keys
 // on the distinctive words. Client-side canonical matching (pickBest) does the
 // authoritative, order-independent check afterward.
@@ -282,7 +362,13 @@ export async function lookupEntityFreeSOS(
   try {
     if (state === "CA") return opts.calicoKey ? await lookupCalico(req, opts.calicoKey) : null;
     const src = SOCRATA_SOURCES[state];
-    if (src) return await lookupSocrata(src, req);
+    if (src) {
+      const hit = await lookupSocrata(src, req);
+      if (hit) return hit;
+    }
+    // NY: the Socrata export leaks (misses real active entities), so fall back to
+    // the authoritative live DOS API — free, cookieless, and status-bearing.
+    if (state === "NY") return await lookupNyDosLive(req);
   } catch (err) {
     console.warn(`[sos-free] ${state} lookup error:`, err instanceof Error ? err.message : err);
   }
