@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PulseClose — answer-first detail page (v2, research-informed)</title>
+<style>
+  :root{
+    --navy:#0F172A; --slate900:#1e293b; --slate600:#475569; --slate500:#64748b;
+    --slate400:#94a3b8; --slate200:#e2e8f0; --slate100:#f1f5f9; --slate50:#f8fafc;
+    --blue:#3B82F6; --blue50:#eff6ff; --emerald:#059669; --emerald50:#ecfdf5;
+    --amber:#d97706; --amber50:#fffbeb; --amber200:#fde68a; --red:#dc2626; --red50:#fef2f2;
+    --line:#e2e8f0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--slate100);color:var(--navy);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:940px;margin:0 auto;padding:28px 20px 80px}
+  .note{background:var(--navy);color:#cbd5e1;border-radius:10px;padding:16px 18px;margin-bottom:26px;font-size:12.5px;line-height:1.55}
+  .note b{color:#fff} .note .p{margin:8px 0 0;padding-left:18px;text-indent:-18px}
+  .page{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 22px 10px;margin-bottom:30px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+  .crumb{color:var(--slate400);font-size:12px;margin-bottom:4px}
+  h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.01em}
+  .sub{color:var(--slate500);font-size:13px;margin-top:2px}
+  .secondary{display:flex;gap:8px}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--slate600);border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  /* verdict hero */
+  .hero{border-radius:12px;padding:18px 20px;border:1px solid}
+  .hero.ok{background:var(--emerald50);border-color:#a7f3d0}
+  .hero.warn{background:var(--amber50);border-color:var(--amber200)}
+  .hero.bad{background:var(--red50);border-color:#fecaca}
+  .vrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .verdict{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:700}
+  .ico{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff}
+  .ok .ico{background:var(--emerald)} .warn .ico{background:var(--amber)} .bad .ico{background:var(--red)}
+  .ok .verdict{color:#065f46} .warn .verdict{color:#92400e} .bad .verdict{color:#991b1b}
+  .delta{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:#fff;border:1px solid var(--line);color:var(--slate500)}
+  .delta.up{color:#065f46;border-color:#a7f3d0} .delta.down{color:#991b1b;border-color:#fecaca}
+  .reason{margin:8px 0 0 30px;font-size:13.5px;color:var(--slate600)}
+  .reason b{color:var(--navy)}
+  /* pillar quad row */
+  .pillars{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:16px 0 4px}
+  .pill{border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 10px}
+  .pill .h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--navy)}
+  .pi{width:15px;height:15px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex:0 0 auto}
+  .pi.y{background:var(--emerald)} .pi.w{background:var(--amber)} .pi.n{background:var(--slate400)} .pi.x{background:var(--red)}
+  .pill .s{font-size:11px;color:var(--slate500);margin-top:3px}
+  .pill .ev{font-size:10.5px;color:var(--blue);margin-top:5px}
+  .mandate{margin:14px 0 2px;font-size:13px;color:var(--slate600)}
+  .mtag{font-weight:600;padding:1px 8px;border-radius:20px;font-size:11.5px}
+  .mtag.no{background:#fee2e2;color:#991b1b} .mtag.yes{background:#d1fae5;color:#065f46} .mtag.cond{background:#fef3c7;color:#92400e}
+  .cf{margin:12px 0 2px;font-size:12.5px;color:var(--slate600);background:#fff;border:1px dashed var(--slate200);border-radius:8px;padding:8px 11px}
+  .cf b{color:var(--navy)}
+  .actions{display:flex;gap:10px;margin:16px 0 2px;flex-wrap:wrap}
+  /* full report disclosure */
+  .report{margin-top:14px;border-top:1px solid var(--line);padding-top:4px}
+  details summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 2px;color:var(--slate500);font-size:13px;font-weight:500}
+  details summary::-webkit-details-marker{display:none}
+  .chev{transition:transform .15s} details[open] .chev{transform:rotate(90deg)}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:6px 0 0}
+  .tab{padding:8px 12px;font-size:13px;color:var(--slate500);border-bottom:2px solid transparent}
+  .tab.on{color:var(--navy);border-color:var(--navy);font-weight:600}
+  .card{border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0;font-size:13px;color:var(--slate600)}
+  .card h4{margin:0 0 6px;font-size:13px;color:var(--navy)}
+  .drill{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--slate100);font-size:12.5px}
+  .drill:last-child{border:0}
+  .muted{color:var(--slate400)} .ev2{color:var(--blue);font-size:11.5px}
+  .stat{display:inline-block;margin-right:22px}.stat b{display:block;font-size:18px;color:var(--navy)}
+  .label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate400)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="note">
+    <b>Mockup v2 — answer-first detail page, informed by competitor research.</b> Applies: BLUF verdict-first ·
+    a first-class “couldn’t-complete” state that never reads as a pass (the Achilles fix) · per-pillar status quad
+    (icon+label+sub-label+message, never adjectives) · counterfactual “what clears this” · delta vs prior run ·
+    color+icon+shape · drill-to-evidence · entire current report collapsed under “Full report” (2-level disclosure).
+    <div class="p">▸ <b>Verdict-first</b> is white space — every LOS researched (nCino, Built, Mortgage Automator, Mortgage Office) buries or omits the decision.</div>
+    <div class="p">▸ <b>“Couldn’t complete ≠ pass”</b> is universal in real decisioning tools (Middesk, Persona, Alloy, Markaaz) — we were violating it.</div>
+  </div>
+
+  <!-- ───────────────── STATE 1 — NEEDS REVIEW (Achilles) ───────────────── -->
+  <div class="page">
+    <div class="top">
+      <div><div class="crumb">← Borrowers</div><h1>Nik Kafetzopoulos</h1>
+        <div class="sub">Achilles Properties LLC · Guarantor: Nik Kafetzopoulos · CA</div></div>
+      <div class="secondary"><button class="btn">Methodology</button><button class="btn">Route ▾</button></div>
+    </div>
+
+    <div class="hero warn">
+      <div class="vrow">
+        <div class="verdict"><span class="ico">!</span> Needs review</div>
+        <span class="delta">first run</span>
+      </div>
+      <div class="reason"><b>One check didn’t complete</b> — the entity/SOS lookup errored, so this isn’t a clean pass yet.</div>
+
+      <div class="pillars">
+        <div class="pill"><div class="h"><span class="pi w">!</span> Entity / SOS</div><div class="s">Didn’t complete</div><div class="s muted">CA · Cobalt 429</div><div class="ev">Re-run →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Track record</div><div class="s">4 verified</div><div class="ev">View evidence →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Litigation</div><div class="s">No federal cases</div><div class="ev">View evidence →</div></div>
+        <div class="pill"><div class="h"><span class="pi n">–</span> GC</div><div class="s">Not applicable</div><div class="s muted">no GC on deal</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Sanctions / PEP</div><div class="s">No hits</div><div class="ev">View evidence →</div></div>
+      </div>
+
+      <div class="mandate">Mandate · Colchis Capital (RTL purchase grid): <span class="mtag cond">conditional — re-run required</span></div>
+      <div class="cf">↳ <b>What clears this:</b> re-run the entity check once Cobalt is available <span class="muted">(or add the CA CALICO key — then CA resolves free)</span>. No other issues stand.</div>
+      <div class="actions"><button class="btn primary">Re-run entity check</button><button class="btn">Evaluate against investors</button></div>
+    </div>
+
+    <div class="report"><details><summary><span class="chev">▸</span> Full report — evidence · AI memo · why this rating · methodology · monitoring</summary></details></div>
+  </div>
+
+  <!-- ───────────────── STATE 2 — VERIFIED (report expanded) ───────────────── -->
+  <div class="page">
+    <div class="top">
+      <div><div class="crumb">← Borrowers</div><h1>Westbrook Capital Partners LLC</h1>
+        <div class="sub">Westbrook Capital Partners LLC · CA</div></div>
+      <div class="secondary"><button class="btn">Methodology</button><button class="btn">Route ▾</button></div>
+    </div>
+
+    <div class="hero ok">
+      <div class="vrow">
+        <div class="verdict"><span class="ico">✓</span> Verified · LOW risk</div>
+        <span class="delta up">▲ from MEDIUM last run</span>
+      </div>
+      <div class="reason">All five checks completed and cleared. <b>Binding signal:</b> 4 corroborated flips drive the LOW tier; no entity, litigation, or sanctions flags.</div>
+
+      <div class="pillars">
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Entity / SOS</div><div class="s">Active · good standing</div><div class="ev">View filing →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Track record</div><div class="s">4 verified flips</div><div class="ev">View evidence →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Litigation</div><div class="s">No federal cases</div><div class="ev">View evidence →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> GC</div><div class="s">License active</div><div class="ev">View evidence →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Sanctions / PEP</div><div class="s">No hits</div><div class="ev">View evidence →</div></div>
+      </div>
+
+      <div class="mandate">Mandate · Colchis Capital (RTL purchase grid): <span class="mtag yes">✓ meets standard</span></div>
+      <div class="actions"><button class="btn primary">Evaluate against investors</button><button class="btn">Hand off</button></div>
+    </div>
+
+    <div class="report">
+      <details open>
+        <summary><span class="chev">▸</span> Full report — evidence · AI memo · why this rating · methodology · monitoring</summary>
+        <div class="tabs"><div class="tab on">Summary</div><div class="tab">Evidence</div><div class="tab">Deal</div><div class="tab">Hand off</div><div class="tab">Portfolio</div></div>
+        <div class="card">
+          <h4>AI memo <span class="muted" style="font-weight:400">— narrates, never sets the tier</span></h4>
+          Strong sponsor with 4 corroborated flips in-market. Entity active and in good standing; clean litigation and
+          sanctions. The deterministic tier (LOW) is driven by the verified track record and the absence of flags…
+        </div>
+        <div class="card">
+          <h4>Why this rating? <span class="muted" style="font-weight:400">— deterministic factors (drill to source)</span></h4>
+          <div class="drill"><span>Entity active in CA SOS <span class="muted">(+15)</span></span><span class="ev2">View SOS filing →</span></div>
+          <div class="drill"><span>4 properties corroborated via deed chain <span class="muted">(+20)</span></span><span class="ev2">View 4 deeds →</span></div>
+          <div class="drill"><span>No active federal litigation <span class="muted">(+10)</span></span><span class="ev2">View search →</span></div>
+          <div style="margin-top:10px">
+            <span class="stat"><span class="label">Completeness</span><b>94%</b></span>
+            <span class="stat"><span class="label">Experience</span><b>Tier 1</b></span>
+            <span class="stat"><span class="label">Properties</span><b>4</b></span>
+            <span class="stat"><span class="label">Flags</span><b>0</b></span>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ───────────────── STATE 3 — FLAGGED ───────────────── -->
+  <div class="page">
+    <div class="top">
+      <div><div class="crumb">← Borrowers</div><h1>Mark Morrison</h1>
+        <div class="sub">(no entity captured) · Guarantor: Mark Morrison · CA</div></div>
+      <div class="secondary"><button class="btn">Methodology</button><button class="btn">Route ▾</button></div>
+    </div>
+
+    <div class="hero bad">
+      <div class="vrow">
+        <div class="verdict"><span class="ico">✕</span> Flagged · 2 issues</div>
+        <span class="delta down">▼ from LOW last run</span>
+      </div>
+      <div class="reason">Checks completed, but <b>two material flags</b> need a human decision before this advances.</div>
+
+      <div class="pillars">
+        <div class="pill"><div class="h"><span class="pi x">✕</span> Entity / SOS</div><div class="s">No entity captured</div><div class="s muted">add at intake</div><div class="ev">Add entity →</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Track record</div><div class="s">3 verified</div><div class="ev">View evidence →</div></div>
+        <div class="pill"><div class="h"><span class="pi x">✕</span> Litigation</div><div class="s">1 active case</div><div class="s muted">civil · 2025</div><div class="ev">Open case →</div></div>
+        <div class="pill"><div class="h"><span class="pi n">–</span> GC</div><div class="s">Not applicable</div></div>
+        <div class="pill"><div class="h"><span class="pi y">✓</span> Sanctions / PEP</div><div class="s">No hits</div><div class="ev">View evidence →</div></div>
+      </div>
+
+      <div class="mandate">Mandate · Colchis Capital (RTL purchase grid): <span class="mtag no">✗ does not meet</span></div>
+      <div class="cf">↳ <b>What clears this:</b> capture the vesting entity, and resolve or explain the active civil case. Both are reviewer decisions — the engine won’t auto-clear them.</div>
+      <div class="actions"><button class="btn primary">Review flags</button><button class="btn">Evaluate anyway</button></div>
+    </div>
+
+    <div class="report"><details><summary><span class="chev">▸</span> Full report — evidence · AI memo · why this rating · methodology · monitoring</summary></details></div>
+  </div>
+
+</div>
+</body>
+</html>

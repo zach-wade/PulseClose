@@ -379,3 +379,87 @@ app is one of those three. The engine sets the numbers; the AI narrates.
    (src/components/ui/term.tsx) + GLOSSARY; applied to the sizing ratio row.
    Extend to the remaining labels incrementally (NumField labels, detail-page
    jargon) — backward-compatible, low-risk.
+
+> **Superseded by §11.** The incremental detail-page tweaks above (banner
+> consolidation, verdict line) are rolled into the deliberate **verdict-first
+> redesign** specced in §11, approved 2026-06-26 after competitor research.
+
+## 11. Verdict-first redesign — research → principles → platform-wide rollout (2026-06-26, APPROVED)
+
+The §10 incremental fixes helped (sizing went 18→8 fields) but the detail page
+stayed busy — reordering ≠ reducing. So we did a deliberate design pass: a
+clickable mockup (`docs/mockups/detail-redesign.html`, 3 states: verified /
+needs-review / flagged), grounded in competitor research, **approved by the owner
+2026-06-26.** This section is the spec; build against it, don't re-litigate.
+
+### 11.1 Competitor research — what the market actually does
+Three parallel research sweeps (KYB/identity-decisioning · CRE/bridge LOS ·
+credit-memo/decision tools), REAL screenshots where obtainable.
+
+| Tool (category) | How its screen leads | Takeaway |
+|---|---|---|
+| nCino, Built, Mortgage Office, **Mortgage Automator**, **Baseline**, Liquid Logics (LOS) | Money tiles + dates + people + tasks; Kanban pipeline; **no verdict, no grade, no ratios on the loan** | Systems of record — they *omit* the decision |
+| Lendr (private-lending AI UW) | Findings bucketed **Critical/Warning/Info/Pass** with imperative action labels | Severity + action verbs, link to source |
+| Blooma (CRE AI UW) | One composite score → drill; a **valuation selector cascades into all ratios** | One driving valuation, not every permutation |
+| Persona / Alloy / Middesk / Markaaz (KYB/decisioning) | Status-label verdict (approve/review/decline); **score is secondary** | A first-class "couldn't-complete" state, never a pass |
+| Moody's CreditLens / S&P / nCino credit | Verdict/rating on top → weighted factors → raw spreads (3 layers); **AI in the narrative only** | BLUF + glass-box reason codes + deterministic score |
+
+**Two headlines:** (1) **verdict-first is genuine white space** — *no* competitor leads with a synthesized decision combining sized loan + binding constraint + AI stance + diligence verdict. (2) **"couldn't-complete ≠ pass" is universal** in real decisioning tools (Middesk `neutral`/`irs_unavailable`, Persona yellow "Not Applicable", Alloy `error`, Markaaz F-vs-Z, Cobalt "Incomplete") — our "Verified-on-429" (Achilles) bug is the exact anti-pattern they engineer against.
+
+### 11.2 Principles (canonical — apply platform-wide)
+1. **BLUF / verdict-first.** Lead every decision surface with the answer in display type, then a one-line "why" (binding driver). *(credit-memo BLUF; Persona/Lendr)*
+2. **Two disclosure levels max.** Verdict → driver cards → evidence drawer. Never everything at once. *(NN/g; Shneiderman "overview → zoom → details-on-demand")*
+3. **First-class "couldn't-complete" state, never a pass.** Distinguish three non-passes: real negative *finding* vs *no-data/not-supplied* vs *infra-error*. *(Middesk/Alloy/Markaaz)* — **this is the status-bug fix.**
+4. **Separate workflow/system state from the quality verdict.** *(Persona lifecycle vs decision)* — mirrors "AI never sets the tier."
+5. **Status = color + icon + shape, never color alone.** Status badge (pass/review) ≠ count badge (3 liens). *(NN/g a11y; ~1 in 12 men colorblind)*
+6. **Per-pillar quad: status + label + sub-label + plain message.** Concrete state ("CA SOS 429", "1 active case · civil · 2025"), never adjectives ("minor"). *(Middesk/Rabbet)*
+7. **Counterfactual line — "what clears this."** The most-trusted explanation for novices; pair with **headroom** (distance-to-cap) for experts. *(XAI research; Built covenants)*
+8. **Severity buckets with imperative action verbs.** "Re-run entity check", "Review flags" — not adjectives. *(Lendr)*
+9. **Delta vs prior run** (▲/▼ signed) — anchor the verdict in time (we have override-and-rerun + monitoring). *(dashboard UX)*
+10. **Drill to source evidence via a side drawer, not below-the-fold.** *(Rabbet slide-out; Cobalt source screenshot; our drill-down rule)*
+11. **One driving set of numbers; alternates one click away.** Highlight the binding/abnormal metric, mute the in-range ones. *(Blooma valuation selector; LightBox "outside the norm")*
+12. **Money-tile header for deal surfaces** — big label-over-value tiles; lead tile = binding constraint + max loan. *(Mortgage Automator/Baseline)*
+13. **Auto-rerun the verdict on input change; re-run only the failed piece.** *(Lendr live re-underwrite; Alloy 206-partial resumable)* — our override-and-rerun.
+14. **One strong opinionated default, not infinite configurability** *(the recurring competitor anti-pattern)*. Keep the math **auditable on screen** *(rivals hide it in Excel — our visible deterministic engine is the trust wedge)*.
+
+### 11.3 The detail page spec (answer-first) — APPROVED
+Layout, top to bottom:
+- **Header:** borrower name · entity · state · *secondary* actions only (Methodology, Route).
+- **Verdict hero** (one card, color/icon/shape per state):
+  - Verdict + **delta chip** (▲/▼ vs last run, or "first run").
+  - One-line **reason** (the binding signal / top driver — BLUF).
+  - **5-pillar quad row** (Entity / Track / Litigation / GC / Sanctions), each = icon + label + sub-label + message + "view evidence →".
+  - **Mandate** line (meets / conditional / does-not-meet).
+  - **Counterfactual** ("what clears this").
+  - **1–2 actions** with imperative verbs.
+- **"Full report" (collapsed `<details>`):** the *entire current page* — the 5 tabs (Summary/Evidence/Deal/Hand off/Portfolio), AI memo, Why-this-rating (with the old stat tiles + factors drilling to source), monitoring. Nothing deleted; demoted one level.
+
+**Verdict-state computation (single source of truth — `lib/validation/verdict.ts`):**
+- **Needs review** — ANY of the 5 checks did not complete (errored / `not_run` / unavailable). Beats everything; an incomplete check can never read clean. *(fixes Achilles)*
+- **Flagged** — all checks completed AND (≥1 material flag OR mandate "does not meet").
+- **Verified** — all checks completed AND no material flags.
+- The deterministic **tier** rides alongside the verdict (Verified · LOW); AI never sets either.
+
+### 11.4 Platform-wide rollout (apply the SAME primitives everywhere)
+Build a shared kit once, reuse on every surface:
+- **Shared primitives:** `computeVerdict()` util (§11.3 logic — the status-bug fix, used everywhere so verdicts are consistent) · status tokens (color+icon+shape) · `<VerdictHero>` · `<PillarQuad>` · `<DeltaChip>` · `<Counterfactual>` · evidence `<Drawer>` · `<Term>` (done).
+
+| Surface | Apply |
+|---|---|
+| **Borrowers list** (dashboard) | Replace the bare status with the **verdict chip** (Verified/Needs review/Flagged) + delta; reuse `computeVerdict()` so list and detail never disagree. |
+| **Deal stepper** | Lead each step's *result* with the answer. Sizing result → **money-tile header** (max loan · binding constraint · tier) + a **constraint table with the binding row highlighted + headroom**; **counterfactual** ("would clear at LTV ≤ 70%"); auto-rerun on input change. Judgment → already verdict-shaped (stance + memo + macro); align its styling to `<VerdictHero>`. |
+| **Handoff PDF / view** | **BLUF**: lead the artifact with the verdict + binding constraint + tier so the investor sees the answer first. |
+| **Capital / Mandate console** | Verdict-first per originator (meets/conditional/fails throughput + exception rate); reuse the pillar/quad + delta. |
+| **Portfolio** | KPI tiles + delta; flag the abnormal metric, mute in-range. |
+| **Fund tenant** | Cross-originator verdict rollup built from the same `computeVerdict()`. |
+
+### 11.5 Build sequence (each gated by build + visual-verify on prod)
+1. **Shared primitives** — `computeVerdict()` + status tokens + `<VerdictHero>` / `<PillarQuad>` / `<DeltaChip>` / `<Counterfactual>` / evidence `<Drawer>`.
+2. **Detail page** (highest-value, most-broken) — assemble from the primitives; folds in the **Verified-on-429 status fix**. Ship → drive-visual-pass.
+3. **Borrowers list** verdict chips (reuse the util).
+4. **Deal stepper** result surfaces (money-tile header + constraint table + counterfactual).
+5. **Handoff PDF** BLUF lead.
+6. **Capital / Portfolio / Fund** rollups.
+
+Consistency is load-bearing: every verdict on every surface comes from the one
+`computeVerdict()` — inconsistent verdicts destroy trust faster than missing ones.
