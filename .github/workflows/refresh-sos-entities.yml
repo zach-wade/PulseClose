@@ -1,0 +1,63 @@
+# Scheduled refresh of the sos_entities reference table from FL Sunbiz bulk data
+# (the one SOS source with no live name-query API — SFTP-only — so it's a true
+# bulk load; CA/CO/NY are live-query+cache and need no cron). Runs the tsx ETL
+# (no serverless timeout — the quarterly full file is multi-GB / millions of rows).
+#
+# Cadence mirrors Sunbiz's own: a DAILY update file (work days) + a QUARTERLY
+# full file (generated Jan/Apr/Jul/Oct). Adding more bulk SOS sources to
+# scripts/sos-sources.ts auto-joins this job (the runner iterates the registry).
+#
+# REQUIRED REPO SECRETS (Settings → Secrets and variables → Actions) — the SAME
+# two the contractor cron uses:
+#   NEXT_PUBLIC_SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+# Until those are set, the scheduled runs no-op with an auth error (harmless).
+# (FL Sunbiz SFTP creds are public constants in sos-sources.ts — not secrets.)
+
+name: Refresh SOS entities (FL Sunbiz)
+
+on:
+  schedule:
+    - cron: "0 11 * * *"          # daily 11:00 UTC → --daily (small work-day update)
+    - cron: "0 12 1 1,4,7,10 *"   # 1st of Jan/Apr/Jul/Oct 12:00 UTC → --full (quarterly)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which load to run"
+        type: choice
+        options: [daily, full]
+        default: daily
+
+concurrency:
+  group: refresh-sos-entities
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330   # quarterly full is heavy (multi-GB SFTP + millions of rows)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Determine mode
+        id: m
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 12 1 1,4,7,10 *" ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Ingest SOS entities
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          M="${{ steps.m.outputs.mode }}"
+          echo "Running SOS ingest mode: $M"
+          npx tsx scripts/ingest-sos.ts --$M
