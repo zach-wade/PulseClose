@@ -11,6 +11,7 @@ import {
   Landmark,
   Activity,
   BookOpen,
+  MapPinned,
   Settings,
   LogOut,
   Menu,
@@ -52,6 +53,12 @@ const navItems = [
 
 // Secondary utilities — below the spine, visually separated.
 const secondaryItems = [
+  {
+    label: "Coverage",
+    href: "/dashboard/coverage",
+    icon: MapPinned,
+    description: "Where we can validate entity (SOS) + GC license, by state",
+  },
   {
     label: "Activity",
     href: "/dashboard/activity",
