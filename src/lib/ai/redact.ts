@@ -145,18 +145,38 @@ function buildByToken(map: RedactionMap): Map<string, string> {
 }
 
 export function unredactString(text: string, map: RedactionMap): string {
-  if (map.entries.length === 0) return text;
   const byToken = buildByToken(map);
-  return text.replace(TOKEN_RE, (m) => byToken.get(m) ?? m);
+  return text.replace(TOKEN_RE, (m) => byToken.get(m) ?? genericForToken(m) ?? m);
+}
+
+// Generic human-readable fallback for a KNOWN placeholder the model emitted but
+// our map can't resolve — e.g. an individual borrower has no entity, so nothing
+// registers [[ENTITY]], yet the model can produce it by analogy to the other
+// tokens in the prompt. Shipping "[[ENTITY]]" to an investor is worse than a
+// neutral noun, so we substitute one. Truly-unknown tokens (truncation / typos)
+// return null and stay literal, so findLeftoverTokens still flags them.
+export function genericForToken(token: string): string | null {
+  const base = token.replace(/^\[\[|\]\]$/g, "").replace(/_\d+$/, "");
+  switch (base) {
+    case "BORROWER": return "the borrower";
+    case "ENTITY": return "the borrowing entity";
+    case "GUARANTOR": return "the guarantor";
+    case "REG_AGENT": return "the registered agent";
+    case "GC": return "the general contractor";
+    case "PROPERTY": return "the property";
+    case "LENDER": return "the lender";
+    case "LIT_PARTY": return "the named party";
+    case "SANCTIONS_MATCH": return "the screened name";
+    default: return null;
+  }
 }
 
 // Walk a parsed JSON object and unredact every string leaf.
 export function unredactObject<T>(obj: T, map: RedactionMap): T {
-  if (map.entries.length === 0) return obj;
   const byToken = buildByToken(map);
   function walk(v: unknown): unknown {
     if (typeof v === "string") {
-      return v.replace(TOKEN_RE, (m) => byToken.get(m) ?? m);
+      return v.replace(TOKEN_RE, (m) => byToken.get(m) ?? genericForToken(m) ?? m);
     }
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === "object") {

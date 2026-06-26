@@ -47,28 +47,48 @@ function parseArgs(): Options {
 // small but full split-parts are large). Returns mapped + (optionally) filtered
 // rows, accumulating into `sink`. Records shorter than the layout minimum or
 // failing the mapper are skipped.
+// Stream the fixed-width file line-by-line, flushing rows to `onFlush` every
+// FLUSH_SIZE so peak memory stays bounded regardless of file size. The full FL
+// cordata.zip unzips to a multi-GB file with millions of records — accumulating
+// every row before a single upsert would OOM, so we never hold more than one
+// flush window at a time. Cross-flush (state, normalized_name) collisions are
+// resolved by the DB upsert's onConflict (later row wins — fine for a refresh).
+const FLUSH_SIZE = 20000;
+
 async function parseFixedWidthFile(
   localPath: string,
   src: FixedWidthSource,
   activeOnly: boolean,
-  sink: SosEntityRow[],
-): Promise<{ read: number; mapped: number }> {
+  onFlush: (rows: SosEntityRow[]) => Promise<{ upserted: number; deduped: number }>,
+): Promise<{ read: number; mapped: number; upserted: number; deduped: number }> {
   const rl = createInterface({
     input: createReadStream(localPath, { encoding: "latin1" }),
     crlfDelay: Infinity,
   });
   let read = 0;
   let mapped = 0;
+  let upserted = 0;
+  let deduped = 0;
+  let buffer: SosEntityRow[] = [];
+  const flush = async () => {
+    if (buffer.length === 0) return;
+    const res = await onFlush(buffer);
+    upserted += res.upserted;
+    deduped += res.deduped;
+    buffer = [];
+  };
   for await (const line of rl) {
     if (!line.trim()) continue;
     read++;
     const row = src.map(line);
     if (!row || !row.normalized_name) continue;
     if (activeOnly && row.status !== "active") continue;
-    sink.push(row);
+    buffer.push(row);
     mapped++;
+    if (buffer.length >= FLUSH_SIZE) await flush();
   }
-  return { read, mapped };
+  await flush();
+  return { read, mapped, upserted, deduped };
 }
 
 // Connect, find the most-recent daily update file in dailyDir, download it.
@@ -102,7 +122,8 @@ async function downloadDaily(src: FixedWidthSource, workDir: string): Promise<st
   }
 }
 
-// Download all 10 quarterly zip parts, unzip each to its single entry file.
+// Download each quarterly full zip (FL = one cordata.zip) and stream-unzip its
+// single entry to a .txt the parser can read.
 async function downloadFullParts(src: FixedWidthSource, workDir: string): Promise<string[]> {
   const sftp = new SftpClient();
   await sftp.connect({
@@ -158,13 +179,16 @@ async function runSource(
     let totalRead = 0;
     let totalUpserted = 0;
     let totalDeduped = 0;
-    // Parse + upsert each file independently so peak memory stays bounded; the
-    // (state, normalized_name) PK makes cross-file collisions idempotent (later
-    // file's row may overwrite an earlier one — acceptable for a refresh).
+    // Parse + upsert each file by streaming flushes so peak memory stays bounded
+    // even for the multi-GB full file; the (state, normalized_name) PK makes
+    // cross-flush collisions idempotent (later row overwrites — fine for refresh).
     for (const file of files) {
-      const rows: SosEntityRow[] = [];
-      const { read, mapped } = await parseFixedWidthFile(file, src, opts.activeOnly, rows);
-      const { upserted, deduped } = await upsertBatch(supabase, rows);
+      const { read, mapped, upserted, deduped } = await parseFixedWidthFile(
+        file,
+        src,
+        opts.activeOnly,
+        (rows) => upsertBatch(supabase, rows),
+      );
       totalRead += read;
       totalUpserted += upserted;
       totalDeduped += deduped;

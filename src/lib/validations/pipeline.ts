@@ -29,6 +29,7 @@ import {
   getGCDataSource,
   getSanctionsDataSource,
 } from "@/lib/adapters";
+import type { SOSLookupResult } from "@/lib/adapters/types";
 import { generateValidationAnalysis } from "@/lib/ai/analysis";
 import {
   upsertBorrower,
@@ -253,10 +254,32 @@ export async function runValidationPipeline(
       return gc_name ? adapter.lookupGC(gcReq) : null;
     };
 
+    // An individual borrower with no vesting entity is a first-class case (the
+    // Solo persona / a common bridge profile) — NOT a failed entity check. When
+    // no entity name was supplied we skip the SOS lookup entirely (a blank-name
+    // lookup would 404/error and read as "Needs review"), skip writing an
+    // entity_checks row (so the verdict's entity pillar reads not_applicable, not
+    // incomplete), and skip the entity risk factor. Mirrors the GC guard below.
+    const hasEntity = borrower_entity_name.trim().length > 0;
+    const NO_ENTITY: SOSLookupResult = {
+      entity_name: borrower_entity_name,
+      state: entity_state,
+      entity_type: null,
+      sos_status: "not_found",
+      formation_date: null,
+      last_filing_date: null,
+      registered_agent: null,
+      source_url: null,
+      flags: [],
+      raw_response: { _no_entity: true },
+    };
+
     const [entityResult, properties, litigationResults, gcResult] = await Promise.all([
       // DB-first: hits the shared sos_entities cache / bulk-ingested rows before
       // paying Cobalt (de-rent, #1). Caches resolved live results for reuse.
-      lookupEntityCached(supabase, adapter, { entity_name: borrower_entity_name, state: entity_state }),
+      hasEntity
+        ? lookupEntityCached(supabase, adapter, { entity_name: borrower_entity_name, state: entity_state })
+        : Promise.resolve(NO_ENTITY),
       adapter.searchProperties({ borrower_name, entity_name: borrower_entity_name, state: entity_state }),
       adapter.searchLitigation({ entity_name: borrower_entity_name, borrower_name, known_states: knownStates }),
       resolveGc(),
@@ -300,38 +323,44 @@ export async function runValidationPipeline(
       borrower_dob: borrower_dob || undefined,
     });
 
-    // 3. Entity check + refresh cached SOS state.
-    const checkedEntityId = await upsertEntity(supabase, orgId, {
-      displayName: entityResult.entity_name,
-      state: entityResult.state || entity_state,
-      entityType: entityResult.entity_type,
-      formationDate: entityResult.formation_date,
-      latestSosStatus: entityResult.sos_status,
-      latestSosCheckAt: new Date().toISOString(),
-      latestRegisteredAgent: entityResult.registered_agent,
-    });
+    // 3. Entity check + refresh cached SOS state. Skipped entirely for an
+    //    individual borrower (no entity) — no row, so the verdict's entity
+    //    pillar reads not_applicable and no entity_status risk factor is created.
+    const checkedEntityId = hasEntity
+      ? await upsertEntity(supabase, orgId, {
+          displayName: entityResult.entity_name,
+          state: entityResult.state || entity_state,
+          entityType: entityResult.entity_type,
+          formationDate: entityResult.formation_date,
+          latestSosStatus: entityResult.sos_status,
+          latestSosCheckAt: new Date().toISOString(),
+          latestRegisteredAgent: entityResult.registered_agent,
+        })
+      : null;
 
-    await insertOrThrow(
-      supabase.from("entity_checks").insert({
-        validation_id: validationId,
-        org_id: orgId,
-        entity_id: checkedEntityId ?? primaryEntityId,
-        entity_name: entityResult.entity_name,
-        state: entityResult.state,
-        entity_type: entityResult.entity_type,
-        sos_status: entityResult.sos_status,
-        formation_date: entityResult.formation_date,
-        last_filing_date: entityResult.last_filing_date,
-        registered_agent: entityResult.registered_agent,
-        source_url: entityResult.source_url,
-        confidence: entityResult.sos_status === "not_found" ? "low" : "medium",
-        flags: entityResult.flags,
-        raw_response: entityResult.raw_response,
-      }),
-      `entity_checks insert (validation_id=${validationId})`,
-    );
+    if (hasEntity) {
+      await insertOrThrow(
+        supabase.from("entity_checks").insert({
+          validation_id: validationId,
+          org_id: orgId,
+          entity_id: checkedEntityId ?? primaryEntityId,
+          entity_name: entityResult.entity_name,
+          state: entityResult.state,
+          entity_type: entityResult.entity_type,
+          sos_status: entityResult.sos_status,
+          formation_date: entityResult.formation_date,
+          last_filing_date: entityResult.last_filing_date,
+          registered_agent: entityResult.registered_agent,
+          source_url: entityResult.source_url,
+          confidence: entityResult.sos_status === "not_found" ? "low" : "medium",
+          flags: entityResult.flags,
+          raw_response: entityResult.raw_response,
+        }),
+        `entity_checks insert (validation_id=${validationId})`,
+      );
+    }
 
-    const linkEntityId = checkedEntityId ?? primaryEntityId;
+    const linkEntityId = checkedEntityId ?? (hasEntity ? primaryEntityId : null);
     if (primaryBorrowerId && linkEntityId) {
       await linkBorrowerToEntity(supabase, primaryBorrowerId, linkEntityId, "other", "user", "medium");
     }
@@ -519,7 +548,11 @@ export async function runValidationPipeline(
     const sosFree = sosSource === "ca_calico" || sosSource === "co_socrata" || sosSource === "ny_socrata";
     const sosCost = !cobaltKey || sosFree || sosFromCache ? 0 : 500;
     const usageRecords = [
-      { check_type: "sos_lookup", data_source: cobaltKey ? sosSource : "stub", cost_cents: sosCost },
+      // No entity → no SOS lookup ran, so don't bill one (it would charge Cobalt
+      // for a call we never made when a Cobalt key is present in prod).
+      ...(hasEntity
+        ? [{ check_type: "sos_lookup", data_source: cobaltKey ? sosSource : "stub", cost_cents: sosCost }]
+        : []),
       { check_type: "property_search", data_source: propertySource, cost_cents: propertySource === "stub" ? 0 : 1500 },
       { check_type: "litigation_search", data_source: courtListenerToken ? "courtlistener" : "stub", cost_cents: courtListenerToken ? 1000 : 0 },
       { check_type: "sanctions_screen", data_source: sanctionsSource, cost_cents: sanctionsSource === "opensanctions" ? 100 : 0 },
@@ -605,7 +638,7 @@ export async function runValidationPipeline(
     const sosWorked =
       entityResult.sos_status !== "not_found" && !(entityResult.raw_response as { _error?: boolean } | null)?._error;
 
-    if (sosWorked && !looksLikeEntity && !borrowerLinked && !guarantorLinked) {
+    if (hasEntity && sosWorked && !looksLikeEntity && !borrowerLinked && !guarantorLinked) {
       inputWarnings.push(
         `Borrower "${borrower_name}"${guarantor_name ? ` (guarantor "${guarantor_name}")` : ""} does not appear in entity "${entityResult.entity_name}" filings (registered agent or officers). Verify the borrower is connected to this entity.`,
       );
@@ -614,7 +647,7 @@ export async function runValidationPipeline(
     const hasActiveFlags =
       // A 429'd / errored entity lookup is INCOMPLETE, not a hard "not active"
       // flag — it drops to "partial" (incomplete) below, not "flagged" (#21).
-      (entityResult.sos_status !== "active" && !entityUnavailable) ||
+      (hasEntity && entityResult.sos_status !== "active" && !entityUnavailable) ||
       activeLitigation.length > 0 ||
       sanctionsHit ||
       (gcResult && gcResult.license_status !== "active");

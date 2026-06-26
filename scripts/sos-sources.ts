@@ -85,8 +85,12 @@ const FL: FixedWidthSource = {
     return `${y}${m}${day}c.txt`;
   },
   fullDir: "doc/quarterly/cor",
-  // cordata.zip split into 10 by last digit (0-9) of the record.
-  fullFiles: Array.from({ length: 10 }, (_, i) => `cordata${i}.zip`),
+  // Verified against sftp.floridados.gov 2026-06-26: the quarterly full export is
+  // a SINGLE cordata.zip (~1.74 GB), NOT a 10-way split. The old split filenames
+  // (cordata0.zip…cordata9.zip) never existed on the server, so --full always
+  // 404'd ("No such file") and the only FL rows we ever had came from a daily
+  // update file. The runner streams + flushes, so the one big file is fine.
+  fullFiles: ["cordata.zip"],
   map(line: string): SosEntityRow | null {
     // Records are 1440 chars; daily files may have trailing CR/short lines.
     if (!line || line.length < 205) return null;

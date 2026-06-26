@@ -79,15 +79,14 @@ export interface HandoffDocument {
     registered_agent: string | null;
   } | null;
 
-  // Sanctions
+  // Sanctions — counts are sanction/PEP-category only (exclusion noise dropped),
+  // confidence-gated so the handoff line reads "possible — review" (not a hit)
+  // for name-only matches and "Clear" when only weak/exclusion matches exist.
   sanctions: {
     result: string;
     sources_searched: string[];
-    match_count: number;
-    // Matches the disambiguation layer promoted to "confirmed" (a true hit).
-    // Name-only matches stay in match_count but never count here, so the
-    // handoff line can read "possible — review" instead of a raw enum.
     confirmed_count: number;
+    possible_count: number;
   } | null;
 
   // Litigation
@@ -503,28 +502,39 @@ export async function buildHandoffDocument(
         }
       : null,
     sanctions: sanctionsRes.data
-      ? {
-          result: sanctionsRes.data.result,
-          sources_searched: (sanctionsRes.data.sources_searched as string[]) ?? [],
-          match_count: sanctionsRes.data.match_count ?? 0,
-          // Only matches the disambiguation layer confirmed are hits — mirrors
-          // computeVerdict()'s sanctions logic so the handoff line agrees with
-          // the BLUF verdict and the detail page.
-          confirmed_count: ((sanctionsRes.data.matches as Array<{ confidence?: string | null }> | null) ?? []).filter(
-            (m) => m.confidence === "confirmed",
-          ).length,
-        }
+      ? (() => {
+          // Mirror the disambiguation rule + the adapter's own split: only
+          // sanction/PEP-category matches count (regulatory-exclusion noise is
+          // informational), confirmed = a hit, possible/probable = review, and
+          // WEAK matches are filtered out entirely (never "possible — review").
+          // Keeps the handoff line agreeing with computeVerdict() / the BLUF.
+          const matches = (sanctionsRes.data.matches as Array<{ confidence?: string | null; category?: string | null }> | null) ?? [];
+          const screening = matches.filter(
+            (m) => m.category === "sanction" || m.category === "pep" || m.category == null,
+          );
+          return {
+            result: sanctionsRes.data.result,
+            sources_searched: (sanctionsRes.data.sources_searched as string[]) ?? [],
+            confirmed_count: screening.filter((m) => m.confidence === "confirmed").length,
+            possible_count: screening.filter((m) => m.confidence === "possible" || m.confidence === "probable").length,
+          };
+        })()
       : null,
     litigation: (litigationRes.data ?? []).map((l) => {
       const raw = (l.raw_response as Record<string, unknown> | null) ?? {};
       const confidence =
         ((raw._disambiguation as { confidence?: string } | undefined)?.confidence) ?? "possible";
       const terminated = !!raw.date_terminated;
-      // A name-only ("possible") match is capped at review and never reads as an
-      // active case — only a CONFIRMED, non-terminated docket is "active".
+      // Confidence-gated, matching the disambiguation rule: confirmed = a real
+      // case (active unless terminated), possible/probable = a review item, and
+      // WEAK = filtered noise (status null → not shown, not counted). This keeps
+      // the handoff's litigation line consistent with the verdict pillar, which
+      // only treats confirmed-active dockets as flags.
       let status: "active" | "dismissed" | "possible" | null = null;
       if (l.result === "found") {
-        status = confidence === "confirmed" ? (terminated ? "dismissed" : "active") : "possible";
+        if (confidence === "confirmed") status = terminated ? "dismissed" : "active";
+        else if (confidence === "possible" || confidence === "probable") status = "possible";
+        else status = null; // weak / none → filtered
       }
       return {
         search_type: l.search_type,

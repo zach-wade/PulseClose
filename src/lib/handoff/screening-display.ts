@@ -8,10 +8,11 @@
 export interface SanctionsDisplay {
   result: string;
   sources_searched: string[];
-  /** Total matches stored on the check (name-only + confirmed). */
-  match_count: number;
-  /** Matches the disambiguation layer promoted to "confirmed" (a true hit). */
+  /** Sanctions/PEP matches the disambiguation layer promoted to "confirmed". */
   confirmed_count: number;
+  /** Sanctions/PEP matches at possible/probable confidence — review items. Weak
+   *  matches and regulatory-exclusion noise are already filtered out upstream. */
+  possible_count: number;
 }
 
 /** One readable line for the Sanctions / PEP row. Never emits raw enum values. */
@@ -24,9 +25,9 @@ export function sanctionsScreeningLabel(s: SanctionsDisplay | null): string {
   if (s.confirmed_count > 0) {
     return `${s.confirmed_count} confirmed match${s.confirmed_count === 1 ? "" : "es"} — hit${sourceSuffix}`;
   }
-  // A name-only `potential_match` is a review item, not a hit — say so plainly.
-  if (s.match_count > 0) {
-    return `${s.match_count} possible — review (name-only, unconfirmed)${sourceSuffix}`;
+  // A name-only match is a review item, not a hit — say so plainly.
+  if (s.possible_count > 0) {
+    return `${s.possible_count} possible — review (name-only, unconfirmed)${sourceSuffix}`;
   }
   return `Clear — no matches${sourceSuffix}`;
 }
