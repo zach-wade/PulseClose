@@ -20,6 +20,7 @@ import { searchLitigationCourtListener } from "./courtlistener";
 import { lookupCSLB, CSLBError } from "./cslb";
 import { screenSanctionsOpenSanctions, OpenSanctionsError } from "./opensanctions";
 import { screenSanctionsOFAC } from "./ofac";
+import { lookupEntityFreeSOS } from "./sos-free";
 
 const COBALT_BASE_URL = "https://apigateway.cobaltintelligence.com/v1";
 
@@ -285,13 +286,20 @@ interface CobaltAdapterOptions {
   regridToken?: string;
   courtListenerToken?: string;
   openSanctionsKey?: string;
+  calicoKey?: string;
 }
 
 function createCobaltAdapter(opts: CobaltAdapterOptions): ValidationAdapter {
-  const { cobaltKey: apiKey, realieKey, rentcastKey, regridToken, courtListenerToken, openSanctionsKey } = opts;
+  const { cobaltKey: apiKey, realieKey, rentcastKey, regridToken, courtListenerToken, openSanctionsKey, calicoKey } = opts;
   return {
     async lookupEntity(req: SOSLookupRequest): Promise<SOSLookupResult> {
       try {
+        // Free official SOS sources first (de-rent Cobalt): CALICO for CA, Socrata
+        // for CO/NY. A resolved hit short-circuits Cobalt entirely; on no match /
+        // unsupported state / source error we fall through to the paid lookup.
+        const free = await lookupEntityFreeSOS(req, { calicoKey });
+        if (free) return free;
+
         const response = await cobaltSearch(req.entity_name, req.state, apiKey);
 
         if (

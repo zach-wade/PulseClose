@@ -508,8 +508,18 @@ export async function runValidationPipeline(
     const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
     const propertySource = getPropertyDataSource();
     const sanctionsSource = getSanctionsDataSource();
+
+    // Honest de-rent telemetry: bill the SOS lookup by what actually served it.
+    // Free official sources (CALICO/Socrata) and warm cache hits cost $0; only a
+    // fresh paid Cobalt call costs $5. The result stamps `_source`; a cobalt_cache
+    // row served from cache carries `_cache_fetched_at` (marginal cost $0).
+    const sosRaw = (entityResult.raw_response ?? {}) as { _source?: string; _cache_fetched_at?: string };
+    const sosSource = sosRaw._source ?? (cobaltKey ? "cobalt" : "stub");
+    const sosFromCache = Boolean(sosRaw._cache_fetched_at);
+    const sosFree = sosSource === "ca_calico" || sosSource === "co_socrata" || sosSource === "ny_socrata";
+    const sosCost = !cobaltKey || sosFree || sosFromCache ? 0 : 500;
     const usageRecords = [
-      { check_type: "sos_lookup", data_source: cobaltKey ? "cobalt" : "stub", cost_cents: cobaltKey ? 500 : 0 },
+      { check_type: "sos_lookup", data_source: cobaltKey ? sosSource : "stub", cost_cents: sosCost },
       { check_type: "property_search", data_source: propertySource, cost_cents: propertySource === "stub" ? 0 : 1500 },
       { check_type: "litigation_search", data_source: courtListenerToken ? "courtlistener" : "stub", cost_cents: courtListenerToken ? 1000 : 0 },
       { check_type: "sanctions_screen", data_source: sanctionsSource, cost_cents: sanctionsSource === "opensanctions" ? 100 : 0 },

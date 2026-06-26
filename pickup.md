@@ -76,11 +76,20 @@ The two arcs (calibrate, walk-the-UI) are done. Pick the next thrust:
    Module 6 judgment + investor memo), differentiated (a Gundlach/Damodaran-style
    read in a bridge memo), and exactly what Damon asked for (defensible LOIs/memos).
    Applies to every memo, not one deal type. **No external blockers.**
-2. **Cobalt free-state bulk ingest (FL/CA)** — the SOS cache (#1) is shipped; this
-   eliminates Cobalt per-state by bulk-loading `sos_entities` (source != cobalt_cache).
-   Mirror the GC pattern: `scripts/sos-sources.ts` registry + `ingest-sos.ts`, FL
-   Sunbiz bulk (public SFTP) + CA CALICO API. **Needs:** FL SFTP works as `Public`;
-   **CA CALICO requires a (free) registered key — a USER signup at calicodev.sos.ca.gov.**
+2. **Cobalt free-state de-rent (SHIPPED 2026-06-25 for CA/CO/NY)** — built as a
+   LIVE-query + cache layer, not a bulk load: `src/lib/adapters/sos-free.ts` tries
+   the free official source for a state (CALICO for CA, Socrata for CO/NY) BEFORE
+   Cobalt inside `cobalt.ts lookupEntity`; the resolved hit caches in `sos_entities`
+   stamped with its real `_source`. **Design pivot from the original "bulk ingest"
+   plan:** CALICO has NO bulk endpoint (per-name only, ≤150), and the Socrata
+   registries are 3–4M rows EACH — bulk-loading is unjustified storage pre-revenue.
+   Live query is the same $0 with ~0 storage, no ingest cron, no GitHub secrets.
+   Verified live (CO/NY) via `npx tsx scripts/verify-sos-free.ts`. Pipeline usage
+   telemetry now bills SOS by actual provider ($0 for free/cache, $5 only on a fresh
+   Cobalt call). **CA is the review-iteration win but is BLOCKED on a free key:** a
+   USER signup at calicodev.sos.ca.gov → set `CALICO_API_KEY` in `.env.local` + Vercel.
+   FL Sunbiz (SFTP fixed-width, has officers — the rich one) is the deferred follow-up
+   (heaviest; needs an SFTP dep; doesn't touch current CA/TX review loans).
 3. **Tier + investor-placement fidelity** — extend `scripts/fidelity-score.ts` from
    loan-$ to the full decision: diff the engine's TIER + investor PLACEMENT vs the
    Nexys audit logs (10287/10294/10295 present). Turns "we sized right" into "we'd
@@ -161,9 +170,11 @@ git push origin main                            # autodeploy; `vercel ls pulsecl
 `drive-persona.ts`; `scripts/verify-mandate-fix.ts` re-assesses mandates.
 
 **Live key status:** RentCast/OpenSanctions/CourtListener ✅ (prod). **Cobalt = TRIAL
-QUOTA EXHAUSTED in prod** → entity lookups 429 (the cache + backoff degrade honestly;
-de-rent via free-state ingest or a paid/rotated key). User has a rotatable Cobalt
-trial key for demos (not in prod env). Regrid = geo-limited trial (retire).
+QUOTA EXHAUSTED in prod** → entity lookups 429 BUT now de-rented for CA/CO/NY by the
+free-SOS layer (CALICO/Socrata tried first). **CA/CO/NY no longer hit Cobalt at all**
+once `CALICO_API_KEY` is set (CO/NY are live already, no key needed). User has a
+rotatable Cobalt trial key for demos (not in prod env) — now only needed for TX/DE/IL
++ the long tail. Regrid = geo-limited trial (retire).
 
 ---
 
@@ -171,7 +182,10 @@ trial key for demos (not in prod env). Regrid = geo-limited trial (retire).
 - **Cobalt:** rotate trial keys for demos vs. pay (~$1k/mo for 1k) vs. build the
   free-state bulk ingest (FL/CA) to eliminate per-state cost. Rec: ship FL/CA ingest
   (the cache architecture is already in place), keep Cobalt as the long-tail fallback.
-- **CA CALICO key:** free signup at calicodev.sos.ca.gov needed for the CA SOS ingest.
+- **CA CALICO key (the one action that lands the review-iteration win):** free,
+  instant self-serve signup at calicodev.sos.ca.gov → subscribe to the "BE Public
+  Search" product → set `CALICO_API_KEY` in `.env.local` + Vercel. CODE IS SHIPPED;
+  CA stops hitting Cobalt the moment the key is present. (CO/NY already live, no key.)
 - **GitHub repo secrets** for the GC refresh cron: `NEXT_PUBLIC_SUPABASE_URL` +
   `SUPABASE_SERVICE_ROLE_KEY` (Settings → Secrets → Actions). Data is already loaded;
   the scheduled ingest no-ops until set.

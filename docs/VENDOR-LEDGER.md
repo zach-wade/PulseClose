@@ -17,7 +17,9 @@ Last reviewed: 2026-06-25. Owner: Zach Wade.
 
 | # | Vendor | Purpose | Env var(s) | Pricing/Tier | Renewal/Rotation | Fallback | Incident playbook |
 |---|---|---|---|---|---|---|---|
-| 1 | **Cobalt Intelligence** | SOS entity scraping (50 states) | `COBALT_INTELLIGENCE_API_KEY` | Per-call (trial quota exhausted in prod) | Rotate keys; de-rent via sos_entities cache + free-state ingest | `sos_entities` cache; else entity marked UNAVAILABLE → partial/conditional | See §1 |
+| 1 | **Cobalt Intelligence** | SOS entity (50 states) — now the FALLBACK behind the free-SOS layer | `COBALT_INTELLIGENCE_API_KEY` | Per-call (trial quota exhausted in prod) | Rotate keys; de-rented for CA/CO/NY (vendors 1a/1b) | Free-SOS layer first → `sos_entities` cache → else entity UNAVAILABLE → partial/conditional | See §1 |
+| 1a | **CALICO (CA SOS)** | CA business-entity lookup — free primary, de-rents Cobalt for CA | `CALICO_API_KEY` | **Free** (Azure APIM; self-serve key at calicodev.sos.ca.gov) | Rotate via portal; no quota published — handle 429 | Cobalt (vendor 1) | `src/lib/adapters/sos-free.ts` `lookupCalico`; per-name only, ≤150, no filing history; auth fail = HTTP 503 |
+| 1b | **Socrata (CO/NY SOS)** | CO/NY business-entity lookup — free primary, de-rents Cobalt | `SOCRATA_APP_TOKEN` (optional, raises rate limit) | **Free** (open data; no key required) | None | Cobalt (vendor 1) | `sos-free.ts` `lookupSocrata`; CO `4ykn-tg5h` (real status), NY `n9v6-gdp6` (active-only); live SoQL name query + cache |
 | 2 | **Realie** | Property + deed-chain (primary) | `REALIE_API_KEY` | Per-call premium | Annual (TBD) | Regrid | See §2 |
 | 3 | **Regrid** | Property fallback | `REGRID_API_TOKEN` | Per-call | Annual (TBD) | Stub adapter (demo data) | See §3 |
 | 4 | **RentCast** | Sale-history enrichment | `RENTCAST_API_KEY` | Per-call | Annual (TBD) | Skip enrichment, return Regrid as-is | See §4 |

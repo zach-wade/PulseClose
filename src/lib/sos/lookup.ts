@@ -16,6 +16,13 @@ import { canonicalizeName } from "../domain/upsert";
 // cron catches changes in between, and overrides force a fresh validation.
 const CACHE_TTL_DAYS = 60;
 
+// Sources that are bulk-ingested (refreshed by their own cron) and therefore
+// always considered fresh regardless of age. The free-state sources (ca_calico,
+// co_socrata, ny_socrata) are LIVE-fetched single lookups, so — like cobalt_cache
+// — they respect the TTL above and re-fetch (still $0) when stale. None today;
+// add e.g. 'fl_sunbiz' here if a true bulk load ever lands.
+const ALWAYS_FRESH_SOURCES = new Set<string>([]);
+
 interface SosRow {
   state: string;
   normalized_name: string;
@@ -96,15 +103,19 @@ export async function lookupEntityCached(
       .maybeSingle();
     if (data) {
       const row = data as SosRow;
-      if (row.source !== "cobalt_cache" || isFresh(row.fetched_at)) {
+      if (ALWAYS_FRESH_SOURCES.has(row.source) || isFresh(row.fetched_at)) {
         return rowToResult(row);
       }
     }
   }
 
-  // 2) Live lookup (Cobalt). Cache only a resolved, non-errored result.
+  // 2) Live lookup. The adapter tries the free official sources (CALICO/Socrata)
+  //    before Cobalt; whichever resolved it stamps `_source` in raw_response so we
+  //    cache the row under the real provider (ca_calico / co_socrata / ny_socrata /
+  //    cobalt_cache) for honest de-rent telemetry. Cache only resolved, non-errored.
   const live = await adapter.lookupEntity(req);
   const errored = (live.raw_response as { _error?: boolean } | null)?._error === true;
+  const liveSource = (live.raw_response as { _source?: string } | null)?._source ?? "cobalt_cache";
   const resolved = live.sos_status === "active" || live.sos_status === "suspended" || live.sos_status === "dissolved";
   if (state && norm && resolved && !errored) {
     await supabase
@@ -120,7 +131,7 @@ export async function lookupEntityCached(
           last_filing_date: live.last_filing_date,
           registered_agent: live.registered_agent,
           officers: extractOfficers(live),
-          source: "cobalt_cache",
+          source: liveSource,
           source_url: live.source_url,
           raw: (live.raw_response as Record<string, unknown> | null) ?? {},
           fetched_at: new Date().toISOString(),

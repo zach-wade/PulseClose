@@ -10,6 +10,7 @@ export function getAdapter(): ValidationAdapter {
   const regridToken = process.env.REGRID_API_TOKEN;
   const courtListenerToken = process.env.COURTLISTENER_API_TOKEN;
   const openSanctionsKey = process.env.OPENSANCTIONS_API_KEY;
+  const calicoKey = process.env.CALICO_API_KEY;
 
   const realieKey = process.env.REALIE_API_KEY;
 
@@ -27,6 +28,7 @@ export function getAdapter(): ValidationAdapter {
       regridToken: regridToken || undefined,
       courtListenerToken: courtListenerToken || undefined,
       openSanctionsKey: openSanctionsKey || undefined,
+      calicoKey: calicoKey || undefined,
     });
   }
 
