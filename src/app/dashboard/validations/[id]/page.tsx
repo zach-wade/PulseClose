@@ -49,6 +49,7 @@ import { CompareToPriorButton } from "@/components/dashboard/compare-to-prior-bu
 import { RouteToInvestorButton } from "@/components/dashboard/route-to-investor-button";
 import { BorrowerUploadsCard } from "@/components/dashboard/borrower-uploads-card";
 import { VerdictHero } from "@/components/validation/verdict-hero";
+import { deltaFromTiers } from "@/components/validation/delta-chip";
 import { computeVerdict, type MandateStanding, type Pillar } from "@/lib/validation/verdict";
 import type { EntityCheck } from "@/components/dashboard/shared-types";
 import type { TrackRecordEntry } from "@/components/dashboard/shared-types";
@@ -90,6 +91,7 @@ interface ValidationDetail {
   primary_entity_id: string | null;
   risk_factors: RiskFactor[];
   tier: "HIGH" | "MEDIUM" | "LOW";
+  prior_tier: "HIGH" | "MEDIUM" | "LOW" | null;
   handoff_data: {
     overall_narrative?: string | null;
     preparer_name?: string | null;
@@ -408,6 +410,7 @@ export default function ValidationDetailPage() {
       {verdict && (
         <VerdictHero
           verdict={verdict}
+          delta={deltaFromTiers(data.prior_tier, data.tier)}
           mandate={mandate}
           onSelectPillar={(key) => openEvidence(key)}
           actions={heroActions}

@@ -10,6 +10,7 @@ import {
 } from "@/lib/stripe/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { runValidationPipeline } from "@/lib/validations/pipeline";
+import { computeVerdictsForValidations } from "@/lib/validation/verdict-batch";
 
 // The invocation budget is SHARED between the synchronous diligence pipeline
 // (entity/track/litigation/GC/sanctions vendor calls + retries/backoff, ~40-60s)
@@ -37,7 +38,19 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(validations);
+  // Attach the per-row verdict (the SAME computeVerdict() the detail page uses,
+  // so the list chip and the detail hero never disagree) + prior-run delta.
+  const verdicts = await computeVerdictsForValidations(
+    supabase,
+    (validations ?? []).map((v) => ({
+      id: v.id,
+      primary_borrower_id: v.primary_borrower_id ?? null,
+      created_at: v.created_at,
+    })),
+  );
+  const enriched = (validations ?? []).map((v) => ({ ...v, verdict: verdicts.get(v.id) ?? null }));
+
+  return NextResponse.json(enriched);
 }
 
 // POST /api/validations — create a new validation and run all checks.

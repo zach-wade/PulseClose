@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { deriveTier, type RiskFactor } from "@/lib/risk/factors";
+import { computeVerdictsForValidations } from "@/lib/validation/verdict-batch";
 
 export async function GET(
   _request: Request,
@@ -75,11 +76,17 @@ export async function GET(
     });
   }
 
+  // Per-run verdict (same computeVerdict() as the detail hero) + prior-run delta.
+  const verdicts = await computeVerdictsForValidations(
+    supabase,
+    (validations ?? []).map((v) => ({ id: v.id, primary_borrower_id: borrowerId, created_at: v.created_at })),
+  );
+
   const enriched = (validations ?? []).map((v) => {
     const factors = factorsByValidation.get(v.id) ?? [];
     const tier = factors.length > 0 ? deriveTier(factors) : null;
     const outcome = outcomeByValidation.get(v.id) ?? null;
-    return { ...v, tier, outcome };
+    return { ...v, tier, outcome, verdict: verdicts.get(v.id) ?? null };
   });
 
   return NextResponse.json({

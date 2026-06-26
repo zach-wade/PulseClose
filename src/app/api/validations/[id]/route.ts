@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
 import { deriveTier, type RiskFactor } from "@/lib/risk/factors";
+import { priorTierForValidation } from "@/lib/validation/verdict-batch";
 
 // GET /api/validations/[id] — full validation with all check results
 export async function GET(
@@ -100,8 +101,17 @@ export async function GET(
     .eq("id", profile.org_id)
     .maybeSingle();
 
+  // Prior-run tier for the verdict hero's delta chip (▲/▼ vs last run).
+  const prior_tier = await priorTierForValidation(
+    supabase,
+    validationRes.data.primary_borrower_id ?? null,
+    validationRes.data.created_at,
+    profile.org_id,
+  );
+
   return NextResponse.json({
     ...validationRes.data,
+    prior_tier,
     entity_checks: entityRes.data ?? [],
     track_record: trackRecordRes.data ?? [],
     litigation_checks: litigationRes.data ?? [],

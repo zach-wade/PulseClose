@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Term } from "@/components/ui/term";
+import { Counterfactual } from "@/components/validation/counterfactual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -769,35 +770,62 @@ function StepSizing({
 
         {sizing && (
           <div className="space-y-4 pt-2 border-t border-border">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Max loan</p>
-                <p className="text-lg font-bold">{usd(sizing.maxLoan)}</p>
-                <p className="text-xs text-muted-foreground">bound by {sizing.bindingConstraint}</p>
+            {/* Money-tile header — lead with the answer (UX-REDESIGN §11.2
+                principle 12): the dominant tile is max loan + its binding
+                constraint; supporting tiles muted alongside. */}
+            <div className="rounded-xl border border-info/30 bg-info/5 p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Max loan · bound by {sizing.bindingConstraint}
+                  </p>
+                  <p className="text-2xl font-bold leading-tight">{usd(sizing.maxLoan)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {sizing.constraints.find((c) => c.binding)?.label ?? sizing.bindingConstraint} is the{" "}
+                    <Term term="binding constraint">binding constraint</Term>
+                  </p>
+                </div>
+                <Field label="Equity required" value={usd(sizing.equityRequired)} big />
+                <Field label="As-is value" value={usd(sizing.asIsValue)} big />
+                <Field label="Stabilized / ARV" value={usd(sizing.stabilizedValue)} big />
               </div>
-              <Field label="Equity required" value={usd(sizing.equityRequired)} big />
-              <Field label="As-is value" value={usd(sizing.asIsValue)} big />
-              <Field label="Stabilized / ARV" value={usd(sizing.stabilizedValue)} big />
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Constraint ladder — lowest permitted loan binds the deal</p>
               <div className="space-y-1.5">
-                {sizing.constraints.map((c) => (
-                  <div key={c.key} className="flex items-center gap-3">
+                {sizing.constraints.map((c) => {
+                  // Highlight the binding row; mute the in-range ones and show
+                  // each one's headroom above the sized loan (§11.2 principle 11).
+                  const headroom = c.maxLoan - sizing.maxLoan;
+                  return (
+                  <div key={c.key} className={`flex items-center gap-3 rounded-md px-2 py-1 ${c.binding ? "bg-info/10" : ""}`}>
                     <div className="w-44 shrink-0 text-sm">
-                      <span className={c.binding ? "font-semibold" : ""}>{c.label}</span>
+                      <span className={c.binding ? "font-semibold" : "text-muted-foreground"}>{c.label}</span>
                       {c.binding && <Badge className="ml-2 bg-foreground text-background text-[10px] px-1.5 py-0">binding</Badge>}
                     </div>
                     <div className="flex-1 h-6 rounded bg-muted/40 overflow-hidden">
                       <div className={`h-full ${c.binding ? "bg-info" : "bg-info/30"}`} style={{ width: `${maxLadder > 0 ? (c.maxLoan / maxLadder) * 100 : 0}%` }} />
                     </div>
                     <div className="w-48 shrink-0 text-right text-sm">
-                      <span className="font-medium">{usd(c.maxLoan)}</span>
-                      <span className="block text-[11px] text-muted-foreground">{c.basis}</span>
+                      <span className={c.binding ? "font-semibold" : "font-medium text-muted-foreground"}>{usd(c.maxLoan)}</span>
+                      <span className="block text-[11px] text-muted-foreground">{c.binding ? c.basis : `+${usd(headroom)} headroom`}</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
+              {/* Counterfactual — what would change the number (§11.2 principle 7). */}
+              {(() => {
+                const bindingC = sizing.constraints.find((c) => c.binding);
+                const nextC = [...sizing.constraints]
+                  .sort((a, b) => a.maxLoan - b.maxLoan)
+                  .find((c) => !c.binding && c.maxLoan > sizing.maxLoan);
+                if (!bindingC) return null;
+                const text = nextC
+                  ? `Bound by ${bindingC.label} at ${usd(sizing.maxLoan)} — relax it and ${nextC.label} binds next at ${usd(nextC.maxLoan)} (+${usd(nextC.maxLoan - sizing.maxLoan)}).`
+                  : `Bound by ${bindingC.label} at ${usd(sizing.maxLoan)} — every other constraint permits more.`;
+                return <Counterfactual text={text} />;
+              })()}
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-sm pt-2 border-t border-border/50">
               <Field label={<Term term="LTV">LTV (as-is)</Term>} value={ratioPct(sizing.ltv)} />

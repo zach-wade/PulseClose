@@ -32,6 +32,7 @@ import {
 import { useRouter } from "next/navigation";
 import { GCStatusChip, type GCSummaryView } from "@/components/dashboard/gc-status-chip";
 import { UsageMeter } from "@/components/dashboard/usage-meter";
+import { VerdictChip, type VerdictChipData } from "@/components/validation/verdict-chip";
 
 interface Validation {
   id: string;
@@ -47,27 +48,8 @@ interface Validation {
   gc_summary: GCSummaryView | null;
   validation_date: string | null;
   created_at: string;
-}
-
-const statusConfig: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }
-> = {
-  verified: { label: "Verified", variant: "default", icon: CheckCircle2 },
-  partial: { label: "Partial", variant: "secondary", icon: Clock },
-  flagged: { label: "Flagged", variant: "destructive", icon: AlertTriangle },
-  pending: { label: "Pending", variant: "outline", icon: Clock },
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const config = statusConfig[status] ?? statusConfig.pending;
-  const Icon = config.icon;
-  return (
-    <Badge variant={config.variant} className="gap-1">
-      <Icon className="h-3 w-3" />
-      {config.label}
-    </Badge>
-  );
+  // Per-row verdict from the shared computeVerdict() (server-enriched).
+  verdict: VerdictChipData | null;
 }
 
 type StatusFilter = "all" | "verified" | "partial" | "pending" | "flagged";
@@ -286,7 +268,7 @@ export function DashboardHome() {
                   <TableHead className="w-10"></TableHead>
                   <TableHead>Borrower</TableHead>
                   <TableHead>Entity</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Verdict</TableHead>
                   <TableHead className="text-right">Completeness</TableHead>
                   <TableHead className="text-right">Tier</TableHead>
                   <TableHead className="text-right">Props</TableHead>
@@ -483,7 +465,7 @@ export function DashboardHome() {
                   <TableHead className="w-10"></TableHead>
                   <TableHead>Borrower</TableHead>
                   <TableHead>Entity</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Verdict</TableHead>
                   <TableHead className="text-right">Completeness</TableHead>
                   <TableHead className="text-right">Tier</TableHead>
                   <TableHead className="text-right">Props</TableHead>
@@ -539,7 +521,7 @@ export function DashboardHome() {
                       {v.borrower_entity_name}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={v.overall_status} />
+                      <VerdictChip verdict={v.verdict} showDelta />
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {v.confidence_score}%

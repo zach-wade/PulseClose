@@ -19,12 +19,12 @@ import {
   ArrowLeft,
   History,
   CheckCircle2,
-  AlertTriangle,
   Clock,
   XCircle,
   RefreshCw,
   AlertOctagon,
 } from "lucide-react";
+import { VerdictChip, type VerdictChipData } from "@/components/validation/verdict-chip";
 
 // E2 + B4 (roll-up half) — borrower record page. Aggregates the
 // borrower's lender-relationship history with this org plus a list of
@@ -65,17 +65,8 @@ interface ValidationRow {
   created_at: string;
   tier: "HIGH" | "MEDIUM" | "LOW" | null;
   outcome: { status: string; updated_at: string } | null;
+  verdict: VerdictChipData | null;
 }
-
-const statusConfig: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }
-> = {
-  verified: { label: "Verified", variant: "default", icon: CheckCircle2 },
-  partial: { label: "Partial", variant: "secondary", icon: Clock },
-  flagged: { label: "Flagged", variant: "destructive", icon: AlertTriangle },
-  pending: { label: "Pending", variant: "outline", icon: Clock },
-};
 
 const outcomeConfig: Record<
   string,
@@ -257,7 +248,7 @@ export default function BorrowerDetailPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Verdict</TableHead>
                   <TableHead>Tier</TableHead>
                   <TableHead>Outcome</TableHead>
                   <TableHead className="text-right">Completeness</TableHead>
@@ -265,8 +256,6 @@ export default function BorrowerDetailPage() {
               </TableHeader>
               <TableBody>
                 {validations.map((v) => {
-                  const status = statusConfig[v.overall_status] ?? statusConfig.pending;
-                  const StatusIcon = status.icon;
                   const outcome = v.outcome ? outcomeConfig[v.outcome.status] : null;
                   return (
                     <TableRow
@@ -280,10 +269,7 @@ export default function BorrowerDetailPage() {
                         {new Date(v.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={status.variant} className="gap-1">
-                          <StatusIcon className="h-3 w-3" />
-                          {status.label}
-                        </Badge>
+                        <VerdictChip verdict={v.verdict} showDelta />
                       </TableCell>
                       <TableCell>
                         {v.tier ? (
