@@ -134,7 +134,9 @@ const TO_STANDING: Record<MandateAssessment["result"], MandateStanding> = {
 function bindingMandate(rows: MandateAssessment[]): { standing: MandateStanding; label: string } | null {
   if (rows.length === 0) return null;
   const worst = rows.reduce((a, b) => (MANDATE_RANK[b.result] > MANDATE_RANK[a.result] ? b : a));
-  const label = [worst.mandate_name, worst.investor_name].filter(Boolean).join(" · ") || "Mandate";
+  // mandate_name + investor_name overlap heavily ("Colchis … buy-box" vs
+  // "Colchis …") — prefer the more specific mandate_name, don't print both.
+  const label = worst.mandate_name || worst.investor_name || "Mandate";
   return { standing: TO_STANDING[worst.result], label };
 }
 

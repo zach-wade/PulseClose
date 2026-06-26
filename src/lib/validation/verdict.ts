@@ -277,7 +277,8 @@ export function computeVerdict(src: VerdictSource): Verdict {
 
 function counterfactualForIncomplete(incomplete: Pillar[]): string {
   const hasEntity = incomplete.some((p) => p.key === "entity");
-  const names = andList(incomplete.map((p) => p.label.toLowerCase()));
+  // Keep the label's own casing ("Entity / SOS", not "entity / sos").
+  const names = andList(incomplete.map((p) => p.label));
   const hint = hasEntity
     ? " (or add the CA CALICO key — then CA resolves free)"
     : "";
