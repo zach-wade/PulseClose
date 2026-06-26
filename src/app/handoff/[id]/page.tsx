@@ -65,6 +65,31 @@ function mandateVerdict(result: string): string {
   if (result === "conditional") return "Meets with conditions";
   return "Does not meet";
 }
+// BLUF verdict colors — match the app's verdict hero (emerald/amber/red).
+function verdictColor(state: string): string {
+  if (state === "verified") return "#047857";
+  if (state === "needs_review") return "#b45309";
+  return "#b91c1c";
+}
+function verdictTint(state: string): string {
+  if (state === "verified") return "#ecfdf5";
+  if (state === "needs_review") return "#fffbeb";
+  return "#fef2f2";
+}
+// The one-line "why" under the verdict — leads with the sized loan + binding
+// constraint when underwriting is attached, else the deterministic tier.
+function blufLine(doc: HandoffDocument): string {
+  const parts: string[] = [];
+  const sizing = doc.loan_sizing?.sizing;
+  if (sizing) {
+    const bindingLabel = sizing.constraints.find((c) => c.binding)?.label ?? sizing.bindingConstraint;
+    parts.push(`Sized to ${fmtMoney(sizing.maxLoan)}, bound by ${bindingLabel}`);
+  }
+  parts.push(`deterministic tier ${doc.tier}`);
+  if (doc.verdict?.state === "needs_review") parts.push("one or more checks did not complete — not a clean pass");
+  if (doc.verdict?.state === "flagged") parts.push("material flags require a human decision");
+  return parts.join(" · ") + ".";
+}
 
 function HandoffBody({ doc }: { doc: HandoffDocument }) {
   return (
@@ -109,6 +134,25 @@ function HandoffBody({ doc }: { doc: HandoffDocument }) {
           {doc.pending_review_count} property match
           {doc.pending_review_count === 1 ? "" : "es"} awaiting confirm/reject.
           Tier and memo may shift as the lender finalizes review.
+        </div>
+      )}
+
+      {/* BLUF — lead the artifact with the synthesized verdict so the investor
+          sees the answer first (UX-REDESIGN §11.4). */}
+      {doc.verdict && (
+        <div
+          style={{
+            borderLeft: `4px solid ${verdictColor(doc.verdict.state)}`,
+            background: verdictTint(doc.verdict.state),
+            padding: "12px 16px",
+            borderRadius: 8,
+            margin: "0 0 18px",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: verdictColor(doc.verdict.state) }}>
+            {doc.verdict.headline}
+          </p>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#475569" }}>{blufLine(doc)}</p>
         </div>
       )}
 

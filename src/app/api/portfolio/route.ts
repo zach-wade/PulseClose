@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { computeVerdictsForValidations } from "@/lib/validation/verdict-batch";
 
 type RiskSeverity = "critical" | "moderate" | "minor" | "informational" | "none";
 type ValidationStatus = "pending" | "verified" | "partial" | "flagged";
@@ -106,6 +107,27 @@ export async function GET() {
     }
   }
 
+  // ── Verdict mix (the SAME computeVerdict() as the detail hero + list) ──
+  // Latest validation per borrower, so this reads as "how many of my borrowers
+  // are clean / need review / flagged right now" — not inflated by re-runs.
+  const latestPerBorrower = new Map<string, (typeof validations)[number]>();
+  for (const v of validations) {
+    const key = v.borrower_id ?? v.id;
+    const seen = latestPerBorrower.get(key);
+    if (!seen || new Date(v.created_at) > new Date(seen.created_at)) latestPerBorrower.set(key, v);
+  }
+  const latest = Array.from(latestPerBorrower.values());
+  const verdictMap = await computeVerdictsForValidations(
+    supabase,
+    latest.map((v) => ({ id: v.id, primary_borrower_id: v.borrower_id ?? null, created_at: v.created_at })),
+  );
+  const verdictCounts: Record<"verified" | "needs_review" | "flagged", number> = {
+    verified: 0,
+    needs_review: 0,
+    flagged: 0,
+  };
+  for (const vd of verdictMap.values()) verdictCounts[vd.state]++;
+
   // ── Borrowers needing attention (dedupe by borrower, latest first) ─
   const seenBorrowers = new Set<string>();
   type AttentionRow = typeof attentionRows[number];
@@ -138,6 +160,7 @@ export async function GET() {
       borrowers: uniqueBorrowers.size,
     },
     status_counts: statusCounts,
+    verdict_counts: verdictCounts,
     tier_counts: tierCounts,
     severity_counts: severityCounts,
     outcomes_90d: outcomeCounts,

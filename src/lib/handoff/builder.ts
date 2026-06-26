@@ -8,6 +8,8 @@ import { deriveTier } from "@/lib/risk/factors";
 import type { RiskFactor, Tier } from "@/lib/risk/factors";
 import { normalizeAddress } from "@/lib/domain/upsert";
 import type { UwSizingResultV1, UwJudgmentV1 } from "@/lib/schemas/jsonb";
+import { computeVerdictsForValidations } from "@/lib/validation/verdict-batch";
+import type { VerdictState } from "@/lib/validation/verdict";
 
 export interface HandoffPropertyRow {
   property_id: string | null;
@@ -63,6 +65,9 @@ export interface HandoffDocument {
 
   // Risk
   tier: Tier;
+  // Synthesized verdict (same computeVerdict() as the app), so the artifact can
+  // lead with the answer (BLUF) instead of burying it (UX-REDESIGN §11.4).
+  verdict: { state: VerdictState; headline: string } | null;
   risk_factors: RiskFactor[];
 
   // Entity check
@@ -458,6 +463,15 @@ export async function buildHandoffDocument(
   const riskFactors = (riskRes.data ?? []) as RiskFactor[];
   const tier = deriveTier(riskFactors);
 
+  // Synthesized verdict via the SAME computeVerdict() the app uses everywhere
+  // (correct GC/sanctions/entity handling + mandate roll-up), so the handoff's
+  // BLUF can never disagree with the borrower's detail page.
+  const verdictMap = await computeVerdictsForValidations(supabase, [
+    { id: validationId, primary_borrower_id: v.primary_borrower_id ?? null, created_at: v.created_at },
+  ]);
+  const bv = verdictMap.get(validationId);
+  const verdict = bv ? { state: bv.state, headline: bv.headline } : null;
+
   return {
     generated_at: new Date().toISOString(),
     org_name: orgRes.data?.name ?? "PulseClose",
@@ -471,6 +485,7 @@ export async function buildHandoffDocument(
     experience_tier: v.experience_tier,
     confidence_score: v.confidence_score,
     tier,
+    verdict,
     risk_factors: riskFactors,
     entity: entityRes.data
       ? {

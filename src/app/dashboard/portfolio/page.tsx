@@ -18,6 +18,9 @@ type OutcomeStatus = "withdrawn" | "funded" | "extended" | "repaid" | "defaulted
 interface PortfolioPayload {
   totals: { validations: number; borrowers: number };
   status_counts: Record<ValidationStatus, number>;
+  // Verdict mix (latest run per borrower), from the same computeVerdict() as the
+  // detail hero + list chips — so the portfolio rollup can't disagree with them.
+  verdict_counts: Record<"verified" | "needs_review" | "flagged", number>;
   tier_counts: Record<string, number>;
   severity_counts: Record<RiskSeverity, number>;
   outcomes_90d: Record<OutcomeStatus, number>;
@@ -150,10 +153,32 @@ export default function PortfolioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Book</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {data.totals.borrowers} borrower{data.totals.borrowers === 1 ? "" : "s"} • {data.totals.validations} validation{data.totals.validations === 1 ? "" : "s"} on record
         </p>
+      </div>
+
+      {/* Verdict mix — latest run per borrower, same computeVerdict() everywhere. */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatPill
+          label="Verified"
+          value={data.verdict_counts?.verified ?? 0}
+          sub="all checks clean"
+          tone="ok"
+        />
+        <StatPill
+          label="Needs review"
+          value={data.verdict_counts?.needs_review ?? 0}
+          sub="a check didn't complete"
+          tone={(data.verdict_counts?.needs_review ?? 0) > 0 ? "warn" : "muted"}
+        />
+        <StatPill
+          label="Flagged"
+          value={data.verdict_counts?.flagged ?? 0}
+          sub="material flags to clear"
+          tone={(data.verdict_counts?.flagged ?? 0) > 0 ? "danger" : "muted"}
+        />
       </div>
 
       {/* KPI strip */}

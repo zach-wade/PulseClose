@@ -83,6 +83,33 @@ export async function generateHandoffWorkbook(doc: HandoffDocument): Promise<Buf
     cover.addRow([]);
   }
 
+  // BLUF — lead the cover with the synthesized verdict (UX-REDESIGN §11.4),
+  // mirrors the PDF. Same computeVerdict() as the app, so it can't disagree.
+  if (doc.verdict) {
+    const vColor =
+      doc.verdict.state === "verified" ? "FF047857" : doc.verdict.state === "needs_review" ? "FFB45309" : "FFB91C1C";
+    const vTint =
+      doc.verdict.state === "verified" ? "FFECFDF5" : doc.verdict.state === "needs_review" ? "FFFFFBEB" : "FFFEF2F2";
+    const vh = cover.addRow([doc.verdict.headline]);
+    vh.font = { size: 13, bold: true, color: { argb: vColor } };
+    vh.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: vTint } };
+    cover.mergeCells(`A${vh.number}:B${vh.number}`);
+    const s = doc.loan_sizing?.sizing;
+    const lineParts: string[] = [];
+    if (s) {
+      const bindingLabel = s.constraints.find((c) => c.binding)?.label ?? s.bindingConstraint;
+      lineParts.push(`Sized to $${fmtMoney(s.maxLoan).toLocaleString()}, bound by ${bindingLabel}`);
+    }
+    lineParts.push(`deterministic tier ${doc.tier}`);
+    if (doc.verdict.state === "needs_review") lineParts.push("a check did not complete — not a clean pass");
+    if (doc.verdict.state === "flagged") lineParts.push("material flags require a human decision");
+    const vl = cover.addRow([lineParts.join(" · ") + "."]);
+    vl.font = { size: 10, color: { argb: MUTED } };
+    vl.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: vTint } };
+    cover.mergeCells(`A${vl.number}:B${vl.number}`);
+    cover.addRow([]);
+  }
+
   const headerRow = cover.addRow(["Borrower Profile"]);
   headerRow.font = { size: 12, bold: true, color: { argb: ACCENT } };
   cover.mergeCells(`A${headerRow.number}:B${headerRow.number}`);
