@@ -65,10 +65,12 @@ approved verdict-first redesign.
 5. **Crons live:** `refresh-contractor-licenses.yml` (GC) + new
    `refresh-sos-entities.yml` (FL daily + quarterly). **GitHub repo secrets SET this
    session** — both crons now run (were no-op'ing).
-6. **THE VERDICT-FIRST REDESIGN — researched, approved, specced (NOT built).** Full
+6. **THE VERDICT-FIRST REDESIGN — researched, approved, specced, and now BUILDING.** Full
    competitor research (KYB/decisioning · CRE/bridge LOS · credit-memo) → 14
-   principles → an approved clickable mockup → `UX-REDESIGN-PLAN.md §11`. This is the
-   next thrust.
+   principles → an approved clickable mockup → `UX-REDESIGN-PLAN.md §11`.
+   **Steps 1-2 shipped this session:** the shared `computeVerdict()` primitives +
+   the answer-first detail page (Achilles 429 bug fixed, live-verified). Steps 3-6
+   (borrowers list · deal stepper · handoff BLUF · Capital/Portfolio/Fund rollups) remain.
 
 ---
 
@@ -81,15 +83,21 @@ surface). The core idea: **lead every surface with the answer (verdict + one-lin
 why + 5-pillar status + one action); collapse the full report behind one disclosure.**
 
 **Build order (§11.5 — each step gated by `npm run build` + a visual-verify pass on
-prod via `scripts/drive-visual-pass.ts`):**
-1. **Shared primitives** — `computeVerdict()` util (Verified / Needs review /
-   Flagged; the **single source of truth**, also the status-bug fix) + status tokens
-   (color+icon+shape) + `<VerdictHero>` · `<PillarQuad>` · `<DeltaChip>` ·
-   `<Counterfactual>` · evidence `<Drawer>`. (`<Term>` glossary already exists.)
-2. **Detail page** — assemble from the primitives; **folds in the Verified-on-429
-   status fix** (see bug below). Highest-value, most-broken. Ship → visual-verify.
-3. **Borrowers list** — verdict chips per row (reuse `computeVerdict()` so list +
-   detail never disagree).
+prod via `scripts/drive-verdict-pass.ts`):**
+1. ✅ **DONE** — **Shared primitives.** `src/lib/validation/verdict.ts`
+   (`computeVerdict()` + `extractPillars()` — the **single source of truth**, mirrors
+   the pipeline's per-pillar completion logic) + `src/components/validation/`
+   (status tokens color+icon+shape · `<VerdictHero>` · `<PillarQuad>` · `<DeltaChip>` ·
+   `<Counterfactual>` · evidence `<Drawer>`). `scripts/verify-verdict.ts` = 20 assertions.
+2. ✅ **DONE — live + verified.** **Detail page** assembled answer-first: verdict hero
+   leads, the entire prior page demoted under a "Full report" disclosure; pillars drill
+   to the Evidence tab. **Achilles Verified-on-429 bug FIXED** (hero reads "Needs review";
+   confirmed on prod via `drive-verdict-pass.ts`, 7/7). DeltaChip not yet wired (needs a
+   prior-run tier lookup — deferred, renders nothing rather than a fake "first run").
+3. **← NEXT. Borrowers list** — verdict chips per row (reuse `computeVerdict()` so list +
+   detail never disagree). **Needs list-API enrichment:** `/api/validations` is
+   `select("*")` (row cols only, no joined pillar tables) — add the pillar-completion
+   signals (or a denormalized verdict) so `extractPillars()` can run there.
 4. **Deal stepper** result surfaces — money-tile header (max loan · binding
    constraint · tier) + constraint table w/ binding row highlighted + counterfactual.
 5. **Handoff PDF** — BLUF lead (verdict + binding constraint + tier first).
@@ -98,11 +106,12 @@ prod via `scripts/drive-visual-pass.ts`):**
 > **Consistency is load-bearing:** every verdict on every surface comes from the one
 > `computeVerdict()`. Inconsistent verdicts destroy trust faster than missing ones.
 
-### Known bug — fix it in step 2 (it's why the redesign exists)
-- **Verified-on-429 (Achilles).** The status badge reads **"Verified"** even when the
-  entity/SOS check ERRORED (Cobalt 429 — confirmed live on `Achilles Properties LLC`,
-  CA). Violates "failed check ≠ clean." `computeVerdict()` returns **"Needs review"**
-  whenever any of the 5 checks didn't complete — this is the fix.
+### Known bug — ✅ FIXED in step 2 (it's why the redesign exists)
+- **Verified-on-429 (Achilles).** The status badge read **"Verified"** even when the
+  entity/SOS check ERRORED (Cobalt 429). **Fixed:** `computeVerdict()` returns
+  **"Needs review"** whenever any of the 5 checks didn't complete (entity `_error` /
+  litigation/sanctions `not_run`/`pending`). Confirmed live on `Achilles Properties LLC`
+  via `drive-verdict-pass.ts`. The old `statusFromTier`/`StatusBadge` path is deleted.
 
 ### Remaining calibration gaps (unchanged, lower priority than the redesign)
 - **#2 entity-anchored track record** — owner-name search returns 0 for held-via-LLC /
