@@ -360,15 +360,22 @@ app is one of those three. The engine sets the numbers; the AI narrates.
    Deal/Deal); "Book" is opaque; Mandate console + `/admin` are orphaned; CRE
    jargon everywhere with no inline definitions.
 
-### Ranked fixes (most confusion collapsed first) — STATUS
-1. **One spine everywhere** (Verify → Underwrite → Distribute as the single
-   progress metaphor; delete duplicates on the detail page).
-2. **Verdict-first detail page** (lead with tier + one-line verdict + mandate
-   stamp promoted to top + ONE next action; collapse the 3 banners into one).
-3. **Progressive disclosure on Sizing** (~4 core numbers by default; depth behind
-   "Advanced").
-4. **One name per concept + fix orphans** ("Deals" everywhere; "Book"→"Portfolio";
-   Mandate console front door; link/drop `/admin`).
-5. **Inline glossary** (tooltips on the jargon; extend the "Completeness" pattern).
-
-*(Build status appended inline as each lands — see commits 2026-06-26.)*
+### Ranked fixes (most confusion collapsed first) — STATUS (commits 2026-06-26)
+1. **One spine everywhere** — 🔶 PARTIAL. Detail page de-duplicated (single next
+   action in the strip; mandate stamp already promoted to top). Full app-wide
+   Verify → Underwrite → Distribute metaphor across every screen still TODO.
+2. **Verdict-first detail page** — 🔶 PARTIAL. ✅ Primary CTA de-duplicated (was
+   3×, now 1 in the strip); ✅ mandate stamp at top. TODO: collapse the 3 stacked
+   banners into one "needs attention" block; surface the one-line verdict (memo
+   headline) above the fold.
+3. **Progressive disclosure on Sizing** — ✅ DONE. 10 advanced inputs (house caps
+   + exit/takeout, investor-defaulted) collapse behind "Advanced"; 8 core
+   economics fields stay visible. Results-pane deep blocks (takeout/stabilization/
+   interest-reserve) could get the same treatment (TODO, lower priority).
+4. **One name per concept + fix orphans** — 🔶 PARTIAL. ✅ "Book" → "Portfolio"
+   (nav + detail tab + button); ✅ evaluate H1 "Evaluate Deal" → "Deals". TODO:
+   Mandate console front door; link or drop orphaned `/admin`.
+5. **Inline glossary** — ✅ FOUNDATION + first application. New reusable `<Term>`
+   (src/components/ui/term.tsx) + GLOSSARY; applied to the sizing ratio row.
+   Extend to the remaining labels incrementally (NumField labels, detail-page
+   jargon) — backward-compatible, low-risk.
