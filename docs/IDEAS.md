@@ -114,15 +114,21 @@ without manual chart-pulling.
 - **Unblocks when:** a deal's defensibility (investor memo) hinges on a macro read -
   the 6/25 ICC call is the first concrete instance.
 
-**Build-now assessment (2026-06-25):** The strongest near-term feature candidate of
-the two. FREE (FRED API), **small** (a handful of series → one macro-context block
-threaded into Module 6's market/exit dimensions + the investor memo), **differentiated**
-(nobody puts a Gundlach/Damodaran-style macro read in a bridge-loan memo), and it
-serves the exact thing Damon asked for — *defensible LOIs/memos* — which is the
-distribution wedge (capital-provider endorsement). NOT a single-deal-type feature
-(applies to every memo). **Recommend: promote to ROADMAP as the next feature AFTER the
-in-flight work** (Cobalt de-rent, doc-ingest 4MB fix, fund-persona home, AI-memo #23).
-Don't start mid-stream — too many open threads — but it's first in line once they clear.
+**SHIPPED v1 (2026-06-25):** `src/lib/macro/fred.ts` — 7 free FRED series
+(T10Y2Y yield curve, BAMLH0A0HYM2 HY OAS, DFF fed funds, CPIAUCSL→YoY, UNRATE
+trend, SAHMREALTIME, MSACSR housing supply) → DETERMINISTIC per-indicator
+signal + a regime label (Supportive→Mid-cycle→Late-cycle→Contractionary), built
+from a transparent risk score (never AI-set — same spine: AI narrates, doesn't
+set the regime). Threaded into `buildFactsBlock` so Module 6's market/exit
+dimensions + the partner memo cite the regime explicitly. Best-effort: no
+`FRED_API_KEY` or any fetch error → judgment runs without it (never fatal); each
+series degrades independently. **Needs the free FRED key** (instant signup at
+fred.stlouisfed.org/docs/api/api_key.html → set `FRED_API_KEY`). Verified:
+null-path + format via `npx tsx scripts/verify-macro.ts`; build + lint clean.
+**Follow-ups (noted, not blocking):** (a) surface the deterministic indicator
+table as a drill-down card in the memo UI (Noah's "show the inputs, don't just
+characterize" — the AI memo characterizes, the indicator table is the evidence);
+(b) persist a daily macro snapshot instead of live-fetching per judge call.
 
 ## Capital-provider "mandate" object (the wedge's missing product surface)
 

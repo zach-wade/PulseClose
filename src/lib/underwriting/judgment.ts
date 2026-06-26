@@ -32,6 +32,7 @@ import { parseUwJudgmentV1 } from "@/lib/schemas/jsonb";
 import type { SizingInputs, SizingResult } from "./sizing";
 import type { DealContext, JudgmentResult } from "./types";
 import { buildFactsBlock } from "./facts";
+import { getMacroContext } from "@/lib/macro/fred";
 
 const DEFAULT_MODEL = "claude-opus-4-8";
 
@@ -52,6 +53,10 @@ RULES:
 - Sponsor and market are qualitative: assess them ONLY from the provided context. If a field says \
 NOT PROVIDED, say so plainly and treat the missing diligence as itself a flag (you cannot clear a \
 deal on a sponsor you know nothing about). Do not invent a track record, a market, or a thesis.
+- If a MACRO CONTEXT block is present, use its regime + indicators to inform the market and exit \
+dimensions (rate path, refinance/takeout availability, exit-cap and for-sale risk) and reference the \
+regime explicitly in the memo. The macro figures are deterministic context — cite them, don't \
+override or re-estimate them; if absent, don't speculate about the macro environment.
 - Be a skeptic on deal-killers: thin development spread, going-in negative leverage (in-place debt \
 yield or DSCR too low), exit-cap optimism (exit cap below going-in cap), ARV-dependence, or an \
 unverifiable sponsor are the usual suspects — flag them when the numbers show them.
@@ -137,7 +142,11 @@ export async function judgeUnderwriting(
     sanctions_match_names: [],
   });
 
-  const facts = buildFactsBlock(args.inputs, args.sizing, scrubbedContext);
+  // Macro overlay (FRED) — best-effort, non-PII, deterministic. Null when no
+  // FRED_API_KEY or the fetch fails; the judgment then runs without it.
+  const macro = await getMacroContext();
+
+  const facts = buildFactsBlock(args.inputs, args.sizing, scrubbedContext, macro);
   const redactedPrompt = redact(PROMPT.replace("{facts}", facts), redactionMap);
 
   const client = new Anthropic({ apiKey });

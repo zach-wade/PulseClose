@@ -11,6 +11,7 @@
 
 import type { SizingInputs, SizingResult } from "./sizing";
 import type { DealContext } from "./types";
+import { formatMacroForFacts, type MacroContext } from "@/lib/macro/fred";
 
 const usd = (n: number | null | undefined): string => {
   if (n == null || Number.isNaN(n)) return "n/a";
@@ -28,6 +29,7 @@ export function buildFactsBlock(
   inputs: SizingInputs,
   result: SizingResult,
   context?: DealContext,
+  macro?: MacroContext | null,
 ): string {
   const basis = inputs.coverageBasis ?? "current";
   const lines: string[] = [];
@@ -80,6 +82,11 @@ export function buildFactsBlock(
   lines.push(`  Yield-on-cost: ${pct(result.returnOnCost)}   Development spread vs exit cap: ${pct(result.developmentSpread)}`);
   lines.push(`  Project profit: ${usd(result.projectProfit)}   Equity multiple: ${mult(result.equityMultiple)}`);
   lines.push("");
+
+  if (macro) {
+    lines.push(formatMacroForFacts(macro));
+    lines.push("");
+  }
 
   lines.push("QUALITATIVE CONTEXT (assess only from what's here; flag anything not provided):");
   lines.push(`  Sponsor: ${context?.sponsor?.trim() || "NOT PROVIDED"}`);

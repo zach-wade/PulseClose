@@ -71,11 +71,13 @@ investor view + sizing-step NOI prefill 🔵 deferred polish.
 The two arcs (calibrate, walk-the-UI) are done. Pick the next thrust:
 
 ### Highest-leverage candidates (pick one)
-1. **Macro / recession overlay (FRED)** — IDEAS.md flags this as the next feature:
-   free (FRED API), small (a handful of series → a macro-context block in the
-   Module 6 judgment + investor memo), differentiated (a Gundlach/Damodaran-style
-   read in a bridge memo), and exactly what Damon asked for (defensible LOIs/memos).
-   Applies to every memo, not one deal type. **No external blockers.**
+1. **Macro / recession overlay (FRED) — SHIPPED v1 2026-06-25.** `src/lib/macro/
+   fred.ts`: 7 free FRED series → deterministic per-indicator signals + a regime
+   label, threaded into the Module 6 judgment facts block (market/exit dimensions +
+   memo cite the regime). Best-effort/null-safe. **Needs the free FRED key** (instant
+   signup → set `FRED_API_KEY` in `.env.local` + Vercel). Follow-ups: a drill-down
+   indicator card in the memo UI (Noah's show-the-inputs principle) + a persisted
+   daily snapshot. See IDEAS.md "Macro / recession-indicator overlay".
 2. **Cobalt free-state de-rent (SHIPPED 2026-06-25 for CA/CO/NY)** — built as a
    LIVE-query + cache layer, not a bulk load: `src/lib/adapters/sos-free.ts` tries
    the free official source for a state (CALICO for CA, Socrata for CO/NY) BEFORE
