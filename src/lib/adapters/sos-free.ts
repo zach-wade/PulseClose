@@ -239,11 +239,15 @@ async function lookupSocrata(src: SocrataSOSSource, req: SOSLookupRequest): Prom
   // canonicalizeName sorts tokens (tokenize-and-set), which would scramble a
   // positional LIKE. Wildcards between words absorb punctuation/spacing diffs in
   // the source; pickBest then canonical-matches the ≤50 candidates client-side.
-  const tokens = req.entity_name
+  const allTokens = req.entity_name
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length >= 2 && !SQL_STOPWORDS.has(t))
-    .slice(0, 3);
+    .filter((t) => t.length >= 1 && !SQL_STOPWORDS.has(t));
+  // Prefer multi-char tokens, but DON'T drop single-letter ones if that's all
+  // there is — e.g. "L Y I LLC" tokenizes to ["l","y","i"] (llc is a stopword);
+  // the old `length >= 2` filter emptied it and returned null WITHOUT querying.
+  const significant = allTokens.filter((t) => t.length >= 2);
+  const tokens = (significant.length > 0 ? significant : allTokens).slice(0, 4);
   if (tokens.length === 0) return null;
   const pattern = `%${tokens.join("%")}%`.replace(/'/g, "''");
   const where = `upper(${src.nameField}) like upper('${pattern}')`;
