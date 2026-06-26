@@ -72,6 +72,27 @@ async function main() {
   check("report expands to the tabs", /Summary/.test(expanded) && /Evidence/.test(expanded), "tabs not revealed");
   await page.screenshot({ path: `${OUT}/02-achilles-report-open.png`, fullPage: true });
 
+  // ── Dashboard list — verdict chips ──
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  const listText = await bodyText(page);
+  check("list has a Verdict column", /Verdict/.test(listText), "header not renamed");
+  check(
+    "list shows verdict chips",
+    /(Verified|Needs review|Flagged)/.test(listText),
+    "no verdict chip text in the list",
+  );
+  await page.screenshot({ path: `${OUT}/03-dashboard-list.png` });
+
+  // ── Portfolio — verdict mix ──
+  await page.goto(`${BASE}/dashboard/portfolio`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  const portText = await bodyText(page);
+  check("portfolio H1 is 'Portfolio' (not 'Book')", /Portfolio/.test(portText) && !/\bBook\b/.test(portText), "still says Book");
+  // Label is CSS-uppercased ("NEEDS REVIEW") — match case-insensitively.
+  check("portfolio shows the verdict mix", /needs review/i.test(portText), "no verdict mix row");
+  await page.screenshot({ path: `${OUT}/04-portfolio-mix.png` });
+
   await browser.close();
   console.log(`\n${fails === 0 ? "✅ verdict pass" : `❌ ${fails} failed`}`);
   process.exit(fails === 0 ? 0 : 1);
