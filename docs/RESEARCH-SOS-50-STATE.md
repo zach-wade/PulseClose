@@ -21,17 +21,22 @@ reshape it.**
    Fixed at the source: doc-ingest now extracts formation state + exact name from the
    Articles / Good Standing (the UW already has these docs). **Do this first — scrapers
    are worthless without correct inputs.**
-2. **"Free" has two leaks that make 100%-free unreachable:**
-   - **Open-data dumps are incomplete.** LYI LLC is a real, current NY LLC (Articles
-     confirm §203 NY) — yet it is *not in NY's Socrata "Active Corporations" dataset*
-     (searched every spelling + its registered address; dataset is current to yesterday).
-   - **Live official searches are bot-walled.** NY's live publicInquiry app renders blank
-     headless (Akamai-style protection); its API throws server-side `NullReferenceException`
-     to a direct POST; the legacy `appext20` search is decommissioned. Defeating that is
-     real, ongoing cost (residential proxies / real browsers / CAPTCHA), not "free."
-3. **So the realistic target isn't 100% free — it's ~85-90% free with a small paid
-   residual** for (a) open-data-leak misses and (b) bot-walled states. CALICO alone gets
-   ICC to ~69% in one free key.
+2. **Open-data dumps are incomplete — but the live APIs are open.** Two related findings:
+   - **Open-data dumps leak.** "L Y I LLC" is a real, **active** NY LLC (live DOS confirms,
+     filed 2012-06-29) — yet it is *not in NY's Socrata "Active Corporations" dataset*. So a
+     dump-only NY source silently misses real entities.
+   - **The "bot-wall" was a false alarm.** NY's publicInquiry **SPA** renders blank headless
+     (client-side protection), but the **API underneath is a plain cookieless JSON POST with
+     NO bot protection** — `apps.dos.ny.gov/PublicInquiryWeb/api/.../GetComplexSearchMatchingEntities`.
+     The earlier "walled" read was a payload-shape bug (wrong wrapper / string-not-array /
+     invalid enum). With the correct flat body it returns 200 + the entity. **Shipped as a
+     free NY fallback** (`sos-free.ts lookupNyDosLive`). LYI now resolves $0, no Cobalt.
+   - **Lesson for all 50 states:** a walled SPA does NOT mean a walled API. Probe each
+     state's XHR — many "live searches" are open JSON endpoints. This makes free live-API
+     coverage far more achievable than a dump-only or browser-scrape approach.
+3. **So the realistic target is HIGH — likely 90%+ free** (open-data + free live APIs +
+   CALICO), with a small paid residual only for genuinely paywalled states (TX/DE). CALICO
+   alone gets ICC to ~69% in one free key.
 
 ---
 
@@ -68,7 +73,8 @@ From the Nexys export (204 real loans; see `scripts/analyze-icc-coverage.ts`):
 |---|---|---|---|---|
 | **1. Open-data dump / API** | Socrata/CKAN feed or bulk file | ✅ | high, but **incomplete** (leak #1) | CO, NY (Socrata) · FL (Sunbiz bulk) · WA/OR (open-data) |
 | **2. Official state API + key** | state-run JSON API | ✅ | high | CA (CALICO) |
-| **3. Live official search scrape** | the state's public entity search | ✅* | fragile; **bot-walled** in some states (leak #2) | NY publicInquiry (walled), most states' search portals |
+| **3a. Live official API** | the JSON XHR behind the search SPA | ✅ | high; cookieless | **NY DOS publicInquiry API (shipped)** — probe each state's XHR |
+| **3b. Live search scrape (HTML)** | the state's search page when there's no clean API | ✅* | fragile; some SPAs render blank headless (use the API in 3a, or stealth browser) | states without an open API |
 | **4. Aggregator API** | third party normalizes 50 states | 💲 free-tier/paid | high | OpenCorporates (free tier + paid), Middesk/Sayari (paid) |
 | **5. Paid 50-state vendor** | what we're replacing | 💲💲 | high | Cobalt (~$5/lookup, trial exhausted) |
 
@@ -134,14 +140,17 @@ Key properties:
    (CA LLC vs DE). *That number* decides how much scraper-building is worth it.
 4. **Build Tier-1 open-data ingests** for the next states by volume (FL full, WA), since
    they're cheap and leak-resistant for entities they contain.
-5. **For the residual** (open-data leaks like LYI + bot-walled states + TX/DE): use a
-   **paid fallback** — Cobalt, or evaluate **OpenCorporates** (cheaper, open-data-licensed
-   aggregator with an API) as a Cobalt replacement. Accept that "free" has a floor; the
-   residual reads as "Needs review", which is *correct*, not broken.
+5. **Probe each high-volume state's live API** (the NY pattern): open the state's entity
+   search, watch the XHR, and if it's an open JSON endpoint, wrap it like `lookupNyDosLive`.
+   Many states will be free this way. Only **genuinely paywalled** states (TX SOSDirect, DE
+   detail) need a paid fallback — Cobalt, or evaluate **OpenCorporates** (cheaper,
+   open-data-licensed aggregator) for that small slice. Whatever still misses reads as
+   "Needs review", which is *correct*, not broken.
 
-**Bottom line:** "free 50-state" is ~85-90% achievable and CALICO is most of it — but the
-last ~10-15% (incomplete dumps + bot-walled live searches + TX/DE) is an irreducible paid
-residual. Engineering can't make a state hand over data it bot-protects or sells.
+**Bottom line:** "free 50-state" is **mostly achievable** — CALICO is ~69% of ICC in one
+key, open-data + free live APIs (NY proven) cover most of the rest, and the genuinely paid
+residual is small (TX/DE). The key insight: a walled *SPA* is not a walled *API* — probe
+the XHR before paying.
 
 ---
 
@@ -149,7 +158,11 @@ residual. Engineering can't make a state hand over data it bot-protects or sells
 
 - ✅ Doc-ingest extracts **formation state** (not registration/qualification) + exact name.
 - ✅ Socrata tokenizer fixed (single-letter names like "L Y I" now query instead of no-op).
+- ✅ **NY DOS live API fallback shipped** (`lookupNyDosLive`) — catches Socrata leaks free;
+  re-ran ICC's Nachman loan, entity resolves active via `ny_dos_live`, $0, no Cobalt.
 - ✅ Coverage map live (`/dashboard/coverage`, `COVERAGE.md`, `coverage/map.ts`).
 - ⏳ CALICO key — pending (the ~69% unlock).
-- 🔬 **Finding (NY/LYI):** open-data incomplete + live search bot-walled — documented above.
-- ☐ FL full Sunbiz ingest · WA open-data SOS · OpenCorporates eval for the paid residual.
+- 🔬 **Finding (NY/LYI):** open-data dumps leak, but the live APIs behind walled SPAs are
+  open — the bot-wall was a false alarm. Probe each state's XHR for a free live API.
+- ☐ Next: probe TX/other high-volume states for an open live API (per the NY pattern);
+  FL full Sunbiz ingest · WA open-data SOS · OpenCorporates only for genuinely paywalled DE/TX.
