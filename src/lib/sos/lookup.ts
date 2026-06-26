@@ -16,12 +16,13 @@ import { canonicalizeName } from "../domain/upsert";
 // cron catches changes in between, and overrides force a fresh validation.
 const CACHE_TTL_DAYS = 60;
 
-// Sources that are bulk-ingested (refreshed by their own cron) and therefore
-// always considered fresh regardless of age. The free-state sources (ca_calico,
-// co_socrata, ny_socrata) are LIVE-fetched single lookups, so — like cobalt_cache
-// — they respect the TTL above and re-fetch (still $0) when stale. None today;
-// add e.g. 'fl_sunbiz' here if a true bulk load ever lands.
-const ALWAYS_FRESH_SOURCES = new Set<string>([]);
+// Sources that are bulk-ingested (refreshed by their own cron — scripts/
+// ingest-sos.ts) and therefore always considered fresh regardless of age, so a
+// bulk-loaded row never triggers a needless live Cobalt re-fetch after the TTL.
+// The free-state sources (ca_calico, co_socrata, ny_socrata) are LIVE-fetched
+// single lookups, so — like cobalt_cache — they respect the TTL above and
+// re-fetch (still $0) when stale.
+const ALWAYS_FRESH_SOURCES = new Set<string>(["fl_sunbiz"]);
 
 interface SosRow {
   state: string;

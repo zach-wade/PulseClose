@@ -90,8 +90,17 @@ The two arcs (calibrate, walk-the-UI) are done. Pick the next thrust:
    telemetry now bills SOS by actual provider ($0 for free/cache, $5 only on a fresh
    Cobalt call). **CA is the review-iteration win but is BLOCKED on a free key:** a
    USER signup at calicodev.sos.ca.gov → set `CALICO_API_KEY` in `.env.local` + Vercel.
-   FL Sunbiz (SFTP fixed-width, has officers — the rich one) is the deferred follow-up
-   (heaviest; needs an SFTP dep; doesn't touch current CA/TX review loans).
+   **FL Sunbiz bulk ingest — SHIPPED 2026-06-25.** The one source with no live
+   name-query API (SFTP-only), so it's the lone true BULK load: `scripts/
+   sos-sources.ts` (FL fixed-width 1440-char `map`) + `scripts/_sos-ingest.ts`
+   (dedup + chunked upsert) + `scripts/ingest-sos.ts` (SFTP download → unzip →
+   streamed parse → `sos_entities`, source `fl_sunbiz`). Richest free source —
+   carries officers (up to 6). Parser verified against a live daily file (3,167
+   rows landed; "JDA HOLDINGS, INC" resolves active via the cache with Cobalt NOT
+   called). `fl_sunbiz` added to `ALWAYS_FRESH_SOURCES` so bulk rows skip the TTL.
+   **Run the full quarterly load** (heavy — millions of rows, cron-owned):
+   `set -a; source .env.local; set +a; npx tsx scripts/ingest-sos.ts --full`
+   (active-only default; `--all` includes inactive; `--daily` for the small update).
 3. **Pricing + interest-reserve fidelity — SHIPPED 2026-06-25** (re-scoped from
    "tier + placement"). FINDING: the Nexys logs carry **no risk tier** (`tierLevel:
    null`) and **no competitive placement** (ICC funds its own `Insignia RTL`
