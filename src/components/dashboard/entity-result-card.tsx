@@ -99,12 +99,13 @@ export function EntityResultCard({
                 </Badge>
               ) : (
                 <Badge
-                  variant={
+                  // Active = status, so it must read GREEN, not the default blue
+                  // (blue is for actions/identity only — design-system color rule).
+                  variant={data.sos_status === "suspended" || data.sos_status === "dissolved" ? "destructive" : "secondary"}
+                  className={
                     data.sos_status === "active"
-                      ? "default"
-                      : data.sos_status === "suspended"
-                        ? "destructive"
-                        : "secondary"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : undefined
                   }
                 >
                   {data.sos_status.toUpperCase()}

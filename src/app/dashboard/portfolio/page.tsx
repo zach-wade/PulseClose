@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, AlertTriangle, CheckCircle2, Clock, Hourglass } from "lucide-react";
+import { factorLabel } from "@/lib/format/labels";
 
 type RiskSeverity = "critical" | "moderate" | "minor" | "informational" | "none";
 type ValidationStatus = "pending" | "verified" | "partial" | "flagged";
@@ -301,7 +302,7 @@ export default function PortfolioPage() {
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {row.critical_factor_keys.slice(0, 4).map((k) => (
-                          <span key={k}>{severityBadge("critical" as RiskSeverity)}<span className="ml-1 text-xs text-muted-foreground">{k}</span></span>
+                          <span key={k}>{severityBadge("critical" as RiskSeverity)}<span className="ml-1 text-xs text-muted-foreground">{factorLabel(k)}</span></span>
                         ))}
                         {row.critical_factor_keys.length > 4 && (
                           <span className="text-xs text-muted-foreground">+{row.critical_factor_keys.length - 4}</span>

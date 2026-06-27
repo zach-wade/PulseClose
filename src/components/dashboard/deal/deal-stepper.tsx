@@ -26,6 +26,7 @@ import { StateSelect } from "@/components/ui/state-select";
 import { ChevronRight, Ruler, Sparkles } from "lucide-react";
 import { EvaluateScenarios } from "@/components/dashboard/evaluate-scenarios";
 import { DocIngest, type IngestExtraction } from "@/components/dashboard/doc-ingest";
+import { enumLabel } from "@/lib/format/labels";
 import {
   type Deal,
   type DealTerms,
@@ -495,13 +496,13 @@ function StepTerms({
           <div className="space-y-1.5">
             <Label htmlFor="loan_type">Loan type</Label>
             <select id="loan_type" className={selectCls()} value={t.loan_type} onChange={(e) => set("loan_type", e.target.value)}>
-              {LOAN_TYPES.map((lt) => <option key={lt} value={lt}>{lt}</option>)}
+              {LOAN_TYPES.map((lt) => <option key={lt} value={lt}>{enumLabel(lt)}</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="property_type">Property type</Label>
             <select id="property_type" className={selectCls()} value={t.property_type} onChange={(e) => set("property_type", e.target.value)}>
-              {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+              {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{enumLabel(pt)}</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
@@ -535,13 +536,13 @@ function StepTerms({
           <div className="space-y-1.5">
             <Label htmlFor="occupancy">Occupancy</Label>
             <select id="occupancy" className={selectCls()} value={t.occupancy} onChange={(e) => set("occupancy", e.target.value)}>
-              {OCCUPANCIES.map((o) => <option key={o} value={o}>{o}</option>)}
+              {OCCUPANCIES.map((o) => <option key={o} value={o}>{enumLabel(o)}</option>)}
             </select>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="loan_purpose">Loan purpose</Label>
             <select id="loan_purpose" className={selectCls()} value={t.loan_purpose} onChange={(e) => set("loan_purpose", e.target.value)}>
-              {LOAN_PURPOSES.map((lp) => <option key={lp} value={lp}>{lp}</option>)}
+              {LOAN_PURPOSES.map((lp) => <option key={lp} value={lp}>{enumLabel(lp)}</option>)}
             </select>
           </div>
           <div className="space-y-1.5 flex items-end">

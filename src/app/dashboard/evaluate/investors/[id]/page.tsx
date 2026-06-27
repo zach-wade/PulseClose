@@ -12,6 +12,7 @@ import { InvestorPerformanceCard } from "@/components/dashboard/investor-perform
 import { MandatesManager } from "@/components/dashboard/mandates-manager";
 import { Term } from "@/components/ui/term";
 import { formatCriterion } from "@/lib/investors/criteria-display";
+import { enumLabel } from "@/lib/format/labels";
 
 // A4/A5 — Investor detail page. Pulls the criteria + performance card +
 // rate trend together in one place. The admin-list view at
@@ -84,7 +85,7 @@ export default function InvestorDetailPage() {
             {investor.display_name}
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {investor.type && <Badge variant="outline" className="mr-2">{investor.type}</Badge>}
+            {investor.type && <Badge variant="outline" className="mr-2">{enumLabel(investor.type)}</Badge>}
             {investor.criteria.length} active criteria
           </p>
         </div>
