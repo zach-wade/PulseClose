@@ -140,10 +140,24 @@ function trackPillar(track: TrackLike[]): Pillar {
   // Track record is a search, not a pass/fail screen — it never errors into a
   // flag and a thin record affects the tier, not the verdict. Always "complete".
   const verified = track.filter((t) => t.review_status !== "pending_review" && t.review_status !== "rejected");
+  const pending = track.filter((t) => t.review_status === "pending_review").length;
   if (verified.length === 0) {
+    // Don't say "No properties found" when N auto-discovered matches are sitting
+    // in the verify tray — that contradicts the "Properties Found: N" stat + the
+    // preliminary memo. Surface them as a review item (still unverified, so not a
+    // "verified" track record — the lender must confirm what's theirs).
+    if (pending > 0) {
+      return {
+        ...base,
+        status: "not_applicable",
+        subLabel: `${pending} pending review`,
+        message: `${pending} found · awaiting review`,
+      };
+    }
     return { ...base, status: "not_applicable", subLabel: null, message: "No properties found" };
   }
-  return { ...base, status: "verified", subLabel: null, message: `${verified.length} verified` };
+  const suffix = pending > 0 ? ` · ${pending} pending` : "";
+  return { ...base, status: "verified", subLabel: null, message: `${verified.length} verified${suffix}` };
 }
 
 function litigationPillar(checks: LitigationLike[]): Pillar {

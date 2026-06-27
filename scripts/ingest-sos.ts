@@ -14,8 +14,9 @@
 // FL Sunbiz SFTP creds are hardcoded constants in sos-sources.ts (public access),
 // NOT env vars — only the Supabase service key comes from .env.local.
 
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, statSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -135,22 +136,33 @@ async function connectSftp(src: FixedWidthSource): Promise<SftpClient> {
   return sftp;
 }
 
-// Download a remote file with retry + reconnect. The FL cordata.zip is ~1.74 GB
-// and the public SFTP endpoint resets long transfers (ECONNRESET) intermittently,
-// so a single fastGet is unreliable; reconnect and retry a few times.
-async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip: string, attempts = 4): Promise<void> {
+// RESUMABLE download with reconnect + backoff. The FL cordata.zip is ~1.74 GB and
+// the public SFTP endpoint resets long transfers (ECONNRESET) — and a rapid
+// reconnect can transiently fail DNS (ENOTFOUND). A plain fastGet restarts from
+// zero on every reset and never finishes. Instead we resume: on failure, keep the
+// bytes already written and re-open a read stream from that offset (appending),
+// with exponential backoff so DNS/network can settle.
+async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip: string, attempts = 12): Promise<void> {
   for (let i = 1; i <= attempts; i++) {
-    const sftp = await connectSftp(src);
+    const start = existsSync(localZip) ? statSync(localZip).size : 0;
+    let sftp: SftpClient | null = null;
     try {
-      await sftp.fastGet(remote, localZip);
+      sftp = await connectSftp(src);
+      const ws = createWriteStream(localZip, { flags: start > 0 ? "a" : "w" });
+      // ssh2-sftp-client.get() accepts a writable dst + readStreamOptions; `start`
+      // makes the server read from that byte offset so we resume, not restart.
+      await sftp.get(remote, ws, { readStreamOptions: { start } } as Parameters<SftpClient["get"]>[2]);
+      const got = statSync(localZip).size;
+      if (start > 0) console.log(`  resumed from ${(start / 1e6).toFixed(0)}MB → ${(got / 1e6).toFixed(0)}MB total`);
       return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.warn(`  download attempt ${i}/${attempts} failed: ${msg}`);
-      await rm(localZip, { force: true }); // drop the partial before retrying
+      const have = existsSync(localZip) ? statSync(localZip).size : 0;
+      console.warn(`  download attempt ${i}/${attempts} failed at ${(have / 1e6).toFixed(0)}MB: ${msg}`);
       if (i === attempts) throw e;
+      await sleep(Math.min(30000, 2000 * 2 ** Math.min(i, 4))); // backoff, cap 30s
     } finally {
-      await sftp.end().catch(() => {});
+      await sftp?.end().catch(() => {});
     }
   }
 }

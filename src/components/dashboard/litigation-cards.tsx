@@ -123,23 +123,37 @@ export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [age, setAge] = useState<AgeFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
+  // "weak" = the borrower is NOT a named party; the name only appears in the
+  // docket text (a same-named different person — e.g. an attorney, expert, or
+  // unrelated party). These are noise, not this borrower's record, so they're
+  // hidden by default — showing "GlaxoSmithKline v. Teva" under a real-estate
+  // borrower named Sharon Nachman is the exact false positive that kills trust
+  // (Noah's rule). Revealable, never silently dropped.
+  const [showUnlikely, setShowUnlikely] = useState(false);
+
+  const weakCount = useMemo(() => cases.filter((c) => caseConfidence(c) === "weak").length, [cases]);
+  // The borrower's actual record (everything we'd attribute to them).
+  const attributable = useMemo(
+    () => (showUnlikely ? cases : cases.filter((c) => caseConfidence(c) !== "weak")),
+    [cases, showUnlikely],
+  );
 
   const filtered = useMemo(() => {
     const fiveYearsAgo = new Date();
     fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-    return cases.filter((c) => {
+    return attributable.filter((c) => {
       if (category !== "all" && c.category !== category) return false;
       if (status === "pending" && c.status !== "pending") return false;
       if (age === "5y" && c.filed_at && new Date(c.filed_at) < fiveYearsAgo) return false;
       return true;
     });
-  }, [cases, category, age, status]);
+  }, [attributable, category, age, status]);
 
   const counts = useMemo(() => {
     const byCat: Record<string, number> = {};
-    for (const c of cases) byCat[c.category] = (byCat[c.category] ?? 0) + 1;
+    for (const c of attributable) byCat[c.category] = (byCat[c.category] ?? 0) + 1;
     return byCat;
-  }, [cases]);
+  }, [attributable]);
 
   // Matches surfaced for review: possible/probable only. "weak" means the
   // borrower isn't actually the named party (caption is someone else) — that's
@@ -170,7 +184,7 @@ export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }
             <Scale className="h-4 w-4" />
             Public records
             <Badge variant="outline" className="text-[10px] uppercase">
-              {cases.length} case{cases.length === 1 ? "" : "s"}
+              {attributable.length} case{attributable.length === 1 ? "" : "s"}
             </Badge>
             {reviewCount > 0 && (
               <Badge variant="outline" className="text-[10px] uppercase border-amber-300 text-amber-700 bg-amber-50/60">
@@ -209,7 +223,7 @@ export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground mr-1">Filter:</span>
           <FilterChip active={category === "all"} onClick={() => setCategory("all")}>
-            All ({cases.length})
+            All ({attributable.length})
           </FilterChip>
           {(["bankruptcy", "civil", "foreclosure", "lien", "tax"] as const).map((cat) => {
             const n = counts[cat] ?? 0;
@@ -234,6 +248,19 @@ export function LitigationCases({ cases, legacyChecks, validationId, onUpdated }
           >
             Pending only
           </FilterChip>
+          {weakCount > 0 && (
+            <>
+              <span className="mx-1 text-muted-foreground">·</span>
+              <button
+                type="button"
+                onClick={() => setShowUnlikely((s) => !s)}
+                className="text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+                title="Name-only text matches where the borrower is not a named party — likely a same-named different person."
+              >
+                {showUnlikely ? `Hide ${weakCount} unlikely` : `Show ${weakCount} unlikely (name-only, not a party)`}
+              </button>
+            </>
+          )}
         </div>
 
         {filtered.length === 0 ? (
