@@ -34,6 +34,8 @@ interface ValidationDiligence {
   sos_active: boolean;
   /** Entity check errored (e.g. 429) — unverified, not a confirmed "not active". */
   sos_unavailable: boolean;
+  /** No entity on file (individual borrower) — require_sos_active is n/a, not a fail. */
+  sos_not_applicable: boolean;
   has_active_litigation: boolean;
   /** Litigation screen could not complete — cannot be asserted clear. */
   litigation_incomplete: boolean;
@@ -97,6 +99,11 @@ async function loadValidationDiligence(
   // asserted as a confirmed negative against the borrower.
   const sos_status = entityRes.data?.sos_status ?? null;
   const sos_active = sos_status === "active";
+  // No entity_checks row at all = an individual borrower with no vesting entity.
+  // A `require_sos_active` gate is vacuously satisfied (there's no entity that
+  // could be inactive) — it must NOT fail, mirroring the verdict's entity
+  // not_applicable. Distinct from sos_unavailable (entity exists, lookup errored).
+  const sos_not_applicable = !entityRes.data;
   // A 429 / upstream error is NOT a confirmation the entity is absent — it's an
   // unverified check that should make the mandate conditional, not auto-fail.
   const sos_unavailable = Boolean(
@@ -147,6 +154,7 @@ async function loadValidationDiligence(
     risk_tier,
     sos_active,
     sos_unavailable,
+    sos_not_applicable,
     has_active_litigation,
     litigation_incomplete,
     sanctions_hit,
@@ -186,7 +194,7 @@ export function assessGates(
   if (gates.max_risk_tier && TIER_RANK[dil.risk_tier] > TIER_RANK[gates.max_risk_tier]) {
     failures.push({ gate: "max_risk_tier", message: `Risk tier ${dil.risk_tier} exceeds the allowed ${gates.max_risk_tier}.` });
   }
-  if (gates.require_sos_active && !dil.sos_active) {
+  if (gates.require_sos_active && !dil.sos_active && !dil.sos_not_applicable) {
     if (dil.sos_unavailable) {
       conditional = true;
       conditionalReasons.push({

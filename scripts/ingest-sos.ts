@@ -122,9 +122,8 @@ async function downloadDaily(src: FixedWidthSource, workDir: string): Promise<st
   }
 }
 
-// Download each quarterly full zip (FL = one cordata.zip) and stream-unzip its
-// single entry to a .txt the parser can read.
-async function downloadFullParts(src: FixedWidthSource, workDir: string): Promise<string[]> {
+// Connect a fresh SFTP client (used for retries — a reset connection is dead).
+async function connectSftp(src: FixedWidthSource): Promise<SftpClient> {
   const sftp = new SftpClient();
   await sftp.connect({
     host: src.sftp.host,
@@ -133,13 +132,39 @@ async function downloadFullParts(src: FixedWidthSource, workDir: string): Promis
     password: src.sftp.password,
     readyTimeout: 60000,
   });
+  return sftp;
+}
+
+// Download a remote file with retry + reconnect. The FL cordata.zip is ~1.74 GB
+// and the public SFTP endpoint resets long transfers (ECONNRESET) intermittently,
+// so a single fastGet is unreliable; reconnect and retry a few times.
+async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip: string, attempts = 4): Promise<void> {
+  for (let i = 1; i <= attempts; i++) {
+    const sftp = await connectSftp(src);
+    try {
+      await sftp.fastGet(remote, localZip);
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`  download attempt ${i}/${attempts} failed: ${msg}`);
+      await rm(localZip, { force: true }); // drop the partial before retrying
+      if (i === attempts) throw e;
+    } finally {
+      await sftp.end().catch(() => {});
+    }
+  }
+}
+
+// Download each quarterly full zip (FL = one cordata.zip) and stream-unzip its
+// single entry to a .txt the parser can read.
+async function downloadFullParts(src: FixedWidthSource, workDir: string): Promise<string[]> {
   const txtPaths: string[] = [];
-  try {
+  {
     for (const zipName of src.fullFiles) {
       const remote = `${src.fullDir}/${zipName}`;
       const localZip = join(workDir, zipName);
       console.log(`  downloading ${remote} …`);
-      await sftp.fastGet(remote, localZip);
+      await fastGetWithRetry(src, remote, localZip);
       // Unzip the single entry to a .txt and record its path.
       const dir = await unzipOpen.file(localZip);
       const entry = dir.files.find((f) => f.type === "File");
@@ -152,8 +177,6 @@ async function downloadFullParts(src: FixedWidthSource, workDir: string): Promis
       txtPaths.push(outPath);
       await rm(localZip, { force: true });
     }
-  } finally {
-    await sftp.end();
   }
   return txtPaths;
 }
