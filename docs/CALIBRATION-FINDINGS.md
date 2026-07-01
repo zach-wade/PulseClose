@@ -347,6 +347,17 @@ sizer ships with a `scripts/verify-*.ts` golden test; these are the model-level 
     (same ratio definitions, verified against Park Place). The stepper (UX-2) should support
     both: "size it for me" and "check my requested number."
 
+22. **🟡 "DSCR" means two different things across ICC's models — name the convention.**
+    The DSCR Calculator sheet holds both: (a) **residential PITIA DSCR** = gross rent ÷
+    (P&I + taxes + insurance + HOA) — debt service sits *inside* the ratio with T&I; this is
+    what DSCR-rental lenders quote; and (b) **commercial NOI DSCR** = NOI ÷ (P&I only), where
+    NOI already nets opex. They are not interchangeable — the same deal yields different DSCRs
+    under each. `dscr-sizer.ts` implements **both explicitly** (`dscrForLoan` = residential
+    PITIA, `maxLoanByDscr` = commercial NOI), and the UI must label which is shown so a
+    reviewer is never guessing. Verified: the commercial `maxLoanByDscr` PV path is
+    algebraically identical to `sizing.ts underwrite()`'s DSCR constraint (assert in
+    `verify-dscr-sizer.ts`) — the two engines will not drift.
+
 ## Carried into the product plan (2026-07-01, Damon reset)
 
 The findings above are the evidence base for the ROADMAP

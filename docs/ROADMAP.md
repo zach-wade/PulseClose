@@ -766,8 +766,14 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
      example, and the LTC/LTARV/LTAIS/shortage definitions matching the real `Loan Sizer for
      Park Place.xlsx` deal to the penny. **Two findings surfaced** — see
      [CALIBRATION-FINDINGS.md #19/#20](CALIBRATION-FINDINGS.md).
-   - **Remaining:** the DSCR/rental income-approach path (**UW-6**, decoded DSCR calc), then
-     wire all three into the deal stepper (UX-2 Excel-parity layout + UW-5 live-solve).
+   - **DSCR / rental income-approach (UW-6)** — [src/lib/underwriting/dscr-sizer.ts](../src/lib/underwriting/dscr-sizer.ts)
+     + [scripts/verify-dscr-sizer.ts](../scripts/verify-dscr-sizer.ts) (15/15): reproduces
+     `DSCR Calculator.xlsx` to the penny — **both** DSCR conventions (residential PITIA DSCR
+     `dscrForLoan`, commercial NOI max-loan `maxLoanByDscr`) — and asserts the PV max-loan is
+     identical to `underwrite()`'s DSCR constraint (no engine drift). Finding logged
+     ([#22](CALIBRATION-FINDINGS.md): label which DSCR convention is shown).
+   - **All three sizing modes now shipped + math-verified.** Next: wire them into the deal
+     stepper (UX-2 Excel-parity layout + UW-5 live-solve).
    *Stage: Route / underwrite.*
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
    trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
