@@ -147,6 +147,7 @@ async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip:
   for (let i = 1; i <= attempts; i++) {
     let start = existsSync(localZip) ? statSync(localZip).size : 0;
     let sftp: SftpClient | null = null;
+    let ws: ReturnType<typeof createWriteStream> | null = null;
     try {
       sftp = await connectSftp(src);
       // Guard cross-run resume against a stale/complete partial: if the remote
@@ -159,15 +160,24 @@ async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip:
         await rm(localZip, { force: true });
         start = 0;
       }
-      const ws = createWriteStream(localZip, { flags: start > 0 ? "a" : "w" });
+      ws = createWriteStream(localZip, { flags: start > 0 ? "a" : "w" });
       // ssh2-sftp-client.get() accepts a writable dst + readStreamOptions; `start`
       // makes the server read from that byte offset so we resume, not restart.
       await sftp.get(remote, ws, { readStreamOptions: { start } } as Parameters<SftpClient["get"]>[2]);
+      // CRITICAL: fully flush + close the write stream and WAIT before measuring
+      // size. If we don't, buffered tail bytes flush late and the next attempt's
+      // append overlaps them, corrupting the zip's deflate stream ("too many
+      // length or distance symbols" at unzip). Closing here makes statSync exact.
+      await closeStream(ws);
+      ws = null;
       const got = statSync(localZip).size;
       if (start > 0) console.log(`  resumed from ${(start / 1e6).toFixed(0)}MB → ${(got / 1e6).toFixed(0)}MB total`);
       return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      // Flush+close the partial write BEFORE the next attempt reads its size, so a
+      // late buffer flush can't overlap the resumed append (the corruption bug).
+      if (ws) await closeStream(ws).catch(() => {});
       const have = existsSync(localZip) ? statSync(localZip).size : 0;
       console.warn(`  download attempt ${i}/${attempts} failed at ${(have / 1e6).toFixed(0)}MB: ${msg}`);
       if (i === attempts) throw e;
@@ -176,6 +186,15 @@ async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip:
       await sftp?.end().catch(() => {});
     }
   }
+}
+
+// End + fully flush a write stream, resolving only once its bytes are on disk
+// (the 'close' event). Idempotent if the stream is already ended.
+function closeStream(ws: ReturnType<typeof createWriteStream>): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (ws.closed) { resolve(); return; }
+    ws.end(() => ws.close(() => resolve()));
+  });
 }
 
 // Download each quarterly full zip (FL = one cordata.zip) and stream-unzip its
@@ -191,19 +210,31 @@ async function downloadFullParts(src: FixedWidthSource, workDir: string): Promis
     for (const zipName of src.fullFiles) {
       const remote = `${src.fullDir}/${zipName}`;
       const localZip = join(cacheDir, zipName);
-      console.log(`  downloading ${remote} …`);
-      await fastGetWithRetry(src, remote, localZip);
-      // Unzip the single entry to a .txt and record its path.
-      const dir = await unzipOpen.file(localZip);
-      const entry = dir.files.find((f) => f.type === "File");
-      if (!entry) {
-        console.warn(`  ${zipName}: no file entry, skipping`);
-        continue;
-      }
       const outPath = join(workDir, `${zipName}.txt`);
-      await pipeline(entry.stream(), createWriteStream(outPath));
-      txtPaths.push(outPath);
-      await rm(localZip, { force: true });
+      // Unzip the single entry to a .txt. If inflate fails, the cached zip is
+      // corrupt (a bad resume) — discard it and re-download clean, ONCE. This is
+      // the belt to the write-stream-close suspenders in fastGetWithRetry.
+      let unzipped = false;
+      for (let tryNum = 1; tryNum <= 2 && !unzipped; tryNum++) {
+        console.log(`  downloading ${remote} …${tryNum > 1 ? " (clean re-download after corrupt zip)" : ""}`);
+        await fastGetWithRetry(src, remote, localZip);
+        try {
+          const dir = await unzipOpen.file(localZip);
+          const entry = dir.files.find((f) => f.type === "File");
+          if (!entry) { console.warn(`  ${zipName}: no file entry, skipping`); break; }
+          await pipeline(entry.stream(), createWriteStream(outPath));
+          unzipped = true;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(`  ${zipName}: unzip failed (${msg}) — discarding cached zip`);
+          await rm(localZip, { force: true });
+          if (tryNum === 2) throw new Error(`${zipName}: unzip failed after clean re-download — ${msg}`);
+        }
+      }
+      if (unzipped) {
+        txtPaths.push(outPath);
+        await rm(localZip, { force: true });
+      }
     }
   }
   return txtPaths;
