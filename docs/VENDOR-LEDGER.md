@@ -9,7 +9,38 @@ the formalized version of what that register sketches.
 Maintained alongside `docs/PRIVACY-POSTURE.md` (sub-processor list — what
 data each vendor receives) and `pickup.md` (live operational notes).
 
-Last reviewed: 2026-06-25. Owner: Zach Wade.
+Last reviewed: **2026-07-01** (RentCast plan confirmed + shared-account finding). Owner: Zach Wade.
+
+---
+
+## Plan snapshot — monthly cost + limits (confirm the ⚠️ rows)
+
+The known per-vendor plan/cost. Rows marked **⚠️ CONFIRM** are not yet verified
+against the vendor dashboard — do NOT treat the guess as fact; open the billing page
+and fill the real number.
+
+| Vendor | Plan | Monthly cost | Limit | Renews | Status |
+|---|---|---|---|---|---|
+| **RentCast** | API Foundation | **$74.00** | 1,000 req/mo | 2026-07-19 | ✅ confirmed 07-01 · ⚠️ shared with Build-Folio (`bf` key) — that project, not PulseClose, drives the 85% burn |
+| **Anthropic Claude** | Pay-as-you-go | usage | — | — | ✅ (metered; no fixed cap) |
+| **Supabase** | Pro | ~$25 + usage | Pro quotas | annual? | ⚠️ CONFIRM exact $ + PITR |
+| **Vercel** | Pro | ~$20/seat | Pro quotas | annual? | ⚠️ CONFIRM |
+| **Sentry** | Team | ~$26+ | event tier | annual? | ⚠️ CONFIRM |
+| **Resend** | Free → paid | $0 (≤3K/mo) | 3,000 email/mo | — | ✅ free tier |
+| **CourtListener** | Free token | $0 | 5,000 req/day | — | ✅ free |
+| **OpenSanctions** | Trial → paid | ⚠️ | trial | expired 2026-05-28? | ⚠️ CONFIRM (OFAC direct is the free floor) |
+| **Cobalt Intelligence** | Per-call | ⚠️ | trial quota exhausted | rotate | ⚠️ CONFIRM plan/rate (now fallback behind free-SOS) |
+| **Realie** | Per-call premium | ⚠️ | — | annual? | ⚠️ CONFIRM plan/rate |
+| **Regrid** | Per-call | ⚠️ | — | annual? | ⚠️ CONFIRM plan/rate |
+| **PostHog** | Free | $0 | event tier | — | ✅ free tier |
+| **GitHub** | Free | $0 | — | — | ✅ free |
+| **CALICO / Socrata / FL Sunbiz / OFAC / CSLB** | Free/public | $0 | see rows 1a–1c, 7, 8 | — | ✅ free by design |
+| **Stripe** | Standard | % of revenue | — | — | ✅ (revenue-based) |
+| **WordPress / GoDaddy** | Managed WP | ⚠️ | — | annual? | ⚠️ CONFIRM |
+
+**Confirmed-cost total is small; the only active cost anomaly is RentCast**, and that
+is Build-Folio's usage on the shared account, not PulseClose (see §4). Next review:
+verify the ⚠️ CONFIRM rows against each dashboard and replace the guesses.
 
 ---
 
@@ -23,7 +54,7 @@ Last reviewed: 2026-06-25. Owner: Zach Wade.
 | 1c | **FL Sunbiz (SFTP bulk)** | FL business-entity BULK load (officers incl.) — de-rents Cobalt for FL | None (`Public`/`PubAccess1845!` constants) | **Free** (Ch.119 public SFTP) | Quarterly full (Jan/Apr/Jul/Oct) + daily updates; cron via `scripts/ingest-sos.ts --full` | Cobalt (vendor 1) | `scripts/sos-sources.ts` + `ingest-sos.ts`; fixed-width 1440-char; source `fl_sunbiz` in `sos_entities` (ALWAYS_FRESH, skips TTL) |
 | 2 | **Realie** | Property + deed-chain (primary) | `REALIE_API_KEY` | Per-call premium | Annual (TBD) | Regrid | See §2 |
 | 3 | **Regrid** | Property fallback | `REGRID_API_TOKEN` | Per-call | Annual (TBD) | Stub adapter (demo data) | See §3 |
-| 4 | **RentCast** | Sale-history enrichment | `RENTCAST_API_KEY` | Per-call | Annual (TBD) | Skip enrichment, return Regrid as-is | See §4 |
+| 4 | **RentCast** | Sale-history enrichment | `RENTCAST_API_KEY` | **API Foundation — $74/mo, 1,000 req/mo** (overage over) ⚠️ shared with Build-Folio (`bf` key) | Monthly (next **2026-07-19**) | Skip enrichment, return Regrid as-is | See §4 |
 | 5 | **CourtListener** | Federal litigation (PACER + RECAP) | `COURTLISTENER_API_TOKEN` | Free, 5K req/day | None (free token) | Stub adapter | See §5 |
 | 6 | **OpenSanctions** | Sanctions/PEP screening | `OPENSANCTIONS_API_KEY` | **Trial — expires 2026-05-28** | Rotate trial keys; paid tier post-NPLA | OFAC SDN direct | See §6 |
 | 7 | **OFAC SDN direct** | Sanctions fallback (CSV) | None (Treasury endpoint) | Free | n/a | n/a (this IS the floor) | See §7 |
@@ -149,11 +180,27 @@ and we have ≥1 Regrid result.
 
 **Where it's called:** `src/lib/adapters/rentcast.ts` via
 `enrichPropertiesWithRentcast(toEnrich.slice(0,5), rentcastKey)`. Slice cap of 5
-limits cost.
+limits cost. No caching — repeated pipeline runs re-fetch (only matters for
+scripts, and PulseClose's own usage is ~0; see below).
 
-**Pricing:** Per-call.
+**Pricing (confirmed 2026-07-01):** **API Foundation plan — $74.00/mo, 1,000
+requests/billing period**, overage fees above the cap. Billing period is monthly
+(next payment **2026-07-19**). Includes AVM, sale/rental comps, owner info,
+listings, market stats nationwide.
 
-**Renewal/rotation:** Annual contract (TBD).
+**⚠️ SHARED ACCOUNT — the burn is NOT PulseClose (finding 2026-07-01).** The
+RentCast account has **two API keys on the one $74/mo plan**: `pulseclose` (created
+2026-06-24) and **`bf` = Build-Folio** (created 2026-06-19). At 85% used (853/1,000)
+only 40% through the cycle, on pace for ~2,100 → ~1,100 overage. **Filtered to the
+`pulseclose` key it's 70 requests lifetime and 0 in the last 5 days** — so **the
+draw is essentially all the `bf` (Build-Folio) project.** Overall error rate 17.5%
+(168/962) also wastes quota. **Actions (owner):** (a) put Build-Folio on its own
+RentCast account/plan so one project can't push the other into overage, or bump the
+plan; (b) look at Build-Folio's usage + error rate, not PulseClose's. A PulseClose-
+side response cache was considered and **dropped as unneeded** (PulseClose ~0 usage).
+
+**Renewal/rotation:** Monthly auto-renew (next 2026-07-19). Rotate both keys if
+either leaks; keys are account-scoped so a leak of one exposes the shared quota.
 
 **Fallback:** Skip on failure — Regrid result returned as-is. Code path:
 "RentCast enrichment failed, returning data without enrichment".
