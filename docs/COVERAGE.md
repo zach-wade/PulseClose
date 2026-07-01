@@ -16,9 +16,19 @@ the narrative companion. Last reviewed **2026-06-26**.
 
 - **Two pillars are state-gated:** entity (Secretary of State) and GC license.
   The other three — litigation, sanctions, track record — are **nationwide**.
-- **Run a full end-to-end in FL.** Florida is the one state where **both** the
-  entity lookup (Sunbiz bulk) **and** the GC license (DBPR bulk) resolve from a
-  free source today. CA joins the moment the CALICO key is set.
+- **Run a full end-to-end in FL** — *once the statewide entity bulk is loaded.*
+  Florida is the one state where **both** the entity lookup (Sunbiz bulk) **and**
+  the GC license (DBPR bulk) can resolve free. CA joins the moment the CALICO key is set.
+
+> ⚠️ **FL entity correction (2026-06-30):** the `fl_sunbiz` cache currently holds
+> only **~3,167 rows** (one *daily* update file), NOT the statewide corpus — the
+> `--full` load never ran because the SFTP path assumed a 10-way `cordata0-9.zip`
+> split, but the server serves a **single `cordata.zip` (~1.74 GB)**. Path is fixed
+> (`scripts/sos-sources.ts`) + the download is resumable, but the full load must run
+> from **CI** (`refresh-sos-entities.yml`) — local pulls DNS-block at ~67%. Until
+> then, an **arbitrary FL entity resolves via Cobalt (429), not free.** FL **GC**
+> (DBPR, ~142k rows) IS fully cached. NY entities resolve free on-demand via the
+> live DOS API regardless. See [pickup.md](../pickup.md) §Open Thread B.
 
 ---
 
@@ -32,7 +42,7 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
 | **CA** | CALICO (CA SOS API) | live-query + cache | **yes — CALICO key (free, self-serve)** | $0 | ⏳ once key set |
 | **CO** | Socrata (open data) | live-query + cache | no | $0 | ✅ |
 | **NY** | Socrata (open data) | live-query + cache | no | $0 | ✅ |
-| **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk (always-fresh) | no | $0 | ✅ |
+| **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ⚠️ **partial — only ~3,167 rows cached; statewide `--full` load pending (CI)**; arbitrary entity → Cobalt |
 | *all others* | Cobalt Intelligence (50-state) | live-query | yes — Cobalt key | ~$5 fresh / $0 cached | ⚠️ trial quota exhausted |
 
 - Lookup order: `sos_entities` cache → free source (CALICO/Socrata/FL bulk) →
@@ -74,7 +84,7 @@ level; everything else is manual until bulk ingest is added.
 
 | State | Entity (SOS) | GC | Both free now? |
 |---|---|---|---|
-| **FL** | ✅ Sunbiz bulk | ✅ DBPR bulk | ✅ **yes — best E2E target** |
+| **FL** | ⚠️ Sunbiz bulk (statewide load pending — see above) | ✅ DBPR bulk | ⚠️ **once the FL `--full` load runs (CI)** — then the best E2E target |
 | CA | ⏳ CALICO (key pending) | ✅ CSLB scrape | ⏳ once CALICO key set |
 | CO | ✅ Socrata | ❌ no statewide GC | entity only |
 | NY | ✅ Socrata | ❌ no statewide GC | entity only |

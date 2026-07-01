@@ -1,4 +1,10 @@
-# UX Polish Backlog (post-redesign)
+# UX Polish Backlog (post-redesign) — ✅ ALL 5 DONE (2026-06-30)
+
+> **STATUS: complete + shipped** (commit `4d3fe3f`). #1 handoff verbs → `screening-display.ts`;
+> #2 buy-box → `criteria-display.ts`; #3 sizing prefill NOI/cap → doc-ingest + deal-stepper;
+> #4 `<Term>` glossary extended; #5 mandate tokens → `MandateChip`. Superseded by the broader
+> **UX audit** — see [UX-AUDIT-RUBRIC.md](UX-AUDIT-RUBRIC.md) + `ux-review/audit/FINDINGS.md`
+> + [pickup.md](../pickup.md) for open items. Kept below for the acceptance criteria/history.
 
 **Context:** the verdict-first redesign (`UX-REDESIGN-PLAN.md §11.5`, all 6 steps) is
 **done + live + verified** — `computeVerdict()` single-source on detail · list ·
