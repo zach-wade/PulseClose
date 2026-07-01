@@ -752,12 +752,22 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
    secondary; **infer basis from economics**, not the purpose dropdown — calibration #14);
    (e) LTV/LTP govern the *initial advance* with **holdback added back** (`AsIs×MaxLTV +
    Holdback`); (f) a **cushion (headroom) per constraint**, surfaced.
-   **Status: RTL/fix&flip path SHIPPED** — [src/lib/underwriting/rtl-sizer.ts](../src/lib/underwriting/rtl-sizer.ts)
-   + [scripts/verify-rtl-sizer.ts](../scripts/verify-rtl-sizer.ts) reproduce `RTL_Loan_Sizer`
-   Option_1 to the penny (30/30). **Remaining: the ground-up construction path** — a
-   Sources/Uses model with a **capitalized interest reserve solved in closed form**
-   (`TotalLoan = (PurchaseAdvance + ConstructionHoldback) / (1 − Rate/12 × Months × Discount)`),
-   per the decoded `Loan Sizer - Construction.xlsx` — deterministic where their Excel iterates.
+   **Status (2 of 3 sizing modes SHIPPED, math cross-checked):**
+   - **RTL / fix&flip** — [src/lib/underwriting/rtl-sizer.ts](../src/lib/underwriting/rtl-sizer.ts)
+     + [scripts/verify-rtl-sizer.ts](../scripts/verify-rtl-sizer.ts): reproduces
+     `RTL_Loan_Sizer_Fillable.xlsx` Option_1 **to the penny** (30/30). Model + fixture in
+     `loan-sizer-trove-2026-07/`.
+   - **Ground-up construction** — [src/lib/underwriting/construction-sizer.ts](../src/lib/underwriting/construction-sizer.ts)
+     + [scripts/verify-construction-sizer.ts](../scripts/verify-construction-sizer.ts):
+     Sources/Uses with a **capitalized interest reserve solved in closed form**
+     (`TotalLoan = (PurchaseAdvance + ConstructionHoldback) / (1 − Rate/12 × Months × Discount)`),
+     per decoded `Loan Sizer - Construction.xlsx`. Cross-checked 4 ways (21/21): closed-form
+     **==** 50-iteration fixed point (proof no Solver needed), Sources==Uses, a hand-worked
+     example, and the LTC/LTARV/LTAIS/shortage definitions matching the real `Loan Sizer for
+     Park Place.xlsx` deal to the penny. **Two findings surfaced** — see
+     [CALIBRATION-FINDINGS.md #19/#20](CALIBRATION-FINDINGS.md).
+   - **Remaining:** the DSCR/rental income-approach path (**UW-6**, decoded DSCR calc), then
+     wire all three into the deal stepper (UX-2 Excel-parity layout + UW-5 live-solve).
    *Stage: Route / underwrite.*
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
    trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
