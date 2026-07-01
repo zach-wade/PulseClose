@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EntityResultCard } from "@/components/dashboard/entity-result-card";
-import { UnifiedPropertyTable } from "@/components/dashboard/unified-property-table";
+import { UnifiedPropertyTable, unifiedPropertyCounts } from "@/components/dashboard/unified-property-table";
 import { VerifyTray } from "@/components/dashboard/verify-tray";
 import { LitigationCases, type LitigationCaseRow } from "@/components/dashboard/litigation-cards";
 import { GCResultCard } from "@/components/dashboard/gc-result-card";
@@ -148,8 +148,11 @@ export default function ValidationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Detail-page tabs (UX-REDESIGN-PLAN §3), now nested inside the "Full report"
-  // disclosure under the verdict hero (§11.3 — two-level disclosure).
-  const [tab, setTab] = useState("summary");
+  // disclosure under the verdict hero (§11.3 — two-level disclosure). The Summary
+  // (memo + why-this-rating + at-a-glance) is promoted OUT of the disclosure into
+  // a two-column at-a-glance section; the disclosure holds the deep drill only, so
+  // the default tab is Evidence.
+  const [tab, setTab] = useState("evidence");
   const [reportOpen, setReportOpen] = useState(false);
   // Binding mandate standing for the verdict hero (loaded separately; the
   // MandateAssessmentsCard inside the report carries the per-mandate drill-down).
@@ -321,6 +324,20 @@ export default function ValidationDetailPage() {
     (r) => r.review_status !== "pending_review" && r.review_status !== "rejected",
   );
   const pendingProps = data.track_record.filter((r) => r.review_status === "pending_review");
+  // Reconcile the "Track record" stat with the property table below (UX audit #5):
+  // both merge the SAME confirmed set (track_record + verified_flips) so the number
+  // agrees with what the table renders (a standalone claimed-only flip counts too).
+  const propCounts = unifiedPropertyCounts(confirmedProps, data.verified_flips ?? []);
+  const propStatSub =
+    pendingProps.length > 0
+      ? `+${pendingProps.length} pending review`
+      : propCounts.claimed_only > 0
+        ? propCounts.total - propCounts.claimed_only > 0
+          ? `${propCounts.total - propCounts.claimed_only} verified · ${propCounts.claimed_only} claimed only`
+          : "claimed only — unverified"
+        : completedProjects.length > 0
+          ? `${completedProjects.length} sold`
+          : `${propCounts.total} current`;
   const litigationConfidence = (l: LitigationCheck) =>
     ((l as unknown as { raw_response?: { _disambiguation?: { confidence?: string } } })
       .raw_response?._disambiguation?.confidence) ?? "possible";
@@ -425,7 +442,194 @@ export default function ValidationDetailPage() {
         />
       )}
 
-      {/* Full report — the entire prior page, demoted one disclosure level. */}
+      {/* At-a-glance — the curated Summary, promoted out of the disclosure so the
+          page leads with the decision + its "why" (§11.2 BLUF; UX audit #3 dead
+          space). Two columns: the narrative + factors on the left, the numbers +
+          mandate stamps on the right. Deep drill (Evidence/Deal/Hand off/Portfolio)
+          stays behind the Full-report disclosure below. */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left — narrative + rating rationale */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Input warnings */}
+          {data.input_warnings && data.input_warnings.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-1.5">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-800">
+                Input Warning{data.input_warnings.length > 1 ? "s" : ""}
+              </p>
+              {data.input_warnings.map((w, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-amber-900">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  {w}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pending-review banner — memo built off un-reviewed Flow B matches. */}
+          {(() => {
+            const pendingCount = data.track_record.filter(
+              (r) => r.review_status === "pending_review",
+            ).length;
+            if (pendingCount === 0) return null;
+            return (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 flex items-start gap-3">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-amber-900">
+                    Memo is preliminary — {pendingCount} property match
+                    {pendingCount === 1 ? "" : "es"} pending review.
+                  </p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    We auto-discovered properties registered to a similar name but the
+                    corroborating signals aren&apos;t strong enough to auto-add. Confirm or
+                    reject in the verify tray below — the memo + tier will regenerate from
+                    your final set.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openEvidence("track")}
+                  className="shrink-0 text-xs font-medium text-amber-900 hover:text-amber-700 underline"
+                >
+                  Review now →
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Demo-data banner — only when stub data was actually used. */}
+          {(() => {
+            const allRaw = [
+              ...data.entity_checks.map((e) => (e as unknown as Record<string, unknown>).raw_response),
+              ...data.track_record.map((t) => (t as unknown as Record<string, unknown>).raw_response),
+              ...data.litigation_checks.map((l) => (l as unknown as Record<string, unknown>).raw_response),
+              ...(data.gc_validations ?? []).map((g) => (g as unknown as Record<string, unknown>).raw_response),
+            ];
+            const hasStub = allRaw.some((r) => r && JSON.stringify(r).includes('"_demo":true'));
+            if (!hasStub) return null;
+            return (
+              <div className="rounded-md border border-info/30 bg-info/5 p-3 flex items-center gap-2">
+                <Badge variant="secondary" className="bg-info/20 text-info">
+                  DEMO DATA
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  Some check results use simulated data. Real vendor APIs will replace stub
+                  data as they are connected.
+                </p>
+              </div>
+            );
+          })()}
+
+          {!data.ai_analysis && (
+            <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Sparkles className="h-4 w-4 text-info animate-pulse shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">AI Risk Assessment is generating…</p>
+                  <p className="text-xs text-muted-foreground">
+                    Claude is analyzing the validation data. This page will update
+                    automatically — usually within 30 seconds.
+                  </p>
+                </div>
+                <div className="h-1.5 w-1.5 rounded-full bg-info animate-pulse" />
+              </CardContent>
+            </Card>
+          )}
+          {data.ai_analysis ? (
+            <AIMemo
+              rawAnalysis={data.ai_analysis}
+              pendingReviewCount={data.track_record.filter((r) => r.review_status === "pending_review").length}
+              onJumpToFactor={(key) => {
+                const el = document.getElementById(`risk-factor-${key}`);
+                el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            />
+          ) : null}
+
+          <WhyThisRating
+            tier={data.tier}
+            riskFactors={data.risk_factors ?? []}
+            borrowerId={data.primary_borrower_id}
+            validationId={data.id}
+            onSignalApplied={handleSignalApplied}
+          />
+        </div>
+
+        {/* Right — the numbers + mandate stamps at a glance */}
+        <div className="space-y-4">
+          <div className="grid gap-4 grid-cols-2">
+            <Card>
+              <CardContent className="p-4">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className="text-sm text-muted-foreground inline-flex items-center gap-1 cursor-help">
+                        Completeness
+                        <Info className="h-3 w-3 opacity-60" />
+                      </span>
+                    }
+                  />
+                  <TooltipContent side="bottom" className="max-w-sm">
+                    <div className="space-y-1.5 text-left">
+                      <p className="font-semibold">How this is computed</p>
+                      <p>Composite signal score, base 50, clamped 10–100.</p>
+                      <p>
+                        <span className="font-semibold text-emerald-300">+</span> Entity SOS active
+                        (+15) · 10+ properties (+20) / 5+ (+15) / 1+ (+10) · No active federal
+                        litigation (+10) · GC license active or N/A (+5) · Sanctions clear (+5)
+                      </p>
+                      <p>
+                        <span className="font-semibold text-red-300">−</span> Entity
+                        suspended/dissolved (−20) · Active litigation (−15) · Sanctions hit (−30)
+                      </p>
+                      <p className="opacity-70">
+                        Higher = more verified data + cleaner flags. This is not a model
+                        prediction.
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+                <p className="text-2xl font-bold mt-1">{data.confidence_score}%</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">Experience</p>
+                <div className="mt-1">
+                  <ExperienceStars tier={data.experience_tier} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">Track record</p>
+                <p className="text-2xl font-bold mt-1">
+                  {propCounts.total}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">
+                    ({propStatSub})
+                  </span>
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">Flags</p>
+                <p className="text-2xl font-bold mt-1">
+                  {flaggedLitigation.length +
+                    data.entity_checks.reduce((n, e) => n + e.flags.length, 0) +
+                    confirmedSanctions}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Capital-provider mandate stamps — full per-mandate drill-down. */}
+          <MandateAssessmentsCard validationId={data.id} />
+        </div>
+      </div>
+
+      {/* Full report — the deep drill (evidence + deal history + hand off +
+          portfolio/monitoring), demoted one disclosure level. */}
       <div className="rounded-lg border border-border">
         <button
           type="button"
@@ -433,199 +637,18 @@ export default function ValidationDetailPage() {
           className="flex w-full items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           <ChevronDown className={`h-4 w-4 transition-transform ${reportOpen ? "" : "-rotate-90"}`} />
-          Full report — evidence · AI memo · why this rating · methodology · monitoring
+          Full report — evidence · deal history · hand off · portfolio &amp; monitoring
         </button>
 
         {reportOpen && (
           <div className="space-y-6 border-t border-border p-4">
-            {/* Input warnings */}
-            {data.input_warnings && data.input_warnings.length > 0 && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-1.5">
-                <p className="text-xs font-medium uppercase tracking-wide text-amber-800">
-                  Input Warning{data.input_warnings.length > 1 ? "s" : ""}
-                </p>
-                {data.input_warnings.map((w, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm text-amber-900">
-                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    {w}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Pending-review banner — memo built off un-reviewed Flow B matches. */}
-            {(() => {
-              const pendingCount = data.track_record.filter(
-                (r) => r.review_status === "pending_review",
-              ).length;
-              if (pendingCount === 0) return null;
-              return (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 flex items-start gap-3">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-amber-900">
-                      Memo is preliminary — {pendingCount} property match
-                      {pendingCount === 1 ? "" : "es"} pending review.
-                    </p>
-                    <p className="text-xs text-amber-800 mt-0.5">
-                      We auto-discovered properties registered to a similar name but the
-                      corroborating signals aren&apos;t strong enough to auto-add. Confirm or
-                      reject in the verify tray below — the memo + tier will regenerate from
-                      your final set.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTab("evidence")}
-                    className="shrink-0 text-xs font-medium text-amber-900 hover:text-amber-700 underline"
-                  >
-                    Review now →
-                  </button>
-                </div>
-              );
-            })()}
-
-            {/* Demo-data banner — only when stub data was actually used. */}
-            {(() => {
-              const allRaw = [
-                ...data.entity_checks.map((e) => (e as unknown as Record<string, unknown>).raw_response),
-                ...data.track_record.map((t) => (t as unknown as Record<string, unknown>).raw_response),
-                ...data.litigation_checks.map((l) => (l as unknown as Record<string, unknown>).raw_response),
-                ...(data.gc_validations ?? []).map((g) => (g as unknown as Record<string, unknown>).raw_response),
-              ];
-              const hasStub = allRaw.some((r) => r && JSON.stringify(r).includes('"_demo":true'));
-              if (!hasStub) return null;
-              return (
-                <div className="rounded-md border border-info/30 bg-info/5 p-3 flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-info/20 text-info">
-                    DEMO DATA
-                  </Badge>
-                  <p className="text-sm text-muted-foreground">
-                    Some check results use simulated data. Real vendor APIs will replace stub
-                    data as they are connected.
-                  </p>
-                </div>
-              );
-            })()}
-
-            {/* Summary stat cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardContent className="p-4">
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className="text-sm text-muted-foreground inline-flex items-center gap-1 cursor-help">
-                          Completeness
-                          <Info className="h-3 w-3 opacity-60" />
-                        </span>
-                      }
-                    />
-                    <TooltipContent side="bottom" className="max-w-sm">
-                      <div className="space-y-1.5 text-left">
-                        <p className="font-semibold">How this is computed</p>
-                        <p>Composite signal score, base 50, clamped 10–100.</p>
-                        <p>
-                          <span className="font-semibold text-emerald-300">+</span> Entity SOS active
-                          (+15) · 10+ properties (+20) / 5+ (+15) / 1+ (+10) · No active federal
-                          litigation (+10) · GC license active or N/A (+5) · Sanctions clear (+5)
-                        </p>
-                        <p>
-                          <span className="font-semibold text-red-300">−</span> Entity
-                          suspended/dissolved (−20) · Active litigation (−15) · Sanctions hit (−30)
-                        </p>
-                        <p className="opacity-70">
-                          Higher = more verified data + cleaner flags. This is not a model
-                          prediction.
-                        </p>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                  <p className="text-2xl font-bold mt-1">{data.confidence_score}%</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Experience</p>
-                  <div className="mt-1">
-                    <ExperienceStars tier={data.experience_tier} />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Track record</p>
-                  <p className="text-2xl font-bold mt-1">
-                    {confirmedProps.length}
-                    <span className="text-sm font-normal text-muted-foreground ml-1">
-                      ({pendingProps.length > 0
-                        ? `+${pendingProps.length} pending review`
-                        : completedProjects.length > 0
-                          ? `${completedProjects.length} sold`
-                          : `${confirmedProps.length} current`})
-                    </span>
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Flags</p>
-                  <p className="text-2xl font-bold mt-1">
-                    {flaggedLitigation.length +
-                      data.entity_checks.reduce((n, e) => n + e.flags.length, 0) +
-                      confirmedSanctions}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Capital-provider mandate stamps — full per-mandate drill-down. */}
-            <MandateAssessmentsCard validationId={data.id} />
-
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList variant="line" className="w-full justify-start overflow-x-auto">
-                <TabsTrigger value="summary">Summary</TabsTrigger>
                 <TabsTrigger value="evidence">Evidence</TabsTrigger>
                 <TabsTrigger value="deal">Deal</TabsTrigger>
                 <TabsTrigger value="handoff">Hand off</TabsTrigger>
                 <TabsTrigger value="book">Portfolio</TabsTrigger>
               </TabsList>
-
-              <TabsContent value="summary" className="space-y-6 pt-4">
-                {!data.ai_analysis && (
-                  <Card className="border-info/30 bg-gradient-to-br from-info/5 to-transparent">
-                    <CardContent className="p-4 flex items-center gap-3">
-                      <Sparkles className="h-4 w-4 text-info animate-pulse shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">AI Risk Assessment is generating…</p>
-                        <p className="text-xs text-muted-foreground">
-                          Claude is analyzing the validation data. This page will update
-                          automatically — usually within 30 seconds.
-                        </p>
-                      </div>
-                      <div className="h-1.5 w-1.5 rounded-full bg-info animate-pulse" />
-                    </CardContent>
-                  </Card>
-                )}
-                {data.ai_analysis ? (
-                  <AIMemo
-                    rawAnalysis={data.ai_analysis}
-                    pendingReviewCount={data.track_record.filter((r) => r.review_status === "pending_review").length}
-                    onJumpToFactor={(key) => {
-                      const el = document.getElementById(`risk-factor-${key}`);
-                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    }}
-                  />
-                ) : null}
-
-                <WhyThisRating
-                  tier={data.tier}
-                  riskFactors={data.risk_factors ?? []}
-                  borrowerId={data.primary_borrower_id}
-                  validationId={data.id}
-                  onSignalApplied={handleSignalApplied}
-                />
-              </TabsContent>
 
               <TabsContent value="evidence" className="space-y-6 pt-4">
                 {/* Entity */}

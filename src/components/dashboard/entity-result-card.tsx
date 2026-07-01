@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Search, AlertTriangle, CheckCircle2, ExternalLink, Users, FileText } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle2, ExternalLink, Users, FileText, Info } from "lucide-react";
 import { formatDate } from "./shared-types";
 import type { EntityCheck } from "./shared-types";
 import { extractCobaltDetails } from "@/lib/adapters/extract";
@@ -30,6 +30,20 @@ export function EntityResultCard({
   guarantorName?: string | null;
 }) {
   const cobalt = extractCobaltDetails(data.raw_response);
+  // Free public registries (CALICO / Socrata / live DOS / Sunbiz) confirm the
+  // entity's existence + status but don't return officers, registered agent, or
+  // filing history the way paid Cobalt does. When we resolved from one of them,
+  // say so — otherwise the blank fields above read as a data gap, not a source
+  // limitation (UX audit #7). `_source` is stamped by the SOS lookup layer.
+  const entitySource = (data.raw_response as { _source?: string } | null)?._source ?? null;
+  const FREE_SOURCE_LABELS: Record<string, string> = {
+    ny_socrata: "NY DOS",
+    ny_dos_live: "NY DOS",
+    ca_calico: "CA SOS (CALICO)",
+    co_socrata: "CO SOS",
+    fl_sunbiz: "FL Sunbiz",
+  };
+  const freeSourceLabel = entitySource ? (FREE_SOURCE_LABELS[entitySource] ?? null) : null;
   const hasError = data.raw_response?._error === true;
   const agentMatchesBorrower = namesMatch(data.registered_agent, borrowerName);
   const agentMatchesGuarantor =
@@ -131,6 +145,19 @@ export function EntityResultCard({
               <p className="text-sm">{data.registered_agent ?? "—"}</p>
             </div>
           </div>
+
+          {/* Free-source disclosure — explains the blank officer/agent/filing
+              fields as a source limitation, not a missing entity. */}
+          {freeSourceLabel && (!cobalt || cobalt.officers.length === 0) && !hasError && (
+            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                Resolved from {freeSourceLabel} — a free public registry that confirms status
+                but doesn&apos;t return officers, registered agent, or filing history. Blank
+                fields above reflect the source, not a missing entity.
+              </span>
+            </div>
+          )}
 
           {/* Officers / Principals */}
           {cobalt && cobalt.officers.length > 0 && (

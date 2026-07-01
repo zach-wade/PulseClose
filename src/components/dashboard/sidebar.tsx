@@ -51,6 +51,26 @@ const navItems = [
   },
 ];
 
+// Fund / capital-provider tenant (org_type=fund): the standard is the product,
+// not the origination pipeline. A mandator sets the buy-box + watches throughput
+// — it never runs Borrowers or the Deal analyzer. Its spine is Mandates (home,
+// the Mandate Console) + Portfolio (the live loans it funds). Borrowers/Deals are
+// originator-only and hidden. (UX audit #4 — Fund as a first-class tenant.)
+const fundNavItems = [
+  {
+    label: "Mandates",
+    href: "/dashboard/capital/mandates",
+    icon: Landmark,
+    description: "The standards you set + throughput against them — the Mandate Console",
+  },
+  {
+    label: "Portfolio",
+    href: "/dashboard/portfolio",
+    icon: BookOpen,
+    description: "Watch the live loans — tier mix, outcomes, monitoring",
+  },
+];
+
 // Secondary utilities — below the spine, visually separated.
 const secondaryItems = [
   {
@@ -77,6 +97,7 @@ interface UserInfo {
   full_name: string;
   email: string;
   org_name: string;
+  org_type: string | null;
 }
 
 function NavContent({
@@ -88,6 +109,8 @@ function NavContent({
   userInfo: UserInfo | null;
   onSignOut: () => void;
 }) {
+  // Fund tenants get the mandator spine; everyone else the originator spine.
+  const primaryItems = userInfo?.org_type === "fund" ? fundNavItems : navItems;
   return (
     <>
       {/* Logo */}
@@ -119,7 +142,7 @@ function NavContent({
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => {
+        {primaryItems.map((item) => {
           // Deals lives at /dashboard/evaluate but Capital is /dashboard/evaluate/
           // investors — guard so Capital doesn't also light up Deals.
           const isActive =
@@ -231,13 +254,16 @@ export function Sidebar() {
       const meta = user.user_metadata ?? {};
       const displayName = meta.full_name || user.email?.split("@")[0] || "User";
 
-      // Try to fetch org name — use admin-safe API route instead of direct RLS query
+      // Try to fetch org name + type — use admin-safe API route instead of direct
+      // RLS query. org_type drives which nav spine renders (fund vs originator).
       let orgName = "";
+      let orgType: string | null = null;
       try {
         const res = await fetch("/api/settings");
         if (res.ok) {
           const data = await res.json();
           orgName = data.org?.name ?? "";
+          orgType = data.org?.org_type ?? null;
         }
       } catch {
         // Org name is cosmetic — don't fail the sidebar
@@ -247,6 +273,7 @@ export function Sidebar() {
         full_name: displayName,
         email: user.email ?? "",
         org_name: orgName,
+        org_type: orgType,
       });
     }
     loadUser();

@@ -257,6 +257,21 @@ function mergeRows(
   return out;
 }
 
+// Shared count so the Summary "Track record" stat card agrees with THIS table
+// (UX audit #5 — the stat counted only track_record rows and read "0" while the
+// table showed a standalone claimed-only verified_flip as "1 claimed only"). One
+// merge → one property set → one count. Callers pass the SAME filtered set they
+// render (confirmed track_record + verified_flips).
+export function unifiedPropertyCounts(
+  trackRecord: RichTrackRecord[],
+  verifiedFlips: RichVerifiedFlip[],
+): { total: number; verified: number; public_record: number; claimed_only: number; manual: number } {
+  const rows = mergeRows(trackRecord, verifiedFlips);
+  const c = { total: rows.length, verified: 0, public_record: 0, claimed_only: 0, manual: 0 };
+  for (const r of rows) c[r.provenance]++;
+  return c;
+}
+
 interface Props {
   trackRecord: RichTrackRecord[];
   verifiedFlips: RichVerifiedFlip[];

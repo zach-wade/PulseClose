@@ -517,7 +517,7 @@ export function DashboardHome() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground max-w-[200px] truncate" title={v.borrower_entity_name}>
                       {v.borrower_entity_name}
                     </TableCell>
                     <TableCell>
@@ -542,7 +542,7 @@ export function DashboardHome() {
                     <TableCell className="hidden md:table-cell">
                       <GCStatusChip summary={v.gc_summary} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {v.ai_analysis ? (
                         <Badge variant="default" className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
                           <Sparkles className="h-3 w-3" />
@@ -568,7 +568,7 @@ export function DashboardHome() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
                       {v.validation_date
                         ? new Date(v.validation_date).toLocaleDateString(
                             "en-US",
