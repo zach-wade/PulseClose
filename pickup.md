@@ -67,12 +67,39 @@ The whole sizing-engine layer is built + verified (pure modules, no UI yet):
   (residential PITIA + commercial NOI); PV max-loan proven identical to `underwrite()`. Finding #22.
 - **UW-5 live-solve** — `solve.ts` + `verify-solve.ts` (11/11). Bisection goal-seek inverts all
   sizers ("what advance hits $X cash-to-close / a target DSCR"); round-trip verified.
-All findings in `docs/CALIBRATION-FINDINGS.md` #19–22. `npx tsc --noEmit` clean; not merged (branch).
+- **Dispatcher** — `dispatch.ts` + `verify-dispatch.ts` (14/14). `sizingModeForLoanType()` routes
+  the Nexys loan_type → the right sizer (honors CALIBRATION #14 economics override); `sizeDeal()`
+  returns a mode-tagged result.
+**91 assertions total, `tsc` + lint clean.** Findings `docs/CALIBRATION-FINDINGS.md` #19–22.
+**MERGED to main + deployed 2026-07-01** (engine is dormant — imported by no surface yet, so the
+deploy is additive/safe). Vendor work merged too (VENDOR-LEDGER RentCast plan + temp-probe removal).
 
-## Remaining plan — ROADMAP Post-Damon-reset sequence
-- **NEXT:** `sizeDeal()` dispatcher (route loan-type → right sizer), then **wire into the deal
-  stepper** (UX-2 Excel-parity layout: waterfall left / constraint ladder + cushions right;
-  UW-5 sliders). Then UW-3 (surface depth layers) · UW-4 (deposits/equity).
+## RentCast / vendor note (2026-07-01)
+The 85% RentCast burn is **NOT PulseClose** (70 req lifetime, 0 last week) — it's the shared
+**`bf`/Build-Folio** key on the one $74/mo 1,000-req API Foundation plan. Owner action: put
+Build-Folio on its own RentCast account or upgrade; audit its 17.5% error rate. See VENDOR-LEDGER
+§4 + the new Plan snapshot (⚠️ CONFIRM rows = costs not yet verified against dashboards).
+
+## NEXT (paused by choice) — finish wiring the sizers into the deal stepper (UX-2)
+The engine layer is done + dormant; the remaining work is a real feature needing a **prod visual
+drive** to verify (never mark UI done without a drive — memory `feedback_verify_the_ui_not_just_data`).
+Precise steps:
+1. **Input schema** — extend `UnderwriteBody` + `uwSizingInputsV1` (Zod, `src/lib/schemas/`) with the
+   mode-specific fields: RTL (asIsValue, arv, purchaseAdvancePct, rehabFundingPct, prepaidInterestMonths,
+   closingCostsPct, tier, fico, rehabType); construction (reserveMonths, reserveDiscount, holdbackPct,
+   originationFeePct, fixedClosingCosts, maxLTC, maxLoanToARV); DSCR (monthlyRent, taxes, insurance, hoa).
+2. **API dispatch** — in `src/app/api/underwrite/route.ts` (377 lines): call `sizingModeForLoanType(loan_type, {rehabBudget, asIsValue})`
+   → `sizeDeal({mode, ...})`; return the mode-tagged `structured` result **alongside** the existing
+   `sizing` (additive, backward-compatible). Persist in `uw_models`.
+3. **Stepper form** — `src/components/dashboard/deal/deal-stepper.tsx` (1,227 lines; the audit's
+   `:851` refs are in THIS file, the `deal/` subfolder). Step ③ Sizing: show the mode-specific inputs
+   for the chosen loan_type; keep bridge inputs for Bridge.
+4. **Excel-parity result UI (UX-2)** — new components `<ProceedsWaterfall>` (advance+holdback−prepaid−closing→net→cash-to-close→equity%)
+   on the LEFT, `<ConstraintLadder cushion>` (pass/fail + headroom per test) on the RIGHT — mirroring the
+   RTL/Construction sheets. Add UW-5 `<SolveControl>` sliders (goal-seek). Spec: UX-REDESIGN-PLAN §13.2.
+5. **Prod drive** — deploy, drive `/dashboard/evaluate` for a Fix&Flip + a Ground-Up + a DSCR deal
+   (Playwright + screenshots), read them, verify the numbers match the golden fixtures on-screen.
+Then UW-3 (surface depth layers) · UW-4 (deposits/equity).
 - **Phase 2 (coherence+trust):** COH-2 mandate-reads-raw fix (HIGH) · UX-1 craft/de-AI ·
   **UX-2 persona-agnostic coherence** (owner's top priority; principle 13 / UX-REDESIGN §13).
 - **Phase 3:** A1+ rate stack (10 real investors) · CAP-1 concentration + facility-aware · CAP-2 pricing · COND-1 auto-conditions.
