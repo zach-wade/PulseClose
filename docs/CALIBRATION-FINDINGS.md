@@ -358,6 +358,17 @@ sizer ships with a `scripts/verify-*.ts` golden test; these are the model-level 
     algebraically identical to `sizing.ts underwrite()`'s DSCR constraint (assert in
     `verify-dscr-sizer.ts`) — the two engines will not drift.
 
+23. **🟡 Dispatcher DSCR branch is ASYMMETRIC — decide before the stepper wiring.**
+    `sizeDeal()` routes rtl/construction/bridge → functions that **SIZE** the loan (output a
+    max loan), but `dscr` → `dscrForLoan()`, which **evaluates a GIVEN loan** (returns DSCR
+    ratios, not a sized loan). So "size a DSCR deal" via the dispatcher doesn't return a size.
+    Not a bug (dscrForLoan is legitimate), but the name/intent implies sizing. **Decision for
+    the stepper (UX-2):** either (a) route `dscr` mode to `maxLoanByDscr()` so all modes size
+    consistently, with `dscrForLoan()` as a separate "check my requested loan" affordance, or
+    (b) rename the DSCR path to make "evaluate vs. size" explicit. Recommend (a) — it matches
+    the RTL "requested vs. sized" duality (finding #21) and keeps the dispatcher's contract
+    ("give me a deal, get a size") honest.
+
 ## Carried into the product plan (2026-07-01, Damon reset)
 
 The findings above are the evidence base for the ROADMAP

@@ -54,6 +54,12 @@ deal* (proceeds waterfall + initial-advance-vs-holdback + prepaid-interest + cas
 Tier×Rehab buy-box with cushion per test). Also: Construction Budget, DSCR/PITIA calc, Colchis
 rate-stack pricing tool, Track Record schema. `Lenders.zip` = 10 real investor guides (A1 set).
 ⚠️ The **full ICC Box folder (60GB+)** is still downloading (`~/Downloads/Unconfirmed*.crdownload`) — a MAJOR data source (every ICC deal/model/guideline/LOI); mine it when it lands.
+> **🔒 DATA-GOVERNANCE (surfaced 2026-07-01):** the Box is NOT just models — it holds
+> **BOIR/FINCEN beneficial-ownership filings, employee withholding (PII), ICC financials, and a
+> "Cyber Attack File / Captured Server Data" folder (`clients.xls`, `Event_log`)**. Treat it as
+> ICC-confidential + third-party PII under NDA. Extract ONLY the underwriting models we need;
+> do NOT ingest the Box wholesale into any repo/product/AI pipeline; the captured-server-data is
+> off-limits. Be deliberate about where 60GB of this lives and how long we keep it.
 
 ## SHIPPED this session (branch `uw1-rtl-structured-sizer`, math cross-checked to the penny)
 The whole sizing-engine layer is built + verified (pure modules, no UI yet):
