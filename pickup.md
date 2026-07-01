@@ -1,18 +1,23 @@
-# PulseClose — Session Pickup & Execution Plan (2026-07-01, rev. DAMON-RESET)
+# PulseClose — Session Pickup & Execution Plan (2026-07-01, rev. UW-ENGINE-SHIPPED)
 
 > **Self-contained handoff — start a fresh session from here.**
-> This session was **analysis + planning, no code shipped.** Reviewed the **2026-07-01
-> Damon engagement-reset demo transcript** (he saw the restructured 4-section product;
-> ICC now trialing it **July + August across both Insignia businesses**), ran three code
-> deep-reads + checked his assumptions against the real 208-loan ICC book, and reconciled
-> the sizer-vs-Solver question. Then wrote it all into the planning docs. **Everything is
-> on `main`, green, migrations unchanged (00001–00051).**
+> Arc of this session: from the **2026-07-01 Damon engagement-reset** (ICC trialing PulseClose
+> **July + August across both Insignia businesses**) → decoded ICC's real Excel models from the
+> data trove → **BUILT + shipped the whole deal-sizing engine** (RTL/fix&flip, ground-up
+> construction, DSCR, goal-seek, dispatcher — all math-verified **to the penny**) → **merged to
+> `main` + deployed.** All green; migrations unchanged (00001–00051).
 >
-> **The active plan is the ROADMAP [Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).**
-> **UPDATE:** the full sizing-engine layer is now SHIPPED + math-verified on branch
-> `uw1-rtl-structured-sizer` (UW-1 RTL+construction, UW-6 DSCR, UW-5 solve — see §SHIPPED
-> below). Next = `sizeDeal()` dispatcher + wire into the deal stepper (UX-2). Prior
-> session's SOS-coverage state is preserved below under §Critical context (still valid).
+> **The engine is DORMANT** — imported by no UI yet, so the deploy is additive/safe. **NEXT =
+> wire the shipped sizers into the deal stepper (UX-2)** — precise steps + a prod-drive gate in
+> §NEXT below.
+>
+> **⭐ NORTH STAR for the underwriting thread: REPLACE THE EXCEL** (owner-set) — an underwriter
+> opens PulseClose *instead of* their spreadsheet; every ICC model becomes a to-the-penny mode.
+> See ROADMAP §North star + **UW-7** (the Excel long-tail: MFR, requested-loan shape, per-investor
+> pricing, LOI gen). This is also the standalone cold wedge ("kill your Excel UW model").
+>
+> **Active plan:** ROADMAP [Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).
+> Prior session's SOS-coverage state is preserved under §Critical context (still valid).
 
 ## Read first (in order)
 1. **[docs/ROADMAP.md](docs/ROADMAP.md) §Post-Damon-reset sequence** — the active ordered plan (UW-1 → INT-1) + the 2026-07-01 Decisions Log entry.
@@ -26,10 +31,11 @@
 ## Where we are — headline (2026-07-01)
 On `main`, deployed green; **migrations 00001–00051 (no new migrations)**; build clean. The
 prior session's **free-SOS coverage (12 free entity states + Cobalt fallback)** is live and
-unchanged. This session found the one gap that blocks the ICC trial: **the sizing engine is
-loan-type-agnostic, but ~27% of ICC's real book is construction+F&F, and the flagship #10049
-loan is Ground-Up Construction sized as bridge** — confirming Damon's "the LPB's wrong because
-it's a construction loan." That + two coherence breaks + a craft/de-AI UX pass are the plan.
+unchanged. The gap that blocked the ICC trial — the engine was loan-type-agnostic while ~27%
+of ICC's book is construction+F&F — is now **CLOSED at the engine layer**: RTL, ground-up
+construction, and DSCR sizers all ship and reproduce ICC's real sheets to the penny. What's
+left to make it *usable* is the stepper UI (UX-2), plus the coherence fix COH-2 and the Excel
+long-tail (UW-7) toward the "replace the Excel" north star.
 
 ## Analysis + planning done this session (then the code below)
 - **Extracted the Damon reset transcript** (`~/Downloads/Damon Engagement Reset mtg 7.1.26.rtf`) →
@@ -76,7 +82,9 @@ The whole sizing-engine layer is built + verified (pure modules, no UI yet):
 - **Dispatcher** — `dispatch.ts` + `verify-dispatch.ts` (14/14). `sizingModeForLoanType()` routes
   the Nexys loan_type → the right sizer (honors CALIBRATION #14 economics override); `sizeDeal()`
   returns a mode-tagged result.
-**91 assertions total, `tsc` + lint clean.** Findings `docs/CALIBRATION-FINDINGS.md` #19–22.
+**91 assertions total, `tsc` + lint clean.** Findings `docs/CALIBRATION-FINDINGS.md` #19–23
+(#23 = dispatcher DSCR asymmetry — decide before the stepper: route DSCR mode to `maxLoanByDscr`
+so all modes SIZE, with `dscrForLoan` as a "check my number" affordance).
 **MERGED to main + deployed 2026-07-01** (engine is dormant — imported by no surface yet, so the
 deploy is additive/safe). Vendor work merged too (VENDOR-LEDGER RentCast plan + temp-probe removal).
 
@@ -157,7 +165,9 @@ Then UW-3 (surface depth layers) · UW-4 (deposits/equity).
 ## Reference
 - **Repo:** `/Users/zachwade/code/active/pulseclose` · **Prod:** https://app.pulseclose.com
 - **Vercel:** `buildfolios-projects-e8f9d80e/pulseclose` · **Supabase:** `oazwscmgyqknwatqgtyc`
-- **Commits this session:** `1fdc7a3 → f82d553` (14) · migrations **00001–00051** (unchanged)
+- **Commits this session:** the UW engine layer + docs + vendor audit (`73802d0 → 22e0614`), merged to `main`. Migrations **00001–00051** (unchanged, no new).
+- **Engine files (dormant, tested):** `src/lib/underwriting/{rtl-sizer,construction-sizer,dscr-sizer,solve,dispatch}.ts` · tests `scripts/verify-{rtl,construction,dscr,solve,dispatch}*.ts` (run all to re-green).
+- **Decoded models + golden fixtures:** `clients/insignia-capital/data/loan-sizer-trove-2026-07/` (+ README with the math).
 - **Test orgs (pw `Test1234!`):** uw@ `27296b6b-87f2-4b71-9e84-2c71f652449c` · solo@
   `db330e86-bce5-4428-9cd3-81c2a683884a` · fund@ `0aada23e-56f5-47ce-b400-a872be3daaf1` (org_type=fund)
 - **Real-loan trove:** `~/Downloads/Loan Report - All Loan Report.csv` (Nexys export). Free-coverage
@@ -177,7 +187,12 @@ git push origin main                                 # autodeploy; `vercel ls pu
 *Live keys in `.env.local`: RentCast / OpenSanctions / CourtListener / FRED / **Cobalt** ✅ · CALICO
 pending sub-approval. Free SOS state lookups need **no** keys.*
 
-## Decisions for the user (open)
-- **CALICO** — chase the CBC sub approval (bizfile@sos.ca.gov); or accept Cobalt-paid CA indefinitely.
-- **VA corp.xlsx + Iowa** — build for fuller free coverage, or leave (Cobalt covers the gaps)?
-- **Next product thread** — more free-state coverage vs. calibration vs. UX polish?
+## Decisions / open items for next session
+1. **DSCR dispatch (finding #23)** — before wiring: route `dscr` mode to `maxLoanByDscr` (SIZE) with `dscrForLoan` as "check my number"? (Recommended yes.)
+2. **COH-2 sequencing** — the mandate-reads-raw trust-killer is a live bug on the capital-partner surface Damon-as-fund sees in the trial; consider pulling it forward (ahead of / alongside the stepper) rather than leaving it in Phase 2.
+3. **RentCast (owner)** — separate Build-Folio onto its own account/plan or upgrade; audit its 17.5% error rate. PulseClose itself is fine (~0 usage).
+4. **Vendor ledger ⚠️ CONFIRM rows** — verify Supabase/Vercel/Sentry/Cobalt/Realie/Regrid/OpenSanctions/GoDaddy costs against dashboards.
+5. **ICC Box (60GB)** — when it lands, extract ONLY models; do NOT ingest wholesale (PII/FINCEN/captured-server-data — see governance note above). Check it for `ICC SFR 1-4 Construction Deck V.1.01.xlsx`.
+6. **CALICO (carried)** — chase the CBC sub approval (bizfile@sos.ca.gov); CA works via Cobalt meanwhile.
+
+**Also queued:** UW-7 (Excel long-tail → the "replace the Excel" north star) · UW-3 (surface depth layers) · UW-4 (deposits/equity).

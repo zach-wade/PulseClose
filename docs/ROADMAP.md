@@ -729,6 +729,21 @@ budget per property). Plus **10 real investor seller guides / DSCR matrices / qu
 (`Lenders.zip`) as the A1 fixture set. **This changes UW-1 from "port a buy-box" to
 "output the structured deal the way their Excel does — only better."**
 
+### ⭐ North star for the underwriting thread: REPLACE THE EXCEL
+
+The organizing goal (owner-set 2026-07-01): **an underwriter opens PulseClose instead of
+Excel.** Not "assist the spreadsheet" — *replace* it. Every ICC model becomes a mode in the
+engine, reproduced **to the penny** against the real file (the golden-fixture discipline), so
+Damon/Noah/Nikki can size + structure any deal in the app, safely, without touching Solver.
+This is also the clean **standalone cold wedge** ("kill your Excel UW model," no Elementix
+competition — see [IDEAS.md](IDEAS.md#standalone-underwriting-wedge--replace-your-excel-uw-model))
+and the concrete meaning of the "loan desk in a box" positioning in [STRATEGY.md](../STRATEGY.md).
+
+**Shipped toward it (2026-07-01):** RTL/fix&flip, ground-up construction, and DSCR modes +
+goal-seek + dispatcher — all to the penny (UW-1/5/6). **The remaining Excel long-tail (UW-7,
+below) is what makes the "replace" claim fully true.** Track fidelity as *models replaced /
+models ICC uses*.
+
 ### The plan — phased, ordered for the trial then the debut
 
 **Guiding order:** (Phase 1) make the engine model his *real* deals — the July/Aug trial
@@ -809,6 +824,22 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
 6. **UW-4 — Deposits / equity-contribution input (bundle with UW-1).** Add optional
    earnest/deposit/equity-source inputs so equity-required reconciles to the real capital
    stack — matters most on construction. *Stage: Route.*
+7. **UW-7 — Excel long-tail: the modes that make "replace the Excel" fully true.** Beyond the
+   three shipped sizers, ICC uses more model shapes; each is a golden-fixture-backed mode:
+   - **MFR value-add / stabilized** — the `MFR - Bridge or Stabilized.xlsx` + `MFR - Rehab
+     Deck.xlsx` models (multi-year cash-flow, rent-roll, stabilized DSCR). The income-based
+     `underwrite()` covers part of this; the rent-roll + multi-year ramp is the gap.
+   - **Requested-loan / "check my number" shape** — the `Loan Sizer for Park Place` variant
+     (loan is an INPUT → LTC/LTARV/LTAIS + cash shortage). Pairs with finding #21; every mode
+     should offer both "size it for me" and "check my requested loan."
+   - **Per-investor pricing (Colchis-style rate stack)** — the `ColchisScenarioTool` shape:
+     eligibility box (LTV limited by loan-amount × DSCR × product) + buyup/buydown rate stack.
+     Overlaps **A1+** (Phase 3) — build once, use in both.
+   - **LOI generation** — the `ICC Construction/Bridge/Flip LOI` templates: turn a sized deal
+     into the term sheet ICC actually sends. Closes the loop from size → structure → LOI.
+   - **Resolve finding #23** (dispatcher DSCR asymmetry) as part of this — every mode SIZES,
+     with a consistent "check my number" affordance.
+   *Track "models replaced / models ICC uses" as the fidelity metric.* *Stage: Route.*
 
 #### Phase 2 — Coherence + trust (one thing that makes sense to anyone)
 
