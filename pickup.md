@@ -101,8 +101,23 @@ Steers taken: **two-column Summary** + **fund-specific nav**. All shipped + re-d
 ---
 
 ## Critical context (carry forward — non-negotiable)
-- **CALICO key — STILL pending approval.** CA (69% of the ICC book) is parked until approved;
-  no local action possible.
+- **CALICO — "Submitted" 5+ days; CA is NO LONGER hard-blocked (Cobalt key restored).**
+  The subscription screenshot shows **CBC API Production** + **UCC UAT** both "Submitted"
+  (req. 06/25). Research verdict: **CBC is the one we need and is normally SELF-SERVE** —
+  stuck = anomaly (likely unclicked signup-confirmation email, or a per-product approval flag).
+  **UCC UAT is irrelevant (we don't file UCC) and will never clear without a manual UCC
+  Support Center call — cancel it.** Escalate CBC via **bizfile@sos.ca.gov / (916) 653-6814**
+  (no dedicated CALICO address exists). API split: portal `calicodev.sos.ca.gov` vs API host
+  `calico.sos.ca.gov` (prod `/cbc/v1/api/`, UAT `/cbc/uat/v1/api/`, header
+  `Ocp-Apim-Subscription-Key`). **With Cobalt re-keyed, CA now falls back to Cobalt (paid ~$5,
+  functional) — CALICO is a free-vs-paid OPTIMIZATION, not a launch blocker.**
+- **Cobalt key RESTORED (2026-06-30):** new working key set in `.env.local` +
+  Vercel prod (old 64-day trial key removed), auth-verified live (SC search → 202+retryId),
+  prod redeployed. The 50-state paid fallback is live again — un-parks every non-free state.
+- **Free-live SOS now CA(key)·CO·NY·TX·FL(bulk):** **TX shipped free** this session
+  (`sos-free.ts lookupTxComptroller` — Comptroller franchise-tax API, agent+officers+status,
+  no formation date). WA/SC have **no free path** (WA Turnstile + bulk killed Aug 2024; SC
+  reCAPTCHA + paid UCC-only bulk) → stay on Cobalt. See docs/RESEARCH-SOS-50-STATE.md §Update.
 - **FL bulk reality:** COVERAGE.md's "FL fully covered" is **optimistic** — the `fl_sunbiz`
   cache has only **3,167 partial rows** (one daily file); the statewide load hasn't run
   (path fixed this session; needs CI). **FL GC (DBPR) IS fully cached** (~142k rows).
