@@ -772,8 +772,13 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
      `dscrForLoan`, commercial NOI max-loan `maxLoanByDscr`) — and asserts the PV max-loan is
      identical to `underwrite()`'s DSCR constraint (no engine drift). Finding logged
      ([#22](CALIBRATION-FINDINGS.md): label which DSCR convention is shown).
-   - **All three sizing modes now shipped + math-verified.** Next: wire them into the deal
-     stepper (UX-2 Excel-parity layout + UW-5 live-solve).
+   - **All three sizing modes now shipped + math-verified**, plus **UW-5 live-solve**
+     ([solve.ts](../src/lib/underwriting/solve.ts)) and a **dispatcher capstone**
+     ([dispatch.ts](../src/lib/underwriting/dispatch.ts) — `sizingModeForLoanType()` routes
+     the Nexys loan_type → the right sizer, honoring CALIBRATION #14's economics override;
+     `sizeDeal()` returns a mode-tagged result; [verify-dispatch.ts](../scripts/verify-dispatch.ts)
+     14/14). The full engine layer is done; **next is UI: wire into the deal stepper**
+     (UX-2 Excel-parity layout + UW-5 sliders), then UW-3 (depth layers) + UW-4 (deposits).
    *Stage: Route / underwrite.*
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
    trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
@@ -902,8 +907,9 @@ never sets the number or the tier (same spine as always).
 
 ### 2026-07-01 (b) — ICC data trove decoded → expanded phased plan
 ICC handed over a large data trove (`~/Downloads`: `Loan Sizer.zip`, `Insignia Capital
-Corp.zip` 1.5GB, `Lenders.zip` 122MB, `Consumer Bridge.zip`, + a 16GB+ server image still
-downloading). Decoded the **product-relevant models** and pulled them into
+Corp.zip` 1.5GB, `Lenders.zip` 122MB, `Consumer Bridge.zip`, + the **full ICC Box folder
+(60GB+)** still downloading — a major future data source, every ICC deal/model/guideline/LOI).
+Decoded the **product-relevant models** and pulled them into
 `clients/insignia-capital/data/loan-sizer-trove-2026-07/` (with a README documenting the
 decoded logic + golden fixtures). Crown jewel: **`RTL_Loan_Sizer_Fillable.xlsx`** (Noah,
 2026-06-23) — the fix&flip sizer, which produces a **structured deal** (proceeds waterfall,

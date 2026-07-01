@@ -8,9 +8,11 @@
 > the sizer-vs-Solver question. Then wrote it all into the planning docs. **Everything is
 > on `main`, green, migrations unchanged (00001–00051).**
 >
-> **The active plan is now the ROADMAP [Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).**
-> Next code work = **UW-1 (construction sizing in the engine).** Prior session's
-> SOS-coverage state is preserved below under §Critical context (still valid).
+> **The active plan is the ROADMAP [Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).**
+> **UPDATE:** the full sizing-engine layer is now SHIPPED + math-verified on branch
+> `uw1-rtl-structured-sizer` (UW-1 RTL+construction, UW-6 DSCR, UW-5 solve — see §SHIPPED
+> below). Next = `sizeDeal()` dispatcher + wire into the deal stepper (UX-2). Prior
+> session's SOS-coverage state is preserved below under §Critical context (still valid).
 
 ## Read first (in order)
 1. **[docs/ROADMAP.md](docs/ROADMAP.md) §Post-Damon-reset sequence** — the active ordered plan (UW-1 → INT-1) + the 2026-07-01 Decisions Log entry.
@@ -29,7 +31,7 @@ loan-type-agnostic, but ~27% of ICC's real book is construction+F&F, and the fla
 loan is Ground-Up Construction sized as bridge** — confirming Damon's "the LPB's wrong because
 it's a construction loan." That + two coherence breaks + a craft/de-AI UX pass are the plan.
 
-## Done this session (docs only — no code)
+## Analysis + planning done this session (then the code below)
 - **Extracted the Damon reset transcript** (`~/Downloads/Damon Engagement Reset mtg 7.1.26.rtf`) →
   memories `project_damon_engagement_reset_2026-07-01` + `project_damon_excel_model_moat`.
 - **Checked his assumptions vs. real data:** #10049 (99 TO 100 LLC) **is Ground-Up Construction**;
@@ -51,26 +53,31 @@ ICC handed over a large data trove. Product-relevant models decoded + pulled int
 deal* (proceeds waterfall + initial-advance-vs-holdback + prepaid-interest + cash-to-close +
 Tier×Rehab buy-box with cushion per test). Also: Construction Budget, DSCR/PITIA calc, Colchis
 rate-stack pricing tool, Track Record schema. `Lenders.zip` = 10 real investor guides (A1 set).
-⚠️ A **16GB+ server image is still downloading** (`~/Downloads/Unconfirmed*.crdownload`) — analyze when it lands.
+⚠️ The **full ICC Box folder (60GB+)** is still downloading (`~/Downloads/Unconfirmed*.crdownload`) — a MAJOR data source (every ICC deal/model/guideline/LOI); mine it when it lands.
 
-## Active plan — ROADMAP Post-Damon-reset sequence (5 phases). NEXT: build UW-1.
+## SHIPPED this session (branch `uw1-rtl-structured-sizer`, math cross-checked to the penny)
+The whole sizing-engine layer is built + verified (pure modules, no UI yet):
+- **UW-1 RTL/fix&flip** — `src/lib/underwriting/rtl-sizer.ts` + `scripts/verify-rtl-sizer.ts`
+  (30/30, reproduces `RTL_Loan_Sizer` Option_1 to the penny: proceeds waterfall + advance/
+  holdback split + Tier×Rehab buy-box + cushions).
+- **UW-1 ground-up construction** — `construction-sizer.ts` + `verify-construction-sizer.ts`
+  (21/21). The "Solver" = a **circular capitalized interest reserve** that solves in **closed
+  form** (`TotalLoan = base/(1−k)`); proven `closed-form == fixed-point`. 2 findings (#19/#20).
+- **UW-6 DSCR** — `dscr-sizer.ts` + `verify-dscr-sizer.ts` (15/15). Both DSCR conventions
+  (residential PITIA + commercial NOI); PV max-loan proven identical to `underwrite()`. Finding #22.
+- **UW-5 live-solve** — `solve.ts` + `verify-solve.ts` (11/11). Bisection goal-seek inverts all
+  sizers ("what advance hits $X cash-to-close / a target DSCR"); round-trip verified.
+All findings in `docs/CALIBRATION-FINDINGS.md` #19–22. `npx tsc --noEmit` clean; not merged (branch).
 
-- **Phase 1 (do first, trial-blocking):** UW-1 structured RTL/construction sizing (waterfall +
-  holdback split + interest-reserve + deal-type buy-box + cushions, per the decoded RTL sizer) ·
-  UW-2 golden fixtures to-the-penny · UW-5 live-solve/goal-seek · UW-6 DSCR income-approach ·
-  UW-3 surface depth layers · UW-4 deposits/equity.
+## Remaining plan — ROADMAP Post-Damon-reset sequence
+- **NEXT:** `sizeDeal()` dispatcher (route loan-type → right sizer), then **wire into the deal
+  stepper** (UX-2 Excel-parity layout: waterfall left / constraint ladder + cushions right;
+  UW-5 sliders). Then UW-3 (surface depth layers) · UW-4 (deposits/equity).
 - **Phase 2 (coherence+trust):** COH-2 mandate-reads-raw fix (HIGH) · UX-1 craft/de-AI ·
-  **UX-2 persona-agnostic coherence** (owner's top priority — one Deal object, one verdict,
-  Excel-parity layout, cushions everywhere, scenario compare; principle 13 / UX-REDESIGN §13).
-- **Phase 3 (best-execution+capital):** A1+ rate stack across 10 real investors · CAP-1
-  concentration + facility-aware sizing · CAP-2 pricing/margin overlay · COND-1 auto-conditions.
-- **Phase 4 (moat):** AN-1 cost benchmarking · AN-2 reserve adequacy · AN-3 sponsor capacity ·
-  AN-4 calibrate-to-outcomes.
+  **UX-2 persona-agnostic coherence** (owner's top priority; principle 13 / UX-REDESIGN §13).
+- **Phase 3:** A1+ rate stack (10 real investors) · CAP-1 concentration + facility-aware · CAP-2 pricing · COND-1 auto-conditions.
+- **Phase 4 (moat):** AN-1 cost benchmarking · AN-2 reserve adequacy · AN-3 sponsor capacity · AN-4 calibrate-to-outcomes.
 - **Phase 5:** INT-1 Salesforce · Consumer Bridge (logged adjacency, not built).
-
-**Starting now: UW-1** — read `src/lib/underwriting/sizing.ts` + `scripts/fidelity-score.ts`
-`buyBoxFor`, implement the structured waterfall + tier×rehab buy-box + cushions, then UW-2
-golden fixtures (RTL Option_1 → Max Loan $2,422,000, Net $2,200,000, CTC $294,999).
 
 **[USER / NON-PRODUCT ACTIONS]**
 - **Email Damon the AAPL conference info** (Nov 9–11, Vegas) — he asked, can't find it.
