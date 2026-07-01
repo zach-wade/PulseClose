@@ -211,7 +211,46 @@ return none). Everything else is an open-JSON-API one-off (TX-style), a CAPTCHA 
 | 🔴 **HARD-PAID → Cobalt** | **AZ, GA, IN, MO, SC, WA, DE** | reCAPTCHA/Cloudflare/Turnstile wall or paid-only bulk ($1k–$9.5k). DE = the SPV-formation residual. |
 | ⚪ **Not probed (low ICC volume; Cobalt covers)** | remaining ~30 states | Socrata ruled out by the catalog scan; would need per-state open-API probing — not worth it at 0–2 loans each |
 
-**Build notes for the shipped three** (`sos-free.ts` `SOCRATA_SOURCES`):
+### COMPLETE 50-state + DC matrix (2026-06-30) — every state has a verdict
+
+All probed live from a **datacenter IP** (our constraint: Vercel + GitHub Actions are
+datacenter IPs, so anything CAPTCHA/Cloudflare/Incapsula/DataDome/WAF-403 is unusable
+for us even when "free" in a browser). **10 free-live + FL bulk shipped; VA/IA are
+buildable free-bulk; the other ~38 route to Cobalt (now re-keyed).**
+
+**✅ FREE-LIVE — shipped (`sos-free.ts`, per-request, datacenter-friendly):**
+`CA`* (CALICO API — *needs key), `CO` (Socrata), `CT` (Socrata), `DC` (ArcGIS FeatureServer),
+`ID` (FirstStop API), `ND` (FirstStop API), `NY` (Socrata + DOS live), `OR` (Socrata),
+`PA` (Socrata), `TX` (Comptroller API).
+
+**🟢 FREE-BULK — buildable (periodic ingest → `sos_entities`, like FL; NOT yet built):**
+- `FL` — Sunbiz SFTP (**shipping — full load running now**).
+- `VA` — data.virginia.gov **CKAN CSV** (SCC dump: status + formation + agent + **officers** in a
+  joinable file; 420 MB). **We already ingest VA GC → VA would be a full free entity+GC E2E state.**
+- `IA` — Iowa Data Hub **JSON dump** (`idh-be.iowa.gov/api/v1/datasets/554/rows.json`, ~225 MB,
+  active-only so presence=active, agent yes, **no status/officers**).
+
+**🔴 → COBALT (paid fallback; blocker in parens):** `AL` (IP-block/scraper), `AK` (DataDome),
+`AZ` (reCAPTCHA+paid), `AR` (CAPTCHA), `DE` (CAPTCHA+paid — SPV state), `GA` (Cloudflare+paid),
+`HI` (AWS-ELB 403), `IL` (WAF 403+paid), `IN` (reCAPTCHA+$9.5k), `KS` (CAPTCHA), `KY` (scraper+$2k/mo),
+`LA` ($500/yr API), `ME` (reCAPTCHA), `MD` (scraper, no CAPTCHA — medium), `MA` (Incapsula),
+`MI` (Cloudflare), `MN` (app-gated bulk), `MS` (free API but **IP-blocks datacenter**), `MO` (403 scraper),
+`MT` (FirstStop app but **Cloudflare-walled**), `NE` (paid bulk), `NV` (Incapsula), `NH` (403),
+`NJ` (scraper, no CAPTCHA — medium), `NM` (session-gated SPA API), `NC` (WAF 403+paid),
+`OH` (**WAF 403 from datacenter** on search+API+bulk page — free-for-browsers only), `OK` (scraper+$5/entity),
+`RI` (Cloudflare), `SC` (reCAPTCHA), `SD` (reCAPTCHA), `TN` (scraper+$1k bulk), `UT` (Cloudflare),
+`VT` (403), `WA` (Turnstile + bulk killed Aug 2024), `WV` (reCAPTCHA), `WI` (paid bulk), `WY` (CAPTCHA).
+
+**Takeaways:** (1) The free-feed universe is now essentially exhausted — three access patterns
+carry it: Socrata open-data (CO/NY/CT/OR/PA), open no-auth JSON APIs (TX/NY-DOS/ID/ND FirstStop),
+and open ArcGIS (DC). (2) **The dominant blocker is bot-protection, not paywalls** — dozens of
+states have the data behind Cloudflare/Incapsula/DataDome/reCAPTCHA that 403s our datacenter IPs.
+(3) `VA` + `IA` are the two remaining *datacenter-friendly free* wins, but both are **bulk-file**
+ingests (a CI cron + `sos_entities` upsert, like FL — a bigger lift than the live adapters).
+(4) `MT`/`NM`/`OH`/`MS` are the frustrating near-misses: genuinely free feeds that only block
+*datacenter* IPs — a residential-proxy egress would unlock them, but that's infra we don't run.
+
+**Build notes for the Socrata three** (`sos-free.ts` `SOCRATA_SOURCES`):
 - **CT** `data.ct.gov/n7gp-d28j` (1.28M rows) — real `status` column (Active/Forfeited→suspended/
   Dissolved→dissolved) + `date_registration`. Agent/principals in sibling datasets
   (`qh2m-n44y`/`ka36-64k6`, join by account number) — a later enrichment.

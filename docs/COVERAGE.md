@@ -51,9 +51,15 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
 
 - Lookup order: `sos_entities` cache → free source (CALICO/Socrata/TX CPA/FL bulk) →
   Cobalt fallback → cache the result back.
-- **Free-live SOS is now CA(key)·CO·CT·NY·OR·PA·TX** + FL bulk. CT/PA/OR all fit the
-  Socrata `SocrataSOSSource` pattern (`sos-free.ts`) — presence=active for PA/OR (miss →
-  null → Cobalt, never a false "dissolved"); CT carries a real status column.
+- **Free-live SOS is now CA(key)·CO·CT·DC·ID·ND·NY·OR·PA·TX** (10 states) + FL bulk —
+  via three datacenter-friendly patterns: Socrata (CO/NY/CT/OR/PA), open JSON API
+  (TX Comptroller · NY DOS · ID/ND FirstStop), open ArcGIS (DC). See the **complete
+  50-state matrix** in [RESEARCH-SOS-50-STATE.md](RESEARCH-SOS-50-STATE.md) §Complete matrix.
+- **`VA` + `IA` are the two remaining free wins** but are **bulk-file** ingests (CI cron →
+  `sos_entities`, like FL) — not yet built. VA is highest-value (full fields incl. officers,
+  and we already ingest VA GC → full free entity+GC E2E state).
+- **Everything else → Cobalt** (re-keyed): the dominant blocker is bot-protection
+  (Cloudflare/Incapsula/DataDome/reCAPTCHA/WAF-403 that 403s our datacenter IPs), not paywalls.
 - **CALICO key: free — the official CA SOS "BE Public Search" API Guide describes
   instant self-serve** (sign up → confirm email → subscribe → copy
   `Ocp-Apim-Subscription-Key`), **no documented approval queue** (minutes, not weeks;
