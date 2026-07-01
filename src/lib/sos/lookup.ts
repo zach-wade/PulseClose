@@ -22,7 +22,7 @@ const CACHE_TTL_DAYS = 60;
 // The free-state sources (ca_calico, co_socrata, ny_socrata) are LIVE-fetched
 // single lookups, so — like cobalt_cache — they respect the TTL above and
 // re-fetch (still $0) when stale.
-const ALWAYS_FRESH_SOURCES = new Set<string>(["fl_sunbiz"]);
+const ALWAYS_FRESH_SOURCES = new Set<string>(["fl_sunbiz", "va_scc"]);
 
 interface SosRow {
   state: string;

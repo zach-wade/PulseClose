@@ -27,6 +27,10 @@ on:
         type: choice
         options: [daily, full]
         default: daily
+      state:
+        description: "Optional: limit to one state (e.g. VA, FL). Blank = all sources."
+        type: string
+        default: ""
 
 concurrency:
   group: refresh-sos-entities
@@ -59,5 +63,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           M="${{ steps.m.outputs.mode }}"
-          echo "Running SOS ingest mode: $M"
-          npx tsx scripts/ingest-sos.ts --$M
+          STATE="${{ github.event.inputs.state }}"
+          echo "Running SOS ingest mode: $M${STATE:+, state: $STATE}"
+          npx tsx scripts/ingest-sos.ts --$M ${STATE:+--state "$STATE"}

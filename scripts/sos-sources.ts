@@ -6,7 +6,7 @@
 // FL Sunbiz is a fixed-width 1440-char ASCII record. Other states (CA CALICO,
 // WA/CO/OR) will be added as separate configs with their own `kind`.
 
-import { normName, sunbizDate, type SosEntityRow, type SosOfficer } from "./_sos-ingest";
+import { normName, sunbizDate, usOrIsoDate, type SosEntityRow, type SosOfficer } from "./_sos-ingest";
 
 export interface SftpCoords {
   host: string;
@@ -31,7 +31,18 @@ export interface FixedWidthSource {
   map: (line: string) => SosEntityRow | null;
 }
 
-export type SosSource = FixedWidthSource;
+// A CSV-over-HTTPS bulk source (VA SCC open-data). One or more CSV files, each
+// with a header row; `map` receives a { header: value } record (values already
+// trimmed by the runner) and returns a row or null to skip. No SFTP, no unzip.
+export interface CsvUrlSource {
+  state: string;
+  source: string;
+  kind: "csv-url";
+  urls: string[];
+  map: (row: Record<string, string>) => SosEntityRow | null;
+}
+
+export type SosSource = FixedWidthSource | CsvUrlSource;
 
 // ── FL — Sunbiz cordata fixed-width 1440-char records (Ch.119 public) ─────────
 // Layout per the documented cordata spec. 1-indexed start S, length L:
@@ -124,4 +135,41 @@ const FL: FixedWidthSource = {
   },
 };
 
-export const SOURCES: SosSource[] = [FL];
+// ── VA — State Corporation Commission open-data CSV bulk (data.virginia.gov) ──
+// Free CKAN download, no auth, datacenter-friendly. The LLC file is the priority
+// (bridge borrowers are overwhelmingly LLCs); the Corp file is XLSX (deferred).
+// Every field is space-padded → trim. Status = ACTIVE|INACTIVE; IncorpDate is the
+// formation date (mixed M/D/YYYY + YYYY-MM-DD in one file); RA-Name = agent. With
+// VA GC (DPOR) already ingested, this makes VA a full free entity+GC state.
+const VA: CsvUrlSource = {
+  state: "VA",
+  source: "va_scc",
+  kind: "csv-url",
+  urls: [
+    "https://data.virginia.gov/dataset/cdb25eb3-b177-42c6-97e9-be2b170fd778/resource/6d55efe1-1784-414a-a38e-ce1f6b4be5fe/download/llc.csv",
+  ],
+  map(r): SosEntityRow | null {
+    const name = (r["Name"] ?? "").trim();
+    if (!name) return null;
+    const status = (r["Status"] ?? "").trim().toUpperCase() === "ACTIVE" ? "active" : "dissolved";
+    return {
+      state: "VA",
+      normalized_name: normName(name) ?? "",
+      entity_name: name,
+      entity_type: "Limited Liability Company",
+      status,
+      formation_date: usOrIsoDate(r["IncorpDate"]),
+      last_filing_date: null,
+      registered_agent: (r["RA-Name"] ?? "").trim() || null,
+      officers: [],
+      source: "va_scc",
+      source_url: "https://cis.scc.virginia.gov/EntitySearch/Index",
+      raw: {
+        entity_id: (r["EntityID"] ?? "").trim(),
+        status_reason: (r["StatusReason"] ?? "").trim(),
+      },
+    };
+  },
+};
+
+export const SOURCES: SosSource[] = [FL, VA];

@@ -26,7 +26,7 @@ export interface SosRow {
   note?: string;
 }
 
-const SOS_FREE_BULK = ["FL"] as const;
+const SOS_FREE_BULK = ["FL", "VA"] as const;
 
 // Each free-live state resolves via a different official source, not all Socrata:
 // CA = CALICO API, CO = Socrata open-data, NY = Socrata + live DOS fallback,

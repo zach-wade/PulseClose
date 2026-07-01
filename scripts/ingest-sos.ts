@@ -21,11 +21,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createInterface } from "node:readline";
+import { Readable } from "node:stream";
 import SftpClient from "ssh2-sftp-client";
 import { Open as unzipOpen } from "unzipper";
 import { getClient } from "./_contractor-ingest";
-import { upsertBatch, type SosEntityRow } from "./_sos-ingest";
-import { SOURCES, type SosSource, type FixedWidthSource } from "./sos-sources";
+import { upsertBatch, parseCsvFields, csvQuotesBalanced, type SosEntityRow } from "./_sos-ingest";
+import { SOURCES, type SosSource, type FixedWidthSource, type CsvUrlSource } from "./sos-sources";
 
 interface Options {
   mode: "daily" | "full";
@@ -208,12 +209,84 @@ async function downloadFullParts(src: FixedWidthSource, workDir: string): Promis
   return txtPaths;
 }
 
+// Stream a CSV-over-HTTPS bulk source (VA SCC). Downloads each file, parses it
+// record-by-record (accumulating across lines for quoted newlines), maps + flushes
+// in bounded batches so peak memory stays flat even on the 400 MB+ LLC file. No
+// intermediate file on disk — we pipe the HTTP body straight through readline.
+async function runCsvSource(
+  supabase: ReturnType<typeof getClient>,
+  src: CsvUrlSource,
+  opts: Options,
+): Promise<void> {
+  let read = 0;
+  let mapped = 0;
+  let upserted = 0;
+  let deduped = 0;
+  for (const url of src.urls) {
+    console.log(`  downloading ${url.split("/").pop()} …`);
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok || !res.body) {
+      console.warn(`  ${url} → HTTP ${res.status} — skipping`);
+      continue;
+    }
+    const rl = createInterface({
+      input: Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]),
+      crlfDelay: Infinity,
+    });
+    let header: string[] | null = null;
+    let pending = "";
+    let batch: SosEntityRow[] = [];
+    const flush = async () => {
+      if (batch.length === 0) return;
+      const r = await upsertBatch(supabase, batch);
+      upserted += r.upserted;
+      deduped += r.deduped;
+      batch = [];
+      if (upserted % 50000 === 0) console.log(`  …${upserted} upserted`);
+    };
+    for await (const line of rl) {
+      pending = pending ? `${pending}\n${line}` : line;
+      if (!csvQuotesBalanced(pending)) continue; // newline inside a quoted field
+      let record = pending;
+      pending = "";
+      if (record.charCodeAt(0) === 0xfeff) record = record.slice(1); // strip BOM
+      const fields = parseCsvFields(record).map((f) => f.trim());
+      if (!header) {
+        header = fields;
+        continue;
+      }
+      read += 1;
+      const rec: Record<string, string> = {};
+      for (let i = 0; i < header.length; i += 1) rec[header[i]] = fields[i] ?? "";
+      const row = src.map(rec);
+      if (!row || !row.normalized_name) continue;
+      if (opts.activeOnly && row.status !== "active") continue;
+      mapped += 1;
+      batch.push(row);
+      if (batch.length >= 5000) await flush();
+    }
+    await flush();
+    console.log(`  ${url.split("/").pop()}: read ${read}, mapped ${mapped}, upserted ${upserted}`);
+  }
+  console.log(`Done. ${src.state}: read ${read}, mapped ${mapped}, upserted ${upserted}, in-batch deduped ${deduped}.`);
+}
+
 async function runSource(
   supabase: ReturnType<typeof getClient>,
   src: SosSource,
   opts: Options,
 ): Promise<void> {
   console.log(`\n── ${src.state} (${src.source}) — ${opts.mode}${opts.activeOnly ? ", active-only" : ", all"} ──`);
+  if (src.kind === "csv-url") {
+    // CSV bulk files are full snapshots (hundreds of MB) — only pull on --full,
+    // never on the small daily cron.
+    if (opts.mode === "daily") {
+      console.log("  (csv-url source — skipped in daily mode; runs on --full)");
+      return;
+    }
+    await runCsvSource(supabase, src, opts);
+    return;
+  }
   const workDir = join(tmpdir(), `sos-ingest-${src.state}-${Date.now()}`);
   await mkdir(workDir, { recursive: true });
   try {

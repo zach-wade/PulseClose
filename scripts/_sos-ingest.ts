@@ -66,6 +66,54 @@ export function sunbizDate(input: string | null | undefined): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Parse M/D/YYYY (VA SCC) or YYYY-MM-DD (mixed in the same VA file) → YYYY-MM-DD.
+// Rejects blanks and out-of-range placeholders (VA uses "12/31/9999" for "no end").
+export function usOrIsoDate(input: string | null | undefined): string | null {
+  const s = (input ?? "").trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const y = +m[1];
+    return y >= 1800 && y <= 2100 ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null;
+  }
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const y = +m[3];
+    return y >= 1800 && y <= 2100 ? `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : null;
+  }
+  return null;
+}
+
+// Split one CSV record into fields — RFC-4180 quoting: quoted fields, '""' = a
+// literal quote, commas inside quotes aren't separators. VA space-pads every
+// field, so callers .trim() the results.
+export function parseCsvFields(record: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < record.length; i += 1) {
+    const c = record[i];
+    if (inQ) {
+      if (c === '"') {
+        if (record[i + 1] === '"') { cur += '"'; i += 1; }
+        else inQ = false;
+      } else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { out.push(cur); cur = ""; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+// A CSV record is complete only when its quotes balance — a quoted field may
+// contain a newline, so the streaming reader accumulates lines until this is true.
+export function csvQuotesBalanced(s: string): boolean {
+  let n = 0;
+  for (let i = 0; i < s.length; i += 1) if (s[i] === '"') n += 1;
+  return n % 2 === 0;
+}
+
 // Within a single ingest run multiple records can share a canonical name (FL has
 // many name collisions). The PK is (state, normalized_name), so we must collapse
 // them BEFORE upsert. Rule: ACTIVE beats inactive; among same status, the most
