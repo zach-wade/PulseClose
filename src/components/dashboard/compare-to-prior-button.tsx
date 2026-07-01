@@ -25,12 +25,13 @@ function fmtPriorLabel(priorCreatedAt: string, currentCreatedAt: string): string
     prior.getMonth() === current.getMonth() &&
     prior.getDate() === current.getDate();
 
+  // Name the target ("prior run") so the label isn't a bare timestamp — a naked
+  // "Compare to 5:35 PM" reads as cryptic (UX audit finding). Time/date only
+  // disambiguates multiple runs; it rides alongside the noun.
   if (sameDay) {
-    // Same-day: show time so multiple test runs in one day don't all
-    // collapse to "Compare to 5/1".
-    return `Compare to ${prior.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    return `Compare to prior run · ${prior.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   }
-  return `Compare to ${prior.toLocaleDateString([], { month: "numeric", day: "numeric", year: "2-digit" })}`;
+  return `Compare to prior run · ${prior.toLocaleDateString([], { month: "numeric", day: "numeric", year: "2-digit" })}`;
 }
 
 export function CompareToPriorButton({

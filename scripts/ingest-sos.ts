@@ -144,10 +144,20 @@ async function connectSftp(src: FixedWidthSource): Promise<SftpClient> {
 // with exponential backoff so DNS/network can settle.
 async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip: string, attempts = 12): Promise<void> {
   for (let i = 1; i <= attempts; i++) {
-    const start = existsSync(localZip) ? statSync(localZip).size : 0;
+    let start = existsSync(localZip) ? statSync(localZip).size : 0;
     let sftp: SftpClient | null = null;
     try {
       sftp = await connectSftp(src);
+      // Guard cross-run resume against a stale/complete partial: if the remote
+      // size is known, a partial ≥ remote is either done (==) or stale (>) — in
+      // the stale case restart from 0 so we never append to an outdated file.
+      const remoteSize = await sftp.stat(remote).then((s) => s.size).catch(() => 0);
+      if (remoteSize > 0 && start >= remoteSize) {
+        if (start === remoteSize) { console.log(`  already complete (${(start / 1e6).toFixed(0)}MB)`); return; }
+        console.warn(`  local partial ${(start / 1e6).toFixed(0)}MB > remote ${(remoteSize / 1e6).toFixed(0)}MB — restarting`);
+        await rm(localZip, { force: true });
+        start = 0;
+      }
       const ws = createWriteStream(localZip, { flags: start > 0 ? "a" : "w" });
       // ssh2-sftp-client.get() accepts a writable dst + readStreamOptions; `start`
       // makes the server read from that byte offset so we resume, not restart.
@@ -171,10 +181,15 @@ async function fastGetWithRetry(src: FixedWidthSource, remote: string, localZip:
 // single entry to a .txt the parser can read.
 async function downloadFullParts(src: FixedWidthSource, workDir: string): Promise<string[]> {
   const txtPaths: string[] = [];
+  // The full zip persists in a STABLE cache dir (not the ephemeral workDir that's
+  // rm'd after each run) so a killed/blocked multi-GB download resumes on the next
+  // invocation instead of restarting. The .txt still unzips into workDir.
+  const cacheDir = join(tmpdir(), `pulseclose-sos-cache-${src.state}`);
+  await mkdir(cacheDir, { recursive: true });
   {
     for (const zipName of src.fullFiles) {
       const remote = `${src.fullDir}/${zipName}`;
-      const localZip = join(workDir, zipName);
+      const localZip = join(cacheDir, zipName);
       console.log(`  downloading ${remote} …`);
       await fastGetWithRetry(src, remote, localZip);
       // Unzip the single entry to a .txt and record its path.

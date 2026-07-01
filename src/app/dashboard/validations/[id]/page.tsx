@@ -313,6 +313,14 @@ export default function ValidationDetailPage() {
   }
 
   const completedProjects = data.track_record.filter((t) => t.outcome === "completed");
+  // Confirmed vs pending-review split — the "Properties Found" stat used to count
+  // ALL track_record rows, so it read "6" while the track table showed "1
+  // properties" and the verify tray "6 to review" (the inconsistency the review
+  // flagged). Lead with the CONFIRMED count; surface pending as a review sub-label.
+  const confirmedProps = data.track_record.filter(
+    (r) => r.review_status !== "pending_review" && r.review_status !== "rejected",
+  );
+  const pendingProps = data.track_record.filter((r) => r.review_status === "pending_review");
   const litigationConfidence = (l: LitigationCheck) =>
     ((l as unknown as { raw_response?: { _disambiguation?: { confidence?: string } } })
       .raw_response?._disambiguation?.confidence) ?? "possible";
@@ -546,13 +554,15 @@ export default function ValidationDetailPage() {
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Properties Found</p>
+                  <p className="text-sm text-muted-foreground">Track record</p>
                   <p className="text-2xl font-bold mt-1">
-                    {data.track_record.length}
+                    {confirmedProps.length}
                     <span className="text-sm font-normal text-muted-foreground ml-1">
-                      ({completedProjects.length > 0
-                        ? `${completedProjects.length} sold`
-                        : `${data.track_record.length} current`})
+                      ({pendingProps.length > 0
+                        ? `+${pendingProps.length} pending review`
+                        : completedProjects.length > 0
+                          ? `${completedProjects.length} sold`
+                          : `${confirmedProps.length} current`})
                     </span>
                   </p>
                 </CardContent>
