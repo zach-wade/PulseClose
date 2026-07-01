@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calculator, ChevronRight } from "lucide-react";
+import { enumLabel } from "@/lib/format/labels";
 
 interface EvalRow {
   id: string;
@@ -69,7 +70,7 @@ export function BorrowerEvaluationsCard({
             className="flex items-center justify-between gap-3 rounded-md px-3 py-2 hover:bg-accent text-sm transition-colors"
           >
             <span className="min-w-0 truncate">
-              {usd(e.loan_amount)} {e.loan_type} • {e.property_type} • {e.location}
+              {usd(e.loan_amount)} {enumLabel(e.loan_type)} • {enumLabel(e.property_type)} • {e.location}
             </span>
             <span className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
               {new Date(e.evaluated_at).toLocaleDateString()}

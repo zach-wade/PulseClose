@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "lucide-react";
 import { DealStepper } from "@/components/dashboard/deal/deal-stepper";
 import { dealFromEvaluation, type Deal, type EvaluationResumeData, usd } from "@/lib/deal/view-model";
+import { enumLabel } from "@/lib/format/labels";
 
 export default function EvaluationDetailPage() {
   const params = useParams();
@@ -73,7 +74,7 @@ export default function EvaluationDetailPage() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{borrowerName}</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {usd(raw.loan_amount)} {raw.loan_type} • {raw.property_type}
+            {usd(raw.loan_amount)} {enumLabel(raw.loan_type)} • {enumLabel(raw.property_type)}
             {raw.location ? ` • ${raw.location}` : ""}
             {resume.terms.property_address ? ` • ${resume.terms.property_address}` : ""}
           </p>

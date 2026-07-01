@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { enumLabel } from "@/lib/format/labels";
 import { Calculator, ChevronRight, Settings } from "lucide-react";
 import { DealStepper } from "@/components/dashboard/deal/deal-stepper";
 
@@ -121,7 +122,7 @@ function EvaluatePageInner() {
                   <p className="font-medium truncate">
                     {e.additional_params?.borrower_name ?? "(no borrower)"}
                     <span className="font-normal text-muted-foreground ml-2">
-                      {fmtCurrency(e.loan_amount)} {e.loan_type} • {e.property_type} • {e.location}
+                      {fmtCurrency(e.loan_amount)} {enumLabel(e.loan_type)} • {enumLabel(e.property_type)} • {e.location}
                     </span>
                   </p>
                   {e.additional_params?.property_address && (
