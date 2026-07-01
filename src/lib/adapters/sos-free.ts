@@ -224,7 +224,106 @@ const NY: SocrataSOSSource = {
   },
 };
 
-const SOCRATA_SOURCES: Record<string, SocrataSOSSource> = { CO, NY };
+// CT Business Registry "Business Master" (data.ct.gov n7gp-d28j, 1.28M rows,
+// verified live 2026-06-30) — a real status column: Active / Forfeited (failed to
+// file, reinstatable ⇒ suspended) / Revoked ⇒ suspended; Dissolved / Withdrawn /
+// Merged / Cancelled / Expired ⇒ dissolved. Registered agent + principals live in
+// sibling datasets (qh2m-n44y / ka36-64k6) keyed by account number — a later join.
+function mapCtStatus(raw: string | undefined): SOSLookupResult["sos_status"] {
+  const s = (raw ?? "").toLowerCase();
+  if (!s) return "not_found";
+  if (s.includes("active")) return "active";
+  if (s.includes("forfeit") || s.includes("revoked") || s.includes("suspend")) return "suspended";
+  if (
+    s.includes("dissolv") || s.includes("withdrawn") || s.includes("merged") ||
+    s.includes("cancel") || s.includes("expired") || s.includes("terminated")
+  ) return "dissolved";
+  return "active"; // on file, wording unrecognized ⇒ exists.
+}
+
+const CT: SocrataSOSSource = {
+  state: "CT",
+  url: "https://data.ct.gov/resource/n7gp-d28j.json",
+  nameField: "name",
+  map(r, req) {
+    const status = mapCtStatus(r.status);
+    return {
+      entity_name: r.name ?? req.entity_name,
+      state: "CT",
+      entity_type: null,
+      sos_status: status,
+      formation_date: isoDate(r.date_registration),
+      last_filing_date: null,
+      registered_agent: null, // sibling dataset (qh2m-n44y) join — follow-up
+      source_url: "https://service.ct.gov/business/s/onlinebusinesssearch",
+      flags: status !== "active" ? [`Entity status: ${r.status ?? "unknown"}`] : [],
+      raw_response: {
+        _source: "ct_socrata",
+        _account_number: r.accountnumber ?? null,
+        status_raw: r.status ?? null,
+        results: [{ officers: [] }],
+      },
+    };
+  },
+};
+
+// PA Dept. of State "Registered Businesses — Current" (data.pa.gov xvd7-5r2c, 4.0M
+// rows, verified live) — a CURRENT-only export, so presence ⇒ active (a miss ⇒
+// null ⇒ Cobalt, never a false "dissolved"). One row per officer (`party_type`),
+// so pickBest returns one matching-name row; formation = creationdate. No agent.
+const PA: SocrataSOSSource = {
+  state: "PA",
+  url: "https://data.pa.gov/resource/xvd7-5r2c.json",
+  nameField: "business_name",
+  map(r, req) {
+    return {
+      entity_name: r.business_name ?? req.entity_name,
+      state: "PA",
+      entity_type: r.typeofbusinessregistration ?? null,
+      sos_status: "active",
+      formation_date: isoDate(r.creationdate),
+      last_filing_date: null,
+      registered_agent: null,
+      source_url: "https://file.dos.pa.gov/search/business",
+      flags: [],
+      raw_response: {
+        _source: "pa_socrata",
+        _filing_number: r.filing_number ?? null,
+        results: [{ officers: [] }],
+      },
+    };
+  },
+};
+
+// OR SOS "Active Businesses — ALL" (data.oregon.gov tckn-sxa6, verified live) — an
+// ACTIVE-only export ⇒ presence ⇒ active (miss ⇒ null ⇒ Cobalt). Multiple rows per
+// business (associated_name_type: registered agent / principal / mailing), so
+// pickBest returns one matching-name row for status + formation + entity type.
+const OR: SocrataSOSSource = {
+  state: "OR",
+  url: "https://data.oregon.gov/resource/tckn-sxa6.json",
+  nameField: "business_name",
+  map(r, req) {
+    return {
+      entity_name: r.business_name ?? req.entity_name,
+      state: "OR",
+      entity_type: r.entity_type ?? null,
+      sos_status: "active",
+      formation_date: isoDate(r.registry_date),
+      last_filing_date: null,
+      registered_agent: null,
+      source_url: "https://sos.oregon.gov/business/pages/find.aspx",
+      flags: [],
+      raw_response: {
+        _source: "or_socrata",
+        _registry_number: r.registry_number ?? null,
+        results: [{ officers: [] }],
+      },
+    };
+  },
+};
+
+const SOCRATA_SOURCES: Record<string, SocrataSOSSource> = { CO, NY, CT, PA, OR };
 
 // ── NY DOS live entity search (publicInquiry API) ────────────────────────────
 // The Socrata "Active Corporations" export LEAKS — it's missing real, active NY
@@ -490,4 +589,4 @@ export async function lookupEntityFreeSOS(
 }
 
 /** States covered by a free source (CALICO requires a key to actually fire). */
-export const FREE_SOS_STATES = ["CA", "CO", "NY", "TX"] as const;
+export const FREE_SOS_STATES = ["CA", "CO", "CT", "NY", "OR", "PA", "TX"] as const;

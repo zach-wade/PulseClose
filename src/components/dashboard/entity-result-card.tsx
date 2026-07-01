@@ -42,9 +42,10 @@ export function EntityResultCard({
     ca_calico: "CA SOS (CALICO)",
     co_socrata: "CO SOS",
     fl_sunbiz: "FL Sunbiz",
-    // NOTE: tx_comptroller intentionally omitted — TX returns registered agent +
-    // officers (only formation/filing dates are blank), so the "no officers/agent"
-    // note would misdescribe it.
+    tx_comptroller: "TX Comptroller",
+    ct_socrata: "CT Business Registry",
+    pa_socrata: "PA Dept. of State",
+    or_socrata: "OR SOS",
   };
   const freeSourceLabel = entitySource ? (FREE_SOURCE_LABELS[entitySource] ?? null) : null;
   const hasError = data.raw_response?._error === true;
@@ -149,18 +150,32 @@ export function EntityResultCard({
             </div>
           </div>
 
-          {/* Free-source disclosure — explains the blank officer/agent/filing
-              fields as a source limitation, not a missing entity. */}
-          {freeSourceLabel && (!cobalt || cobalt.officers.length === 0) && !hasError && (
-            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-2.5 text-xs text-muted-foreground">
-              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>
-                Resolved from {freeSourceLabel} — a free public registry that confirms status
-                but doesn&apos;t return officers, registered agent, or filing history. Blank
-                fields above reflect the source, not a missing entity.
-              </span>
-            </div>
-          )}
+          {/* Free-source disclosure — explains the blank fields as a source
+              limitation, not a missing entity. Lists only the fields THIS source
+              actually left blank (CO returns an agent; CT/PA/OR don't; TX has
+              agent+officers but no formation date) so the note never misdescribes. */}
+          {(() => {
+            if (!freeSourceLabel || hasError) return null;
+            const missing: string[] = [];
+            if (!cobalt || cobalt.officers.length === 0) missing.push("officers");
+            if (!data.registered_agent) missing.push("registered agent");
+            if (!data.last_filing_date) missing.push("filing history");
+            if (missing.length === 0) return null;
+            const list =
+              missing.length === 1
+                ? missing[0]
+                : `${missing.slice(0, -1).join(", ")} or ${missing[missing.length - 1]}`;
+            return (
+              <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Resolved from {freeSourceLabel} — a free public registry that confirms status
+                  but doesn&apos;t return {list}. Blank fields above reflect the source, not a
+                  missing entity.
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Officers / Principals */}
           {cobalt && cobalt.officers.length > 0 && (

@@ -34,7 +34,10 @@ const SOS_FREE_BULK = ["FL"] as const;
 const FREE_LIVE_SOURCE: Record<string, string> = {
   CA: "CALICO (CA SOS API)",
   CO: "Socrata (open data)",
+  CT: "Socrata (CT Business Registry)",
   NY: "Socrata + live DOS API",
+  OR: "Socrata (OR active businesses)",
+  PA: "Socrata (PA DOS registry)",
   TX: "TX Comptroller (franchise tax)",
 };
 

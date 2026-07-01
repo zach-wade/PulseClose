@@ -192,3 +192,31 @@ Deep research (3 agents, live-verified endpoints) + a shipped adapter:
 - **Free-live SOS now: CA(key)·CO·NY·TX**; **free-bulk: FL** (loading). The "walled SPA ≠
   walled API" thesis held for TX exactly as it did for NY; it FAILS where there's a real CAPTCHA
   (SC) or enterprise bot-protection (WA Turnstile) — those are the genuine paid residual.
+
+### Full 50-state sweep (2026-06-30) — 3 more free states shipped (CT/PA/OR)
+
+Method: a Socrata **catalog discovery** query (`api.us.socrata.com/api/catalog/v1`) across
+ALL state open-data portals — this is **exhaustive for the Socrata question** — plus per-state
+open-JSON-API / bulk probing. All EASY endpoints were live-verified by direct fetch.
+
+**Definitive finding: exactly FIVE states publish a free, queryable business-entity Socrata
+dataset — CO, NY, CT, OR, PA.** No other state does (verified: IA/IL/UT/MO/NJ/PA-domain/MD/etc.
+return none). Everything else is an open-JSON-API one-off (TX-style), a CAPTCHA wall, or paid.
+
+| Verdict | States | Path |
+|---|---|---|
+| ✅ **EASY — shipped** | **CO, NY, TX, CT, PA, OR** (+CA via CALICO key, +FL bulk) | Socrata / open JSON API |
+| 🟢 **EASY — not yet built** | **DC** | ArcGIS FeatureServer `maps2.dcgis.dc.gov/.../Business_Licensing_and_Grants_WebMercator/FeatureServer/0` — no auth, ~500k rows, **status + formation + registered agent** (no officers). Different (Esri) pattern → separate small adapter. |
+| 🟡 **MEDIUM — HTML scraper, route to Cobalt** | **NJ** (njportal form + anti-forgery token, no CAPTCHA), **MD** (Business Express ASP.NET, no CAPTCHA) | free per-entity but HTML-parse; build only if volume justifies |
+| 🔴 **HARD-PAID → Cobalt** | **AZ, GA, IN, MO, SC, WA, DE** | reCAPTCHA/Cloudflare/Turnstile wall or paid-only bulk ($1k–$9.5k). DE = the SPV-formation residual. |
+| ⚪ **Not probed (low ICC volume; Cobalt covers)** | remaining ~30 states | Socrata ruled out by the catalog scan; would need per-state open-API probing — not worth it at 0–2 loans each |
+
+**Build notes for the shipped three** (`sos-free.ts` `SOCRATA_SOURCES`):
+- **CT** `data.ct.gov/n7gp-d28j` (1.28M rows) — real `status` column (Active/Forfeited→suspended/
+  Dissolved→dissolved) + `date_registration`. Agent/principals in sibling datasets
+  (`qh2m-n44y`/`ka36-64k6`, join by account number) — a later enrichment.
+- **PA** `data.pa.gov/xvd7-5r2c` (4.0M rows) — "Current" export ⇒ presence=active; `creationdate`;
+  officers via `party_type` (v1 = status+formation).
+- **OR** `data.oregon.gov/tckn-sxa6` — "Active Businesses" ⇒ presence=active; `registry_date` +
+  `entity_type`. **OR also has free GC (CCB bulk) → OR is now a full free entity+GC E2E state.**
+- Formation dates here ARE genuine (Nike OR → 1969), unlike TX's renewal-stamped date (left null).

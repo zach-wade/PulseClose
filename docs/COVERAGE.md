@@ -43,11 +43,17 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
 | **CO** | Socrata (open data) | live-query + cache | no | $0 | ✅ |
 | **NY** | Socrata + live DOS API | live-query + cache | no | $0 | ✅ |
 | **TX** | TX Comptroller (franchise-tax status API) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — status + registered agent + officers + SOS file #; **no formation date** |
+| **CT** | Socrata `n7gp-d28j` (Business Registry) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — real status column + formation; agent/principals in sibling datasets (later join) |
+| **PA** | Socrata `xvd7-5r2c` (DOS registry, 4M rows) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — "Current" ⇒ presence=active; formation (creationdate); officers via party_type (v1 status+formation) |
+| **OR** | Socrata `tckn-sxa6` (Active Businesses) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — presence=active; formation + entity type. **OR also has free GC → full free E2E state** |
 | **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ⚠️ **partial — only ~3,167 rows cached; statewide `--full` load pending (CI)**; arbitrary entity → Cobalt |
-| *all others* | Cobalt Intelligence (50-state) | live-query | yes — Cobalt key | ~$5 fresh / $0 cached | ⚠️ trial quota exhausted |
+| *all others* | Cobalt Intelligence (50-state) | live-query | yes — Cobalt key | ~$5 fresh / $0 cached | ✅ **re-keyed 2026-06-30** (working key in prod + `.env.local`) |
 
 - Lookup order: `sos_entities` cache → free source (CALICO/Socrata/TX CPA/FL bulk) →
   Cobalt fallback → cache the result back.
+- **Free-live SOS is now CA(key)·CO·CT·NY·OR·PA·TX** + FL bulk. CT/PA/OR all fit the
+  Socrata `SocrataSOSSource` pattern (`sos-free.ts`) — presence=active for PA/OR (miss →
+  null → Cobalt, never a false "dissolved"); CT carries a real status column.
 - **CALICO key: free — the official CA SOS "BE Public Search" API Guide describes
   instant self-serve** (sign up → confirm email → subscribe → copy
   `Ocp-Apim-Subscription-Key`), **no documented approval queue** (minutes, not weeks;
