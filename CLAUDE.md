@@ -96,7 +96,7 @@ src/
     track-record/             # verify-core.ts (deed-chain matcher, parseAddressForState)
     investors/                # extract.ts (A1 Claude prompt + parse) + validator.ts
     evaluate/                 # engine.ts (multi-investor eligibility; min_dscr/min_debt_yield criteria)
-    underwriting/             # sizing.ts (loan sizing engine) + per-investor.ts + judgment.ts (AI UW copilot) + facts.ts
+    underwriting/             # sizing.ts (bridge income model) + rtl-sizer/construction-sizer/dscr-sizer (deal-type sizers 2026-07) + solve.ts (goal-seek) + dispatch.ts (sizeDeal router) + per-investor.ts + judgment.ts (AI UW copilot) + facts.ts
     analytics/                # PostHog client + server capture (no-op without keys)
     litigation/               # extract + materialize
     gc/                       # lookup.ts (DB-first contractor_licenses → CSLB fallback)

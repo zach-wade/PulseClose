@@ -29,11 +29,13 @@ Damon's "the LPB's wrong because it might be a construction loan" landed on #100
 a real GUC loan we sized as generic bridge. **Build:** port the governing-assumption
 picker into `sizing.ts` + the deal stepper; add interest-reserve capitalization into
 the loan amount + an initial-advance-vs-construction-holdback / draw model — that IS
-the "Solver" Damon means. **Source of truth:** Michael Nassirzadeh's Excel Solver LOI
-model does interest-reserve + advance-vs-holdback "to the penny" (referenced in
-consulting `clients/insignia-capital/pickup.md`, NOT in any repo — Michael's local/Box).
-- **Unblocks when:** NOW — Damon demo + calibration #14–#17 both confirm. Get Michael's
-  Solver file, extract formulas, port. Pairs with the standalone-UW-wedge entry below.
+the "Solver" Damon means. **Source of truth (found 2026-07-01):** the ground-up sizer is
+`Loan Sizer - Construction.xlsx` in the trove — its "Solver" behavior is a **circular
+interest reserve** that solves in **closed form** (no iteration needed). **STATUS: engine
+SHIPPED 2026-07-01** — `rtl-sizer.ts` + `construction-sizer.ts` + `dscr-sizer.ts` +
+`solve.ts` + `dispatch.ts`, math-verified to the penny, merged to main. This is now a
+ROADMAP Phase-1 item (done); kept here for rationale.
+- **Unblocks when:** ~~NOW~~ engine done; the stepper UI (UX-2) is the remaining step.
 
 ### Import ICC's real Excel models as engine golden-fixtures + templates
 Sitting in consulting `clients/insignia-capital/data/`: One Sheet Bridge/Construction/

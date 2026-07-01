@@ -36,10 +36,10 @@ it's a construction loan." That + two coherence breaks + a craft/de-AI UX pass a
   memories `project_damon_engagement_reset_2026-07-01` + `project_damon_excel_model_moat`.
 - **Checked his assumptions vs. real data:** #10049 (99 TO 100 LLC) **is Ground-Up Construction**;
   ICC book of 208 = **137 Bridge / 32 GUC / 24 F&F / 15 DSCR**. Construction feedback confirmed.
-- **Reconciled sizer-vs-Solver:** product has the **bridge** ladder (`sizing.ts`); the deal-type
-  construction buy-box was validated in `scripts/fidelity-score.ts` (6.9% mean |Δ|) **but never
-  ported to the engine**; the interest-reserve/holdback/draw math (Michael's local Excel Solver)
-  **exists in no repo.** ICC's real Excel models DO sit in `clients/insignia-capital/data/`.
+- **Reconciled sizer-vs-Solver** (then BUILT it — see §SHIPPED): the deal-type construction
+  buy-box was validated in `scripts/fidelity-score.ts` (6.9% mean |Δ|) but wasn't in the engine;
+  the ground-up "Solver" turned out to be `Loan Sizer - Construction.xlsx` in the trove (a
+  closed-form-solvable circular interest reserve), now shipped as `construction-sizer.ts`.
 - **Wrote the plan into:** ROADMAP (new sequence + Decisions Log), STRATEGY (§Sharpened…),
   UX-REDESIGN-PLAN (§12), IDEAS (§Damon reset). Cleaned memory to PulseClose-only.
 
@@ -108,7 +108,7 @@ Then UW-3 (surface depth layers) · UW-4 (deposits/equity).
 
 **[USER / NON-PRODUCT ACTIONS]**
 - **Email Damon the AAPL conference info** (Nov 9–11, Vegas) — he asked, can't find it.
-- **~~Michael's ground-up Solver~~** — found in the trove (`Loan Sizer - Construction.xlsx`; the "Solver" is a closed-form-solvable circular interest reserve). Still: grab Damon's condo-project Excel + confirm `ICC SFR 1-4 Construction Deck V.1.01.xlsx` (likely in the 16GB download).
+- **~~Michael's ground-up Solver~~** — found in the trove (`Loan Sizer - Construction.xlsx`; the "Solver" is a closed-form-solvable circular interest reserve). Still: grab Damon's condo-project Excel + confirm `ICC SFR 1-4 Construction Deck V.1.01.xlsx` (likely in the 60GB+ ICC Box download).
 - **Thursday 4:00** — run the **Livermore bridge-apartment live deal** through PulseClose with him.
 - **CALICO subscription approval** (carried) — chase `bizfile@sos.ca.gov`; CA works via Cobalt meanwhile.
 

@@ -890,7 +890,7 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
 - **~~Get Michael's Solver `.xlsx`~~** — turned out to be in the trove
   (`Loan Sizer - Construction.xlsx`; "Solver" = a closed-form-solvable circular interest
   reserve). Still worth grabbing Damon's **condo-project Excel** he offered + confirming the
-  named `ICC SFR 1-4 Construction Deck V.1.01.xlsx` (likely in the 16GB download).
+  named `ICC SFR 1-4 Construction Deck V.1.01.xlsx` (likely in the 60GB+ ICC Box download).
 - **Thursday 4:00** standing meeting (was Tuesday; blew it) — run the **Livermore bridge-
   apartment live deal** through PulseClose together.
 - He'll send **Cushman & Wakefield multifamily sizing decks** — mine for MFR sizing nuggets.
@@ -942,7 +942,9 @@ bridge — confirming Damon's "the LPB's wrong because it's a construction loan.
 the "did we replicate his Solver?" question: we ported the **bridge** constraint ladder to
 the product, **validated** the deal-type-aware construction buy-box in `scripts/fidelity-score.ts`
 (6.9% mean |Δ|) but **never ported it to the engine**, and **never built** the interest-
-reserve/holdback/draw math (Michael Nassirzadeh's local Excel Solver — not in any repo).
+reserve/holdback/draw math (believed at the time to be Michael's local-only Excel Solver —
+*corrected in the 07-01(b) entry + the trove work: it's `Loan Sizer - Construction.xlsx`; the
+"Solver" is a closed-form-solvable circular interest reserve, now SHIPPED as construction-sizer.ts*).
 Discovered **ICC's real Excel models already sit in the consulting repo** (`clients/insignia-capital/data/`)
 — usable as golden fixtures. Also confirmed two coherence breaks (mandate console reads raw
 results, #18, still open; two sizing truths) and the "looks AI-developed"/cluttered UX (craft
