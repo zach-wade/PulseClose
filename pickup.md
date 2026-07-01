@@ -67,22 +67,32 @@ snake_case leakage is fixed site-wide** (found + fixed by the visual audit).
 
 ## Open / next (TODO)
 
-### Thread A — remaining UX-audit findings (rubric + `ux-review/audit/FINDINGS.md`)
-- **Summary dead-space** [MED, structural] — verdict hero + one collapsed "Full report"
-  accordion, then ~600px empty. Surface a compact at-a-glance (AI-memo headline + top 1–2
-  risks + next action) above the disclosure. **Get user steer before restructuring.**
-- **Fund persona sees the originator sidebar** (Borrowers/Deals/Capital/Portfolio) [MED] —
-  the Phase-2 Fund-tenant nav; landing redirect to Mandate Console is already correct.
-- **Stat-vs-table property-source reconcile** [MED, data-model] — detail stat "0 confirmed"
-  vs Property Track Record table "1 claimed only" pull from different sources
-  (`track_record` pending set vs the claimed-address / verified_flips path). Unify them.
-- **Small** [LOW] — truncated "AI" column on the Borrowers table; a "free source — limited
-  fields" note on the entity card (NY DOS returns no officers / registered agent / last-filing).
+### Thread A — remaining UX-audit findings — ✅ DONE (`1fdc7a3`, verified live)
+Steers taken: **two-column Summary** + **fund-specific nav**. All shipped + re-driven
+(`scripts/drive-verify-threadA.ts` → `ux-review/audit/threadA/`):
+- **Summary dead-space** — the curated Summary (AI memo + why-this-rating + at-a-glance
+  stats + mandate stamps) is promoted OUT of the "Full report" disclosure into a two-column
+  layout under the verdict hero; disclosure holds the deep drill only (default tab Evidence). ✓
+- **Fund persona nav** — `org_type=fund` gets the mandator spine (**Mandates + Portfolio**);
+  Borrowers/Deals hidden. Sidebar reads `org_type` from `/api/settings`. Verified: fund org
+  sidebar shows only Mandates/Portfolio + secondary. ✓
+- **Property-count reconcile** — Summary "Track record" stat + `UnifiedPropertyTable` share
+  one merge (`unifiedPropertyCounts`); stat now reads "1 (+6 pending review)", agrees with the
+  table's "1 properties · 1 claimed only" + "6 to review". ✓
+- **LOW** — Borrowers-table AI column no longer clips (Entity cell truncates 200px; AI/Date
+  `whitespace-nowrap`); entity card shows a **"Resolved from NY DOS — free public registry …"**
+  note so blank officer/agent/filing fields read as a source limit. Both verified. ✓
+- **Residual [LOW]**: at 1440 the Borrowers table's rightmost **Date** column sits just past
+  the visible edge (reachable via the table's `overflow-x-auto`); AI (the flagged column) now
+  renders fully. Optional future polish: narrow Completeness header / responsive-hide Date.
+- **Noted [LOW]**: the Mandate Console "active" badge renders **blue** — rubric says active
+  status = green (blue = actions only). Not one of my findings; flag for a future pass.
 
-### Thread B — FL full SOS load + the #10049 all-5-free loan
-- Run FL Sunbiz `--full` via the **CI cron** (`.github/workflows/refresh-sos-entities.yml`) —
-  local pulls **DNS-block at ~67%** (`ENOTFOUND` on `sftp.floridados.gov` after heavy use);
-  the download is now cross-run resumable so CI/retry resumes from where it stopped.
+### Thread B — FL full SOS load + the #10049 all-5-free loan — 🔄 IN PROGRESS
+- **DISPATCHED 2026-06-30:** FL Sunbiz `--full` via `gh workflow run refresh-sos-entities.yml
+  -f mode=full` → run **28488437753** (in_progress; multi-GB SFTP + millions of rows, 330-min
+  timeout). Check: `gh run view 28488437753`. Repo secrets confirmed set; download is cross-run
+  resumable. Local pulls still DNS-block at ~67% — CI is the path.
 - Once the FL cache has statewide entities, run **#10049 — "99 TO 100 LLC" + GC BP Construction
   (`CGC1525790`, already cached)**: a real FL **construction** loan that pulls **all 5 pillars
   free** — the definitive Underwriter E2E. (Adapt `scripts/e2e-persona-loan.ts`.) Backup:
