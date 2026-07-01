@@ -114,13 +114,23 @@ async function main() {
   // Authoritative verdict via the SAME computeVerdict() the detail page uses —
   // assembled from the persisted checks, so this doubles as a consistency check
   // against the batch path (lists/handoff) below.
-  const [ecs, trs, lits, gcs, sans] = await Promise.all([
+  const [ecs, trs, lits, gcs, sans, mand] = await Promise.all([
     supabase.from("entity_checks").select("state, sos_status, flags, raw_response").eq("validation_id", result.validation_id),
     supabase.from("track_record_entries").select("outcome, review_status").eq("validation_id", result.validation_id),
     supabase.from("litigation_checks").select("result, details, raw_response").eq("validation_id", result.validation_id),
     supabase.from("gc_validations").select("license_status").eq("validation_id", result.validation_id),
     supabase.from("sanctions_checks").select("result, matches, match_count").eq("validation_id", result.validation_id),
+    supabase.from("mandate_assessments").select("result").eq("validation_id", result.validation_id),
   ]);
+  // Roll the mandate assessments up to one binding standing exactly like the detail
+  // page (worst across rows: fail > conditional > pass) so this cross-check matches
+  // the real surface — otherwise a failing mandate false-alarms as a "mismatch".
+  const mandRows = (mand.data ?? []) as { result: "pass" | "conditional" | "fail" }[];
+  const RANK = { pass: 0, conditional: 1, fail: 2 } as const;
+  const worst = mandRows.length
+    ? mandRows.reduce((a, b) => (RANK[b.result] > RANK[a.result] ? b : a)).result
+    : null;
+  const mandateStanding = worst === "fail" ? "does_not_meet" : worst === "conditional" ? "conditional" : worst === "pass" ? "meets" : null;
   const v = computeVerdict({
     entity_checks: ecs.data ?? [],
     track_record: trs.data ?? [],
@@ -128,6 +138,7 @@ async function main() {
     gc_validations: gcs.data ?? [],
     sanctions_checks: (sans.data ?? []) as never,
     tier: (result.tier as "LOW" | "MEDIUM" | "HIGH") ?? null,
+    mandate: mandateStanding,
   });
   console.log(`\nVERDICT: ${v.state}  "${v.headline}"`);
   console.log(`  why: ${v.reason}`);
