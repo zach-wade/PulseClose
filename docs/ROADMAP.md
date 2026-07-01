@@ -802,7 +802,7 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
    loans + stabilized MFR). *Stage: Route.*
 5. **UW-3 — Surface the sizing depth layers (<1 day).** Promote to first-class the already-
    computed depth (`exit.ts`/`stabilization.ts`/`reserve.ts`): **DSCR in-place AND
-   stabilized** (buried at [deal-stepper.tsx:851](../src/components/dashboard/deal-stepper.tsx);
+   stabilized** (buried at [deal-stepper.tsx:851](../src/components/dashboard/deal/deal-stepper.tsx);
    Damon asked for both), **exit/takeout** ("prove the takeout clears the bridge"), the
    **stabilization path**. *(The "confidence is low" remark maps to existing G4.2 — do
    together.)* *Stage: Route.*
