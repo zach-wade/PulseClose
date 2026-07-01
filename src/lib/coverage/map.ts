@@ -36,6 +36,8 @@ const FREE_LIVE_SOURCE: Record<string, string> = {
   CO: "Socrata (open data)",
   CT: "Socrata (CT Business Registry)",
   DC: "DC DLCP (ArcGIS FeatureServer)",
+  ID: "ID SOSBiz (FirstStop API)",
+  ND: "ND FirstStop (SOS API)",
   NY: "Socrata + live DOS API",
   OR: "Socrata (OR active businesses)",
   PA: "Socrata (PA DOS registry)",

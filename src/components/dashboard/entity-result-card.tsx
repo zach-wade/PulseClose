@@ -47,6 +47,8 @@ export function EntityResultCard({
     pa_socrata: "PA Dept. of State",
     or_socrata: "OR SOS",
     dc_arcgis: "DC DLCP",
+    id_firststop: "ID SOSBiz",
+    nd_firststop: "ND FirstStop",
   };
   const freeSourceLabel = entitySource ? (FREE_SOURCE_LABELS[entitySource] ?? null) : null;
   const hasError = data.raw_response?._error === true;

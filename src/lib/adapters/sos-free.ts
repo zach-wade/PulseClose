@@ -641,6 +641,89 @@ async function lookupDcArcgis(req: SOSLookupRequest): Promise<SOSLookupResult | 
   };
 }
 
+// ── "FirstStop" SOS platform (ID, ND — shared PCC/Tyler backend) ─────────────
+// Several states run the identical "firststop" filing system with an OPEN, no-auth
+// JSON search API (verified live 2026-06-30, datacenter-IP-friendly). One adapter,
+// keyed by host. Response: { rows: { [i]: { TITLE:[name, type], FILING_DATE, AGENT,
+// STATUS, STANDING, ... } } }. (MT runs the same app but is Cloudflare-walled; NM
+// is the same family but session-gated — those stay on Cobalt.)
+const FIRSTSTOP_HOSTS: Record<string, { host: string; source: string; url: string }> = {
+  ID: { host: "sosbiz.idaho.gov", source: "id_firststop", url: "https://sosbiz.idaho.gov/search/business" },
+  ND: { host: "firststop.sos.nd.gov", source: "nd_firststop", url: "https://firststop.sos.nd.gov/search/business" },
+};
+
+// MM/DD/YYYY → YYYY-MM-DD (firststop + several other free feeds use US dates).
+function usDateToIso(s?: string): string | null {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : isoDate(s);
+}
+
+function mapFirstStopStatus(status?: string, standing?: string): SOSLookupResult["sos_status"] {
+  const s = (status ?? "").toLowerCase();
+  const st = (standing ?? "").toLowerCase();
+  if (!s) return "not_found";
+  if (s.includes("active")) return st && !st.includes("good") ? "suspended" : "active";
+  if (
+    s.includes("dissolv") || s.includes("terminated") || s.includes("withdrawn") ||
+    s.includes("revoked") || s.includes("expired") || s.includes("inactive") || s.includes("cancel")
+  ) return "dissolved";
+  return "active";
+}
+
+interface FirstStopRow {
+  TITLE?: [string, string];
+  FILING_DATE?: string;
+  AGENT?: string;
+  STATUS?: string;
+  STANDING?: string;
+  RECORD_NUM?: string;
+}
+
+async function lookupFirstStop(req: SOSLookupRequest, state: string): Promise<SOSLookupResult | null> {
+  const cfg = FIRSTSTOP_HOSTS[state];
+  if (!cfg) return null;
+  const res = await fetch(`https://${cfg.host}/api/Records/businesssearch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ SEARCH_VALUE: req.entity_name, STARTS_WITH: "N", SEARCH_TYPE: "BUSINESS" }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    console.warn(`[sos-free] ${cfg.source} ${res.status} for "${req.entity_name}" — falling back`);
+    return null;
+  }
+  const data = (await res.json()) as { rows?: Record<string, FirstStopRow> };
+  // TITLE[0] is "NAME (recordnum)" — strip the trailing id for clean matching.
+  const cleanName = (t?: string) => (t ?? "").replace(/\s*\(\d+\)\s*$/, "").trim();
+  const cands = Object.values(data.rows ?? {}).map((r) => ({ ...r, _name: cleanName(r.TITLE?.[0]) }));
+  const best = pickBest(cands, req.entity_name);
+  if (!best) return null;
+  const status = mapFirstStopStatus(best.STATUS, best.STANDING);
+  if (status === "not_found") return null;
+  const agent = best.AGENT && !/^no agent$/i.test(best.AGENT.trim()) ? best.AGENT.trim() : null;
+  const flags: string[] = [];
+  if (status !== "active") flags.push(`Entity status: ${best.STATUS ?? "inactive"}${best.STANDING ? ` (${best.STANDING})` : ""}`);
+  return {
+    entity_name: cleanName(best.TITLE?.[0]) || req.entity_name,
+    state,
+    entity_type: best.TITLE?.[1] ?? null,
+    sos_status: status,
+    formation_date: usDateToIso(best.FILING_DATE),
+    last_filing_date: null,
+    registered_agent: agent,
+    source_url: cfg.url,
+    flags,
+    raw_response: {
+      _source: cfg.source,
+      _record_num: best.RECORD_NUM ?? null,
+      status_raw: best.STATUS ?? null,
+      standing_raw: best.STANDING ?? null,
+      results: [{ officers: [] }],
+    },
+  };
+}
+
 /**
  * Try the free official SOS source for `req.state` (CALICO for CA, Socrata for
  * CO/NY). Returns a resolved SOSLookupResult (stamped with `_source`) or null when
@@ -668,6 +751,8 @@ export async function lookupEntityFreeSOS(
     if (state === "TX") return await lookupTxComptroller(req);
     // DC: open ArcGIS FeatureServer — status + formation + registered agent.
     if (state === "DC") return await lookupDcArcgis(req);
+    // ID / ND: the "firststop" SOS platform's open JSON search API.
+    if (FIRSTSTOP_HOSTS[state]) return await lookupFirstStop(req, state);
   } catch (err) {
     console.warn(`[sos-free] ${state} lookup error:`, err instanceof Error ? err.message : err);
   }
@@ -675,4 +760,4 @@ export async function lookupEntityFreeSOS(
 }
 
 /** States covered by a free source (CALICO requires a key to actually fire). */
-export const FREE_SOS_STATES = ["CA", "CO", "CT", "DC", "NY", "OR", "PA", "TX"] as const;
+export const FREE_SOS_STATES = ["CA", "CO", "CT", "DC", "ID", "ND", "NY", "OR", "PA", "TX"] as const;
