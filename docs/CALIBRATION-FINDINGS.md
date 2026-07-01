@@ -314,3 +314,63 @@ Morrison is NOT a critical flag in the Book (factors are disambiguation-aware) b
 FAILS 5 gates in the Mandate Console** — same data, opposite verdict, because the
 mandate path (#18) reads raw results. Mandate Console pass rate on the real loans:
 **33% (2 meet / 4 fail)**, with two clean distinctive-name borrowers among the fails.
+
+## Build cross-check findings (2026-07-01, UW-1 sizing engines)
+
+Surfaced while porting ICC's real Excel models into the product sizing engines
+(rtl-sizer.ts, construction-sizer.ts) and cross-checking the math to the penny. Each
+sizer ships with a `scripts/verify-*.ts` golden test; these are the model-level findings.
+
+19. **🟡 `Loan Sizer - Construction.xlsx` — the "Closing costs in LTC?" toggle is a
+    no-op.** Its Total Cost cell is `SUM(purchase, construction, interest_reserve)` — the
+    closing-costs cell (gated by the toggle) is computed but **never summed**, so the LTC
+    denominator never includes closing regardless of the toggle. `construction-sizer.ts`
+    **defaults to the correct behavior** (closing counted when `closingInCostBasis`) and
+    exposes `legacyCostBasis: true` to reproduce the sheet exactly. Direction (worked
+    example): the sheet omits closing → smaller cost basis → **LTC 87.84%**; counting closing
+    (our default) → larger basis → **LTC 86.07%**. So the toggle silently does nothing; low
+    impact on the buy-box, but the "included?" control is misleading. We default to counting
+    closing so LTC reflects the true all-in basis.
+20. **🟢 The capitalized interest reserve is circular but has a closed form — no Solver
+    needed.** The reserve is funded by the loan and computed on the loan that includes it
+    (`reserve = totalLoan × rate/12 × months × discount`). Excel resolves this by iteration;
+    it solves exactly as `totalLoan = base / (1 − k)`, `k = rate/12 × months × discount`
+    (guard `k < 1`, else the loan diverges). Verified `closed-form == 50-iteration fixed
+    point` to 1e-9. This is the concrete meaning of "replicate Michael's Solver," and the
+    engine is **deterministic where the spreadsheet iterates**. Also noted (→ **AN-2**): the
+    reserve is sized on the full loan for the full term; real draws ramp, so it over-reserves
+    early (conservative) — a draw-weighted reserve is the reserve-adequacy improvement.
+21. **🔵 ICC has (at least) two construction sizing shapes.** `Loan Sizer - Construction`
+    *sizes* the loan (output) from advance rates + capitalized reserve; `Loan Sizer for Park
+    Place` takes a *requested* loan (input) and reports LTC/LTARV/LTAIS + the cash shortage.
+    UW-1 implements the sizing shape; the requested-loan shape is just the metrics layer
+    (same ratio definitions, verified against Park Place). The stepper (UX-2) should support
+    both: "size it for me" and "check my requested number."
+
+22. **🟡 "DSCR" means two different things across ICC's models — name the convention.**
+    The DSCR Calculator sheet holds both: (a) **residential PITIA DSCR** = gross rent ÷
+    (P&I + taxes + insurance + HOA) — debt service sits *inside* the ratio with T&I; this is
+    what DSCR-rental lenders quote; and (b) **commercial NOI DSCR** = NOI ÷ (P&I only), where
+    NOI already nets opex. They are not interchangeable — the same deal yields different DSCRs
+    under each. `dscr-sizer.ts` implements **both explicitly** (`dscrForLoan` = residential
+    PITIA, `maxLoanByDscr` = commercial NOI), and the UI must label which is shown so a
+    reviewer is never guessing. Verified: the commercial `maxLoanByDscr` PV path is
+    algebraically identical to `sizing.ts underwrite()`'s DSCR constraint (assert in
+    `verify-dscr-sizer.ts`) — the two engines will not drift.
+
+## Carried into the product plan (2026-07-01, Damon reset)
+
+The findings above are the evidence base for the ROADMAP
+[Post-Damon-reset sequence](ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).
+Two are load-bearing and **must move from this calibration harness into the product**:
+
+- **#14–#16 → UW-1.** The deal-type-aware buy-box (`buyBoxFor`), the "infer basis from
+  economics not the purpose dropdown" rule, and `costSpentToDate` were validated here
+  (6.9% mean |Δ|) but **live only in `scripts/fidelity-score.ts`.** UW-1 ports them into
+  `src/lib/underwriting/sizing.ts` + the deal stepper, and adds the still-missing
+  interest-reserve/holdback/draw math (Michael's Solver). Confirmed necessary by the
+  Damon reset: ~27% of the real book is construction+F&F, and #10049 (Ground-Up
+  Construction) is sized as generic bridge in the product today.
+- **#18 → COH-2 (HIGH).** The mandate console reading raw results (clean borrower fails 5
+  gates) is still open and now urgent — it's the trust-killer on the capital-partner
+  surface Damon-as-fund sees first in the July/Aug trial.

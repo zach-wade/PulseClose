@@ -106,6 +106,7 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 10. **Generated dedup columns require a backfill plan.** Adding a stricter canonical key to an existing table will reveal pre-existing duplicates that violate the new constraint. Migrations must include either (a) a cleanup script run before `CREATE UNIQUE INDEX` or (b) a `RAISE NOTICE` post-apply step that surfaces the conflict count so the operator can run a merge tool. See [00021_canonical_name_dedup.sql](../supabase/migrations/00021_canonical_name_dedup.sql) for the template — and the lessons we learned writing it.
 11. **Any place we `JSON.parse` a Claude response is a truncation hazard.** Claude returns `stop_reason: "max_tokens"` when it ran out of room mid-output, and the regex pattern `\{[\s\S]*\}` happily matches truncated JSON that then fails `JSON.parse`. Three rules: (a) `max_tokens` defaults to 4096 unless a smaller bound has been measured to fit; (b) the parse path must inspect `stop_reason` and surface "Document too large — Claude truncated" rather than a generic parse error; (c) for response shapes with a known cardinality (e.g., "up to 50 addresses"), tell Claude the cap in the prompt and slice the response defensively. See [src/app/api/ingest/borrower-doc/route.ts](../src/app/api/ingest/borrower-doc/route.ts) for the canonical shape — every `client.messages.create` site copies that pattern.
 12. **Every Claude consumer routes through the AI privacy bundle.** Three layers: (a) `requireAiEnabled(orgId)` gate from [src/lib/ai/check-enabled.ts](../src/lib/ai/check-enabled.ts) — fails CLOSED on lookup error so a DB hiccup never silently sends opted-out PII; returns 503 with code `AI_DISABLED` to the caller. (b) `scrubPii()` from [src/lib/ai/redact-pii.ts](../src/lib/ai/redact-pii.ts) on text-derived inputs (xlsx / csv / txt) — strips SSN/phone/email pre-call. PDFs ride the per-org toggle as the strict-mode answer because pre-extracting text loses table structure. (c) For prompts that interpolate borrower / entity / property / lender names, run [src/lib/ai/redact.ts](../src/lib/ai/redact.ts) `buildRedactionMap` → `redact()` forward → `unredactObject()` reverse → `findLeftoverTokens()` safety scan. `addressVariants()` (street alias) and `entityVariants()` (legal-suffix-stripped) catch partial mentions in factor explanations. Every new endpoint that calls `client.messages.create` MUST add these three layers — see A1 implementation in [src/app/api/investors/[id]/extract-criteria/route.ts](../src/app/api/investors/[id]/extract-criteria/route.ts) for the canonical post-bundle pattern.
+13. **Persona-agnostic coherence — "no matter who you are, it makes sense" (2026-07-01).** The product is one continuous thing to a broker, an underwriter, and a capital partner alike. Every surface obeys: **one Deal object** flows Borrower → Deal → Capital → Portfolio with no re-keying; **one `computeVerdict()`** so no two surfaces disagree (the mandate-vs-book bug is a violation); **verdict/answer first**, evidence on disclosure; sizing follows the **Excel-parity layout** ICC already trusts (waterfall + constraint ladder + **cushion/headroom** per binding test); **native scenario compare** instead of re-keying; and every screen orients the current persona to *their* next action. Any new surface is scored against this + [UX-AUDIT-RUBRIC.md](UX-AUDIT-RUBRIC.md); the full spec is [UX-REDESIGN-PLAN.md §13](UX-REDESIGN-PLAN.md).
 
 ---
 
@@ -674,7 +675,284 @@ warm lender intros — the realistic outcome under the distribution thesis.**
 
 ---
 
+## Post-Damon-reset sequence (2026-07-01) — construction sizing, coherence, craft
+
+Supersedes the Post-NPLA sequence above as the active plan. Synthesized from the
+**2026-07-01 Damon engagement-reset demo** (he saw the restructured 4-section
+product; ICC is trialing it **July + August across both businesses**) cross-checked
+against the code (three deep-read audits), the real 208-loan ICC book, and
+[CALIBRATION-FINDINGS.md](CALIBRATION-FINDINGS.md). Full extraction in memory
+`project_damon_engagement_reset_2026-07-01` + `project_damon_excel_model_moat`; the
+unscoped versions live in [IDEAS.md](IDEAS.md#damon-engagement-reset-demo-2026-07-01--sharpened-signals).
+
+**New forcing function:** the **AAPL conference, Nov 9–11 2026 (Las Vegas)** is the
+GTM debut Damon chose (over NPLA — West Coast, needs runway). Everything below should
+land before it, most inside the July/Aug ICC trial window.
+
+**Why this order (the through-line):** the July/Aug trial *will fail on Damon's real
+flow* if the engine keeps sizing construction as bridge — **~27% of ICC's real book
+is construction + fix&flip (32 GUC / 24 F&F of 208 loans)**, and #10049 (the loan we
+demoed) is Ground-Up Construction that the engine sized as generic bridge. Damon's
+"the LPB's wrong because it might be a construction loan" is **confirmed in code and
+data**. So: (1) make the engine size his real deals, (2) make the app never contradict
+itself, (3) make it not look like a prototype — then expand.
+
+**The sizer-vs-Solver reconciliation (the core finding):** three layers exist, only
+the first is in the product. (a) The **bridge constraint ladder** (`sizing.ts`, MIN
+across LTV/LTC/LTARV/DSCR/DY) reproduces Damon's bridge one-sheet — shipped. (b) The
+**deal-type-aware buy-box** (construction → LTARV-primary, skip as-is LTV, `costSpentToDate`)
+was built and **validated to 6.9% mean |Δ| vs. real ICC approved loans** — but it lives
+in `scripts/fidelity-score.ts buyBoxFor`, **not the product engine.** (c) **Interest-reserve
++ advance-vs-construction-holdback math** — the "Solver" piece. **CORRECTION (2026-07-01,
+trove):** this model is **not missing** — it's `Loan Sizer - Construction.xlsx` in the trove
+(`loan-sizer-trove-2026-07/`). Its "Solver" behavior is a **circular interest reserve** (the
+reserve is capitalized into the loan, and is computed on the loan that includes it), which
+**solves in closed form** — `TotalLoan = (PurchaseAdvance + ConstructionHoldback) / (1 −
+Rate/12 × Months × Discount)` — i.e. deterministic where their Excel iterates. So "it didn't
+replicate his Solver" because we ported only the bridge ladder and never built the RTL
+waterfall (now shipped, see UW-1) or the construction Sources/Uses + capitalized reserve
+(UW-1 ground-up path, spec'd below).
+
+**The 2026-07-01 data trove (decoded).** ICC handed over a large data set; the
+product-relevant models are decoded and pulled into the repo at
+`clients/insignia-capital/data/loan-sizer-trove-2026-07/` (see its README for the full
+decoded logic + golden fixtures). The crown jewel is **`RTL_Loan_Sizer_Fillable.xlsx`**
+(Noah, 2026-06-23) — the fix&flip sizer, which produces a **structured deal, not just a
+max loan**: a proceeds waterfall (purchase-advance + rehab-holdback − prepaid-interest −
+closing → net proceeds → cash-to-close → equity%), an initial-advance-vs-holdback split,
+and a **Tier×Rehab-Type buy-box grid** with a **cushion (headroom) per test**. Also
+decoded: the **Construction Budget** (soft/hard cost split, spent-to-date, %-complete,
+$/sqft), a **DSCR/PITIA calculator** (income-approach max loan via `PV`), the **Colchis
+Scenario Tool** (a real investor's rate-stack pricing + eligibility box, buyup/buydown in
+bps/$), and the **Track Record & REO schema** (which already tags ground-up + construction
+budget per property). Plus **10 real investor seller guides / DSCR matrices / quote sheets**
+(`Lenders.zip`) as the A1 fixture set. **This changes UW-1 from "port a buy-box" to
+"output the structured deal the way their Excel does — only better."**
+
+### The plan — phased, ordered for the trial then the debut
+
+**Guiding order:** (Phase 1) make the engine model his *real* deals — the July/Aug trial
+fails otherwise; (Phase 2) make it **coherent + trustworthy end-to-end** — one thing that
+makes sense to anyone; (Phase 3) best-execution + capital surfaces — the distribution
+wedge; (Phase 4) additional-analysis differentiators — the moat; (Phase 5) integration.
+**Persona-agnostic UX coherence (cross-cutting principle 13) is woven into every item**,
+not deferred to the end — UX-2 is only the dedicated consolidation pass.
+
+#### Phase 1 — The engine models real deals (do first; trial-blocking)
+
+1. **UW-1 — Structured construction/RTL sizing IN the product engine (highest leverage).**
+   Rebuild sizing to output a **structured deal**, per the decoded `RTL_Loan_Sizer`
+   (fixtures in the trove README). Into [src/lib/underwriting/sizing.ts](../src/lib/underwriting/sizing.ts)
+   + the deal stepper: (a) the **proceeds waterfall** (purchase-advance + rehab-holdback,
+   less prepaid-interest + closing → net proceeds → **cash-to-close** → equity%); (b) the
+   **initial-advance-vs-holdback split**; (c) **interest-reserve capitalization**
+   (`InitialAdvance × Rate/12 × PrepaidMonths`, generalizing to a draw timeline); (d) the
+   deal-type-aware **governing-assumption picker** — port `buyBoxFor` from
+   `scripts/fidelity-score.ts` (construction → LTARV-primary, skip as-is LTV, LTC loose
+   secondary; **infer basis from economics**, not the purpose dropdown — calibration #14);
+   (e) LTV/LTP govern the *initial advance* with **holdback added back** (`AsIs×MaxLTV +
+   Holdback`); (f) a **cushion (headroom) per constraint**, surfaced.
+   **Status (2 of 3 sizing modes SHIPPED, math cross-checked):**
+   - **RTL / fix&flip** — [src/lib/underwriting/rtl-sizer.ts](../src/lib/underwriting/rtl-sizer.ts)
+     + [scripts/verify-rtl-sizer.ts](../scripts/verify-rtl-sizer.ts): reproduces
+     `RTL_Loan_Sizer_Fillable.xlsx` Option_1 **to the penny** (30/30). Model + fixture in
+     `loan-sizer-trove-2026-07/`.
+   - **Ground-up construction** — [src/lib/underwriting/construction-sizer.ts](../src/lib/underwriting/construction-sizer.ts)
+     + [scripts/verify-construction-sizer.ts](../scripts/verify-construction-sizer.ts):
+     Sources/Uses with a **capitalized interest reserve solved in closed form**
+     (`TotalLoan = (PurchaseAdvance + ConstructionHoldback) / (1 − Rate/12 × Months × Discount)`),
+     per decoded `Loan Sizer - Construction.xlsx`. Cross-checked 4 ways (21/21): closed-form
+     **==** 50-iteration fixed point (proof no Solver needed), Sources==Uses, a hand-worked
+     example, and the LTC/LTARV/LTAIS/shortage definitions matching the real `Loan Sizer for
+     Park Place.xlsx` deal to the penny. **Two findings surfaced** — see
+     [CALIBRATION-FINDINGS.md #19/#20](CALIBRATION-FINDINGS.md).
+   - **DSCR / rental income-approach (UW-6)** — [src/lib/underwriting/dscr-sizer.ts](../src/lib/underwriting/dscr-sizer.ts)
+     + [scripts/verify-dscr-sizer.ts](../scripts/verify-dscr-sizer.ts) (15/15): reproduces
+     `DSCR Calculator.xlsx` to the penny — **both** DSCR conventions (residential PITIA DSCR
+     `dscrForLoan`, commercial NOI max-loan `maxLoanByDscr`) — and asserts the PV max-loan is
+     identical to `underwrite()`'s DSCR constraint (no engine drift). Finding logged
+     ([#22](CALIBRATION-FINDINGS.md): label which DSCR convention is shown).
+   - **All three sizing modes now shipped + math-verified**, plus **UW-5 live-solve**
+     ([solve.ts](../src/lib/underwriting/solve.ts)) and a **dispatcher capstone**
+     ([dispatch.ts](../src/lib/underwriting/dispatch.ts) — `sizingModeForLoanType()` routes
+     the Nexys loan_type → the right sizer, honoring CALIBRATION #14's economics override;
+     `sizeDeal()` returns a mode-tagged result; [verify-dispatch.ts](../scripts/verify-dispatch.ts)
+     14/14). The full engine layer is done; **next is UI: wire into the deal stepper**
+     (UX-2 Excel-parity layout + UW-5 sliders), then UW-3 (depth layers) + UW-4 (deposits).
+   *Stage: Route / underwrite.*
+2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
+   trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
+   the pre-existing ones (One Sheet Bridge/Construction/Lilac, MFR Rehab, 286 Virginia /
+   544 Sunset) into [scripts/golden-loans.ts](../scripts/golden-loans.ts); assert engine
+   output **to-the-penny** (RTL Option_1 → Max Loan $2,422,000, Net $2,200,000, CTC
+   $294,999). Deal-type templates (RTL / ground-up / DSCR-rental / MFR) in the stepper.
+   The proof for the "replace your Excel model" wedge. *Action: get Michael's ground-up
+   Solver `.xlsx` from Damon.* *Stage: Route.*
+3. **UW-5 — Live-solve / goal-seek (the 10× over their Excel).** Every ICC model is
+   forward-calc; Michael reaches for Excel **Solver** to invert it. Make inversion native:
+   solve for max loan at a target DSCR, the advance that caps cash-to-close, the advance
+   that hits a target LTARV. **SHIPPED (logic):** [src/lib/underwriting/solve.ts](../src/lib/underwriting/solve.ts)
+   — a bisection `goalSeek()` + typed wrappers inverting the RTL / construction / DSCR
+   sizers; [scripts/verify-solve.ts](../scripts/verify-solve.ts) (11/11) proves it by
+   **round-trip** (solve → forward-run reproduces the target) + a pure-math root-finder
+   check. Remaining: the slider UI (with UX-2). *Stage: Route.*
+4. **UW-6 — DSCR / rental income-approach constraint.** Add the PITIA-DSCR path from the
+   decoded DSCR calculator — max loan via `PV(rate/12, term, −(NOI/DSCR)/12)`, both
+   amortizing and interest-only — as a first-class constraint (covers the 15 DSCR-rental
+   loans + stabilized MFR). *Stage: Route.*
+5. **UW-3 — Surface the sizing depth layers (<1 day).** Promote to first-class the already-
+   computed depth (`exit.ts`/`stabilization.ts`/`reserve.ts`): **DSCR in-place AND
+   stabilized** (buried at [deal-stepper.tsx:851](../src/components/dashboard/deal/deal-stepper.tsx);
+   Damon asked for both), **exit/takeout** ("prove the takeout clears the bridge"), the
+   **stabilization path**. *(The "confidence is low" remark maps to existing G4.2 — do
+   together.)* *Stage: Route.*
+6. **UW-4 — Deposits / equity-contribution input (bundle with UW-1).** Add optional
+   earnest/deposit/equity-source inputs so equity-required reconciles to the real capital
+   stack — matters most on construction. *Stage: Route.*
+
+#### Phase 2 — Coherence + trust (one thing that makes sense to anyone)
+
+7. **COH-2 — Fix the mandate console reading raw results (HIGH).** [CALIBRATION #18](CALIBRATION-FINDINGS.md) —
+   still open. `buildDiligence` ([src/lib/mandates/assess.ts:86-90](../src/lib/mandates/assess.ts))
+   bypasses disambiguation / list-classification / not-run, so a **clean borrower fails 5
+   gates** (Mark Morrison: clean in the Book, fails the Mandate Console — same data,
+   opposite verdict). Mirror the risk-factor logic (only `confirmed` litigation trips the
+   gate; only real `sanction`/`pep` trips sanctions; `not_run`/failed = "could not verify,"
+   never auto-fail). The trust-killer on the capital-partner surface Damon-as-fund sees
+   first. *Stage: Route / decide.*
+8. **UX-1 — Craft + de-AI pass (2–3 days, no rearchitecture).** Damon: "looks clearly
+   AI-developed." Enforce [design-system.md](design-system.md) (it already forbids the
+   tells): kill gradients + opacity-arithmetic (`bg-amber-50/40`, `bg-gradient-to-br`), cut
+   icon saturation (7 in the AI-memo card → 1–2), raw tailwind sprawl → semantic tokens,
+   enforce the type scale, single loading state; de-clutter to one-question-per-screen.
+   Full spec: [UX-REDESIGN-PLAN.md §12](UX-REDESIGN-PLAN.md).
+9. **UX-2 — Persona-agnostic coherence (the user's top priority: "no matter who you are it
+   makes sense").** The seamless-product pass: **one Deal object** flowing Borrower → Deal →
+   Capital → Portfolio with no re-keying; **one `computeVerdict()`** on every surface;
+   **Excel-parity sizing layout** (waterfall left, constraint ladder + pass/fail + cushion
+   right — the layout ICC already trusts) so an underwriter reads it instantly; **cushion/
+   headroom shown everywhere** a constraint binds (Damon's "art of massaging the deal");
+   **native scenario compare** (Option_1/Option_2 columns); a first-run path that orients
+   any persona (broker / underwriter / capital partner) to *their* next action. Full spec:
+   [UX-REDESIGN-PLAN.md §13](UX-REDESIGN-PLAN.md). *Woven through Phases 1–4; this item is
+   the dedicated consolidation pass.*
+
+#### Phase 3 — Best-execution + capital (the distribution wedge)
+
+10. **A1+ — Best-execution rate stack (not pass/fail).** Parse the 10 real seller guides /
+    DSCR matrices / quote sheets (`Lenders.zip`: ACRA, ArchWest, Conventus, Dunmor,
+    Eastview, Oakhurst, …) via the A1 parser; the evaluate engine returns a **priced rate
+    stack per investor** (rate + buyup/buydown in bps/$, binding eligibility flag), ranked —
+    the Colchis-tool structure, generalized. Wire live rate sheets so pricing stays current.
+    *Stage: Route.*
+11. **CAP-1 — Concentration alerts + facility-aware sizing + portfolio roll-up.** Flag a
+    borrower crossing a $ threshold ($20M) or geographic concentration ("10 big loans in
+    Bel Air"); size against the **lender's own facility capacity** (the Colchis LOC
+    Borrowing-Base-Limits model) so we never green-light a loan the facility can't hold;
+    roll network activity up to the capital partner. Damon (both businesses) is the first
+    capital-partner user. *Stage: Portfolio / Monitor.*
+12. **CAP-2 — Priced-rate + margin overlay per investor, override-able (small).** "Price
+    every loan, bake in a margin; override if the LO pushes back." Extends the per-investor
+    overlay + A2. *Stage: Route.*
+13. **COND-1 — Auto-conditions from the deal profile.** Generate the likely condition set
+    (ground-up → draw inspections, budget, completion; DSCR → lease/estoppel) from the deal
+    type + pillars, seeded by ICC's Master Nexys Condition List. Turns sizing into a
+    pre-underwrite. *Stage: Decide.*
+
+#### Phase 4 — Additional-analysis differentiators (the moat — things Excel can't do)
+
+14. **AN-1 — Construction cost benchmarking.** Compare a budget's **$/sqft to regional
+    norms** (RSMeans-style or derived from ICC's own deal corpus) → flag under-budgeted
+    rehabs (feasibility + fraud signal). *Stage: Investigate / Route.*
+15. **AN-2 — Interest-reserve adequacy over the draw timeline.** Does the reserve carry to
+    stabilization given the NOI ramp? Wire `reserve.ts` + `stabilization.ts` to the draw
+    schedule. *Stage: Route.*
+16. **AN-3 — Sponsor capacity from the REO schedule.** Concurrent projects, aggregate
+    exposure, can-they-carry — turns the track record into a *forward* risk signal.
+    *Stage: Investigate.*
+17. **AN-4 — Calibrate the buy-box to realized outcomes (the compounding moat).** As deal
+    outcomes accrue (E1), tune the buy-box to *actual* performance and benchmark a
+    borrower's budget/cost against the corpus. A spreadsheet on one laptop can never do
+    this; a multi-tenant platform can. *Stage: Outcome.*
+
+#### Phase 5 — Integration + adjacency
+
+18. **INT-1 — Salesforce connector (customer-gated) = [D6 item 3](#cross-cutting--interoperability--lender-stack-integration-d6).**
+    Damon asked twice; Insignia is standing up SF/Encompass now. Reconfirms SF as the
+    priority connector when the field-mapping need lands. *Stage: Interoperability.*
+19. **Consumer Bridge — logged adjacency, NOT built.** The trove's `Consumer Bridge.zip` is
+    an owner-occupied **HPML/HOEPA/TILA** product (TaliMar-modeled) — a different regulatory
+    animal from the business-purpose ICP. Captured in [IDEAS.md](IDEAS.md); revisit only if
+    ICC actually pursues consumer bridge.
+
+**Non-product action items from the reset call (don't lose these):**
+- **Email Damon the AAPL conference info** (Nov 9–11, Vegas) — he asked; can't find it in his inbox.
+- **~~Get Michael's Solver `.xlsx`~~** — turned out to be in the trove
+  (`Loan Sizer - Construction.xlsx`; "Solver" = a closed-form-solvable circular interest
+  reserve). Still worth grabbing Damon's **condo-project Excel** he offered + confirming the
+  named `ICC SFR 1-4 Construction Deck V.1.01.xlsx` (likely in the 16GB download).
+- **Thursday 4:00** standing meeting (was Tuesday; blew it) — run the **Livermore bridge-
+  apartment live deal** through PulseClose together.
+- He'll send **Cushman & Wakefield multifamily sizing decks** — mine for MFR sizing nuggets.
+
+**New cross-cutting design principle (from the reset call):** the AI memo stays a
+**teaching-oriented "common framework to evaluate the deal," never a black box.** Damon's
+stated fear: throwing a deal in blind and "not knowing shit when the investor calls." The
+memo narrates + frames so the human learns the deal; it never replaces reading it, and
+never sets the number or the tier (same spine as always).
+
+---
+
 ## Decisions log (append-only)
+
+### 2026-07-01 (b) — ICC data trove decoded → expanded phased plan
+ICC handed over a large data trove (`~/Downloads`: `Loan Sizer.zip`, `Insignia Capital
+Corp.zip` 1.5GB, `Lenders.zip` 122MB, `Consumer Bridge.zip`, + the **full ICC Box folder
+(60GB+)** still downloading — a major future data source, every ICC deal/model/guideline/LOI).
+Decoded the **product-relevant models** and pulled them into
+`clients/insignia-capital/data/loan-sizer-trove-2026-07/` (with a README documenting the
+decoded logic + golden fixtures). Crown jewel: **`RTL_Loan_Sizer_Fillable.xlsx`** (Noah,
+2026-06-23) — the fix&flip sizer, which produces a **structured deal** (proceeds waterfall,
+initial-advance-vs-holdback split, prepaid-interest reserve, cash-to-close, Tier×Rehab-Type
+buy-box with a cushion per test). Also decoded: Construction Budget (soft/hard cost split,
+spent-to-date, %-complete, $/sqft), a PITIA DSCR calculator (PV-based max loan), the Colchis
+Scenario Tool (a real investor's rate-stack pricing + eligibility box), and the Track Record
+& REO schema (tags ground-up + construction budget per property). `Lenders.zip` = 10 real
+investor seller guides / DSCR matrices / quote sheets (A1 fixture set). Consumer Bridge = a
+separate HPML/HOEPA product → logged as adjacency, not built. This **reframed UW-1 from "port
+a buy-box" to "output the structured deal the way their Excel does — only better,"** and,
+with an improvement deep-think (features/UX/integrated-data/additional-analysis), expanded
+the plan into **5 phases** (engine models real deals → coherence+trust → best-execution+capital
+→ additional-analysis moat → integration): added UW-5 live-solve/goal-seek, UW-6 DSCR
+income-approach, UX-2 persona-agnostic coherence (+ cross-cutting **principle 13**), A1+
+best-execution rate stack, COND-1 auto-conditions, and AN-1..4 (cost benchmarking, reserve
+adequacy, sponsor capacity, calibrate-to-outcomes). UX coherence elevated to the owner's top
+priority ("no matter who you are, it makes sense") — spec in [UX-REDESIGN-PLAN.md §13](UX-REDESIGN-PLAN.md).
+Next action: **start building UW-1.**
+
+### 2026-07-01 — Damon engagement-reset demo → construction-sizing + coherence + craft plan
+Damon saw the restructured 4-section product (Borrower · Deal · Capital · Portfolio) on
+the 7/1 reset call; strong buy-in ("you're onto something for the space," "bigger
+opportunity here"); ICC trialing it **July + August across both businesses**; **AAPL Nov
+9–11 Vegas** is the new GTM-debut forcing function (chosen over NPLA). Three code deep-reads
++ the real 208-loan ICC book + [CALIBRATION-FINDINGS.md](CALIBRATION-FINDINGS.md) converged
+on one gap: the sizing engine is **loan-type-agnostic**, but **~27% of the real book is
+construction+F&F** and the flagship #10049 E2E loan is Ground-Up Construction sized as
+bridge — confirming Damon's "the LPB's wrong because it's a construction loan." Reconciled
+the "did we replicate his Solver?" question: we ported the **bridge** constraint ladder to
+the product, **validated** the deal-type-aware construction buy-box in `scripts/fidelity-score.ts`
+(6.9% mean |Δ|) but **never ported it to the engine**, and **never built** the interest-
+reserve/holdback/draw math (Michael Nassirzadeh's local Excel Solver — not in any repo).
+Discovered **ICC's real Excel models already sit in the consulting repo** (`clients/insignia-capital/data/`)
+— usable as golden fixtures. Also confirmed two coherence breaks (mandate console reads raw
+results, #18, still open; two sizing truths) and the "looks AI-developed"/cluttered UX (craft
+drift from `design-system.md`, not rearchitecture). Actions: added the **Post-Damon-reset
+sequence** (UW-1 construction sizing → UW-2 import models → COH-2 mandate fix → UW-3 DSCR
+surfacing → UW-4 deposits → UX-1 craft/de-AI → CAP-1 concentration → CAP-2 pricing overlay →
+INT-1 Salesforce); logged the non-product action items (AAPL email, get Michael's Solver
+file, Livermore live-deal run); added the teaching-memo design principle; wrote the demo
+signals into [IDEAS.md](IDEAS.md) and [UX-REDESIGN-PLAN.md §12](UX-REDESIGN-PLAN.md); memory
+`project_damon_engagement_reset_2026-07-01` + `project_damon_excel_model_moat`.
 
 ### 2026-06-23 — Reposition to verification + underwriting gateway; reconcile docs
 The Underwriting Workbench (deterministic sizing) + AI UW Copilot shipped this
