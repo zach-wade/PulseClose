@@ -65,6 +65,66 @@ the work now is to point the positioning, pricing, and first-run UX at it
 (see [docs/UX-PLAN.md](docs/UX-PLAN.md) and the post-NPLA sequence in
 [docs/ROADMAP.md](docs/ROADMAP.md)).
 
+## Sharpened by the Damon reset (2026-07-01) — the product space, made precise
+
+The 2026-07-01 engagement-reset demo (Damon saw the restructured 4-section product;
+ICC now trialing it July + August across **both** Insignia businesses) clarified what
+this actually is, in the buyer's own words. Strip it back and PulseClose is becoming
+**the loan desk in a box for the sub-$30M bridge/construction lender** — the exact
+segment Damon named: *"too small for the big private credit funds but juicy for guys
+like me,"* run by *"guys who spend five minutes and need help structuring,"* on Excel
+models one or two people can safely touch. That segment is **too sophisticated for a
+generic LOS** (Nexys can't model his condo-conversion — *"this is outside the model"*)
+and **too small for institutional infrastructure** (no analyst bench, no CoStar UW shop).
+
+**The moat is Damon's earned modeling expertise, systematized** — so Noah/Nikki can run
+a deal without blowing up Solver, and 40 loans/month becomes feasible. See memory
+`project_damon_excel_model_moat`. The flow is genuinely three-sided through one canonical
+Deal object:
+- **Originator/broker** dumps a messy intake → PulseClose **pre-flights** it (borrower
+  validation + auto-scrub + "here's what's missing"). Damon: *"broker intakes are pathetic"*
+  — cleaning their input is a paid service that *also* improves his deal quality.
+- **Lender/underwriter (Damon/Noah)** sizes + structures with the engine that **encodes
+  his models**, AI narrating on top — *"a common framework to evaluate the deal,"* never
+  replacing the human. The paid core.
+- **Capital partner/fund** gets the handoff + **portfolio roll-up + concentration alerts** —
+  and *"everyone on their network flows up into the capital partner,"* the distribution
+  flywheel, now validated in his own words.
+
+**The strategic unlock: Damon is the entire loop in one relationship.** He's the first
+lender-user *and* the first capital-partner (both Insignia businesses trialing July/Aug).
+The "standalone UW wedge (replace your Excel model)" is the *cold* front door; capital-
+provider endorsement is the *warm* distribution — **Damon collapses both into one proof.**
+Get the loop working end-to-end for him and the core hypothesis is validated at n=1, where
+n=1 is your design partner *and* your distributor.
+
+**The one gap that blocks all of it (must-fix, not optional):** the sizing engine is
+**loan-type-agnostic**, but **~27% of ICC's real 208-loan book is construction + fix&flip**,
+and the flagship #10049 loan is Ground-Up Construction we sized as bridge — confirming
+Damon's *"the LPB's wrong because it might be a construction loan."* We ported his **bridge**
+one-sheet to the product, *validated* the deal-type-aware construction buy-box in a
+calibration script (`scripts/fidelity-score.ts`, 6.9% mean |Δ| vs. real approved loans) but
+**never ported it to the engine**, and **never built** the interest-reserve/holdback math.
+*(2026-07-01 correction: the ground-up "Solver" model is not a mystery file — it's
+`Loan Sizer - Construction.xlsx` in the trove; its "Solver" behavior is a circular interest
+reserve that solves in closed form.)*
+The July/Aug trial fails on his real flow until this is closed. This is UW-1 in the
+[Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft),
+and the concrete meaning of "replace your Excel UW model."
+
+**Update (2026-07-01) — we now have the actual models.** ICC handed over a large data trove;
+the product-relevant sizing models are decoded and in the repo
+(`clients/insignia-capital/data/loan-sizer-trove-2026-07/`) — the RTL fix&flip sizer,
+construction budget, DSCR/PITIA calculator, a real investor's rate-stack pricing tool
+(Colchis), and **10 real investor seller guides / matrices / quote sheets**. This hardens the
+"replace your Excel model" wedge two ways: (1) UW-1 now replicates a *structured deal* (a
+proceeds waterfall + holdback split + cash-to-close + cushions), not just a max-loan number,
+and can be validated **to the penny** against the golden fixtures; (2) best-execution can be
+priced across a real 10-investor grid, which is the thing Damon's brokers actually pay for.
+The deep-think on going *beyond* the incumbent Excel (live goal-seek instead of manual Solver;
+cost-benchmarking, reserve-adequacy, and calibrate-to-realized-outcomes — analysis a
+single-laptop spreadsheet can't do) is captured as Phases 3–4 of the ROADMAP sequence.
+
 ## Where we are today (2026-06-23)
 
 Live at `app.pulseclose.com`, multi-tenant SaaS, Stripe billing, real

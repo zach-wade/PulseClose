@@ -10,6 +10,104 @@ specific journey/stage assignment.
 
 ---
 
+## Damon engagement-reset demo (2026-07-01) — sharpened signals
+
+Damon saw the restructured 4-section product (Borrower · Deal · Capital ·
+Portfolio) on the 7/1 reset call and gave direct feedback; ICC is trialing it
+July + August across both businesses. Full extraction in memory
+`project_damon_engagement_reset_2026-07-01` + `project_damon_excel_model_moat`.
+Several items below confirm/sharpen existing entries — noted inline.
+
+### Construction/ground-up sizing IN the product engine — the "replicate Michael's Solver" gap (ROADMAP-READY, highest leverage)
+`sizing.ts` is loan-type-agnostic: same LTV/LTC/LTARV/DSCR/DY min regardless of
+Bridge vs Ground-Up. The real ICC book is ~27% construction+F&F (32 GUC / 24 F&F
+of 208 loans). The calibration harness **already solved** the deal-type-aware
+buy-box (`buyBoxFor` in `scripts/fidelity-score.ts` — construction → LTARV-primary,
+skip as-is LTV, LTC loose secondary; `6.9%` mean |Δ| vs real approved loans) and
+added `costSpentToDate` — but that logic lives in the **script, not the engine**.
+Damon's "the LPB's wrong because it might be a construction loan" landed on #10049,
+a real GUC loan we sized as generic bridge. **Build:** port the governing-assumption
+picker into `sizing.ts` + the deal stepper; add interest-reserve capitalization into
+the loan amount + an initial-advance-vs-construction-holdback / draw model — that IS
+the "Solver" Damon means. **Source of truth:** Michael Nassirzadeh's Excel Solver LOI
+model does interest-reserve + advance-vs-holdback "to the penny" (referenced in
+consulting `clients/insignia-capital/pickup.md`, NOT in any repo — Michael's local/Box).
+- **Unblocks when:** NOW — Damon demo + calibration #14–#17 both confirm. Get Michael's
+  Solver file, extract formulas, port. Pairs with the standalone-UW-wedge entry below.
+
+### Import ICC's real Excel models as engine golden-fixtures + templates
+Sitting in consulting `clients/insignia-capital/data/`: One Sheet Bridge/Construction/
+Lilac, SFR Ground-Up, MFR Bridge-or-Stabilized (2.5M), MFR Rehab Deck (1.7M), plus
+live loan requests (286 Virginia, 544 Sunset). Use them to (a) validate the engine
+to-the-penny and (b) seed deal-type templates. This is the "5 real Excel models as
+validation anchor" the standalone-UW-wedge entry already assumes — now with paths.
+- **Unblocks when:** same build as construction-sizing; the models are the fixtures.
+
+### Surface the sizing depth layers — DSCR / exit / stabilization (near-zero build)
+Several things Damon engaged with are already computed but buried as optional depth
+(`sizing.ts` + `exit.ts` + `stabilization.ts` + `reserve.ts`): DSCR in-place AND
+stabilized (rendered at `deal-stepper.tsx:851` but the default coverage-basis hides
+in-place — "coverage in place now AND at stabilization, the matrix everyone underwrites
+to"); exit/takeout ("prove the takeout clears the bridge"); the stabilization path on a
+timeframe. Promote all three to first-class. The "confidence is low" remark maps to the
+existing G4.2 confidence-score audit + tooltip — do them together.
+- **Unblocks when:** NOW, trivial (surfacing/default, not build).
+
+### Capital-partner concentration alerts (Portfolio section)
+Damon-as-fund: flag when a borrower crosses a $ threshold (he said $20M) or too many
+loans in one geography ("10 big loans in Bel Air"); bubble to the top of a portfolio
+report; "everything on their network flows up into the capital partner." Extends the
+capital-provider-mandate-object entry with a concrete alerting + roll-up mechanic.
+- **Unblocks when:** fund persona work / Damon's July-Aug trial as first capital-partner.
+
+### Deposits / equity-contribution input
+Engine has no earnest/deposit/equity-injection field ("I haven't built a deposit yet,
+but sometimes you get deposits"). Add optional equity-source inputs so equity-required
+reconciles to the real capital stack (matters most on construction).
+- **Unblocks when:** construction-sizing build.
+
+### Priced-rate + margin overlay per investor, override-able
+"Price every loan, bake in a margin; if the LO doesn't like it he lets us know and we
+override." Small extension of the per-investor overlay + the "pricing output not just
+pass/fail" entry: explicit margin field + override.
+- **Unblocks when:** NOW-ish; small on top of existing per-investor sizing.
+
+> **Update (2026-07-01, ICC data trove decoded).** ICC's real models were decoded and
+> pulled into `clients/insignia-capital/data/loan-sizer-trove-2026-07/`. This promoted most
+> of the entries below into the ROADMAP **Post-Damon-reset sequence** as committed Phase 1–4
+> items (UW-1 structured sizing, UW-5 live-solve, UW-6 DSCR income-approach, A1+ best-execution,
+> COND-1 auto-conditions, AN-1..4 additional-analysis differentiators). What remains here is
+> the unscoped rationale + the not-yet-committed adjacencies (e.g. Consumer Bridge as an
+> HPML/HOEPA product line — logged, not built).
+
+### Broker-intake quality scorer (distribution wedge + product feature)
+Damon: broker intakes are "pathetic" — "how we can help them make it a better deal, better
+presentation... they'll make way more money." A feature that grades/cleans an incoming broker
+packet (completeness, missing fields, presentation) and tells the broker what's missing before
+it reaches the underwriter. Doubles as a wedge: cleaning the broker's input is a paid service
+that *also* improves Damon's deal quality. Builds on the existing DocIngest extraction.
+- **Unblocks when:** the pre-flight/intake flow is the demo path with real broker packets in the
+  July-Aug trial; or a broker-facing surface is scoped. Pairs with the $1–2k/mo broker-modeling
+  pricing thesis (Damon agreed — maps to the PRICING-STRATEGY underwriting tier).
+
+### Salesforce connector
+Damon asked twice "does this play inside Salesforce eventually?" API-first already;
+Insignia is standing up SF/Encompass now. A connector (push deal + pricing fields
+to/from SF) is the automation path he pictures.
+- **Unblocks when:** he commits the SF workflow / a real field-mapping need lands.
+
+### UX craft pass — de-AI-ify the look + cut clutter (NOT a feature; a discipline sweep)
+Audit (2026-07-01) found the architecture (verdict-first stepper, progressive
+disclosure) sound but craft drifted from `design-system.md`: gradient + opacity-
+arithmetic backgrounds (`bg-amber-50/40`), icon saturation (7 in the AI-memo card),
+raw tailwind color sprawl vs semantic tokens, text-size chaos, all-cards-identical.
+~2–3 day pass, no rearchitecture. Damon: "looks clearly AI-developed." Keep the memo
+teaching-oriented (human-on-top: "a common framework to evaluate the deal," never a
+black box — his stated fear was "not knowing shit when the investor calls").
+- **Unblocks when:** NOW — before the AAPL Nov demo and during the July-Aug ICC trial.
+
+---
+
 ## Adjacent market: CRE bridge *lenders* (not brokers) — 2026-06-23
 
 The underwriting engine (`src/lib/underwriting`) already underwrites the

@@ -463,3 +463,114 @@ Build a shared kit once, reuse on every surface:
 
 Consistency is load-bearing: every verdict on every surface comes from the one
 `computeVerdict()` — inconsistent verdicts destroy trust faster than missing ones.
+
+## 12. Craft + de-AI pass (2026-07-01) — "looks clearly AI-developed" + "highly cluttered"
+
+Damon's two verbatim critiques on the 7/1 reset call: the product is *"highly
+cluttered, a lot going on,"* and it *"looks clearly AI-developed."* A full audit
+(three code deep-reads) confirmed both — and, importantly, **separated them into two
+different problems with two different fixes.** This is a **~2–3 day craft/discipline
+sweep, NOT a rearchitecture.** The verdict-first architecture (§11) is sound; the work
+is craft + hierarchy. Do it before the **AAPL Nov 9–11 demo** and during the July/Aug
+ICC trial. Tracked as **UX-1** in the ROADMAP [Post-Damon-reset sequence](ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).
+
+### 12.1 "Cluttered" = signal-to-noise, not bad structure
+The density is *informational*, and the architecture is defensible. The fix is
+emphasis, not removal — one question per screen; everything else discloses:
+- **One answer dominates each surface.** §11 already does this on the detail page;
+  extend to Sizing (the **max loan + binding constraint** is the answer — make it
+  visually dominant; demote the constraint ladder + per-investor table into it).
+- **Collapse the stacked banners.** The detail-page left column stacks up to 3
+  full-width banners (input-warning / pending-review / demo-data) before content →
+  collapse into a single **"data quality"** line that expands on click.
+- **Group related cards.** Evidence tab renders Property table + Verify tray +
+  Borrower uploads + Verified track record as 4 sibling cards → nest under one
+  **"Property evidence"** section.
+- **Reduce visual sameness.** Today every card is an identical white box, so nothing
+  pops. The one thing that matters (binding constraint row, verdict) must be visually
+  louder — via weight/size/spacing/highlight — than its neighbors.
+
+### 12.2 "Looks AI-made" = enforce the design system we already wrote
+`design-system.md` **already forbids** nearly every tell the audit found; it just
+isn't enforced. The sweep (with concrete locations):
+- **Kill gradients + opacity-arithmetic backgrounds.** `bg-gradient-to-br from-info/5`,
+  `bg-amber-50/40`, `border-amber-300/50` ([ai-memo.tsx:59,48](../src/components/dashboard/ai-memo.tsx),
+  banners, [litigation-grid.tsx:60](../src/components/dashboard/litigation-grid.tsx)) →
+  flat semantic-token fills. Opacity math (`/40`, `/60`) is the single biggest AI tell.
+- **Cut icon saturation.** The AI-memo card alone renders **7 different icons**
+  (`Sparkles`, `TrendingUp/Down`, `Minus`, `AlertTriangle`, `Info`, `Lightbulb`,
+  `CheckCircle2` — [ai-memo.tsx:18-28](../src/components/dashboard/ai-memo.tsx)) → 1–2;
+  let typography carry the hierarchy.
+- **Replace raw-tailwind color sprawl with semantic tokens.** `amber-50/100/300`,
+  `red-50` scattered across [gc-status-chip.tsx](../src/components/dashboard/gc-status-chip.tsx),
+  [entity-result-card.tsx:120](../src/components/dashboard/entity-result-card.tsx),
+  banners → `--warning` / `--danger` / etc., one value each, no per-component variants.
+- **Enforce the type scale.** No `text-2xl` on stat values, no `text-[10px]` custom
+  sizes, no 4-sizes-in-one-row factor cards. Page title `text-2xl`, section header
+  `text-base`, card title / body `text-sm`, small `text-xs` — nothing else.
+- **Single, subtle loading state.** No double `animate-pulse` (the "Generating…" card
+  pulses both the `Sparkles` icon and a dot — [ai-memo.tsx:526](../src/components/dashboard/ai-memo.tsx)).
+- **`--info` (violet) is chart-series only** per design-system — remove it from UI
+  status containers.
+
+### 12.3 The teaching-memo principle (design guardrail from the call)
+Damon's stated fear: throwing a deal in blind and *"not knowing shit when the investor
+calls."* The AI memo must stay a **teaching-oriented "common framework to evaluate the
+deal"** — it narrates and frames so the human *learns* the deal; it never becomes a
+black box that replaces reading it, and never sets the number or the tier. When
+simplifying the memo UI, preserve the drill-to-evidence path (Noah's principle: AI
+narrates, never characterizes) — de-clutter the chrome, not the substance.
+
+### 12.4 Scope note
+This is craft, not features. It does **not** touch the engine (that's UW-1) or the
+verdict logic (COH-2). It can ship in parallel with the sizing work. Success test: a
+neutral observer can't tell it was AI-built, and Damon can find the one number that
+matters on each screen in <2 seconds.
+
+## 13. Persona-agnostic coherence — "no matter who you are, it makes sense" (2026-07-01, PRIORITY)
+
+The owner's top UX priority after the reset: the product must feel like **one seamless
+thing** to whoever opens it — a broker submitting an intake, an underwriter (Damon/Noah)
+sizing a deal, or a capital partner reviewing throughput. Today it can read as four bolted-
+together tools. This section is the coherence spec; it's **cross-cutting principle 13** in
+ROADMAP and is tracked as **UX-2**, woven through Phases 1–4 with a dedicated consolidation
+pass. It builds on §11 (verdict-first) — this is §11 extended from "answer-first" to
+"same product, every persona, every surface."
+
+### 13.1 The five coherence rules (apply to every surface)
+1. **One Deal object, no re-keying.** A deal entered once (or doc-ingested once) flows
+   Borrower → Deal → Capital → Portfolio. No surface re-asks for data another surface
+   already has. The intake packet pre-fills sizing; the sized deal pre-fills the handoff.
+2. **One verdict, everywhere.** Every surface renders `computeVerdict()` — the Book, the
+   detail hero, the Mandate Console, the handoff, the portfolio row. Two surfaces disagreeing
+   on the same borrower (the mandate-vs-book bug, COH-2) is the cardinal sin.
+3. **Answer first, evidence on disclosure.** BLUF on every screen (§11.2). The one number
+   that matters is visually dominant; everything else discloses.
+4. **Sizing uses the Excel-parity layout ICC already trusts.** Two-column "Underwriting
+   Summary" — **proceeds waterfall on the left, constraint ladder + pass/fail + cushion on
+   the right** — mirroring `RTL_Loan_Sizer` so an underwriter reads it in seconds. The magic
+   (live-solve, best-execution) sits under a familiar shell.
+5. **Persona wayfinding.** Each surface names the current persona's *next action*:
+   broker → "what's missing / send to underwriter"; underwriter → "size / structure / route";
+   capital partner → "does it meet my mandate / portfolio impact." The fund tenant already
+   gets the mandator spine (§4); extend the pattern so no persona lands on a dead end.
+
+### 13.2 Coherence primitives to add (beyond §11.4's kit)
+- **`<ProceedsWaterfall>`** — the money movement (advance + holdback − prepaid − closing →
+  net → cash-to-close → equity%), from the decoded RTL sizer. The artifact that makes it
+  *replace* the Excel.
+- **`<ConstraintLadder cushion>`** — the binding-constraint table with **headroom per test**
+  surfaced (Damon's "art of massaging the deal"), not just pass/fail. Reused on sizing,
+  handoff, and per-investor.
+- **`<ScenarioColumns>`** — native Option_1 / Option_2 / Option_3 comparison (the RTL sizer
+  and Colchis tool both do this by hand today).
+- **`<SolveControl>`** — the live goal-seek sliders (UW-5): drag a target DSCR / rate /
+  cash-to-close, watch the deal re-solve. The 10× over their Excel.
+- **`<PersonaNextStep>`** — the wayfinding CTA block, persona-aware.
+
+### 13.3 Success test
+Sit a broker, an underwriter, and a capital partner in front of the same deal. Each should
+(a) immediately see the verdict/answer for *their* job, (b) never hit a screen that
+contradicts another or asks for data already given, (c) find their next action without a
+tour. And the underwriter should recognize the sizing screen as "my one-sheet, but it
+solves."

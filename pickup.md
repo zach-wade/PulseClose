@@ -1,99 +1,82 @@
-# PulseClose — Session Pickup & Execution Plan (2026-07-01, rev. SOS-COVERAGE)
+# PulseClose — Session Pickup & Execution Plan (2026-07-01, rev. DAMON-RESET)
 
 > **Self-contained handoff — start a fresh session from here.**
-> This session shipped two things: (1) the remaining **UX-audit Thread A** findings
-> (two-column Summary, fund-tenant nav, property-count reconcile, LOW fixes), then
-> (2) a large **free-SOS-coverage expansion** — went from **3 → 12 free entity states**,
-> restored the Cobalt fallback, diagnosed + fixed the FL bulk load, and passed the
-> definitive **#10049 all-5-pillars-free** E2E. All on `main`, green, migrations
-> unchanged (00001–00051). Commits: **1fdc7a3 → f82d553** (14).
+> This session was **analysis + planning, no code shipped.** Reviewed the **2026-07-01
+> Damon engagement-reset demo transcript** (he saw the restructured 4-section product;
+> ICC now trialing it **July + August across both Insignia businesses**), ran three code
+> deep-reads + checked his assumptions against the real 208-loan ICC book, and reconciled
+> the sizer-vs-Solver question. Then wrote it all into the planning docs. **Everything is
+> on `main`, green, migrations unchanged (00001–00051).**
 >
-> **Nothing is mid-flight.** The only user-action item is the **CALICO subscription
-> approval** (chase `bizfile@sos.ca.gov`; CA works via Cobalt meanwhile). Everything
-> else below is optional/next-up, not blocked.
+> **The active plan is now the ROADMAP [Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).**
+> Next code work = **UW-1 (construction sizing in the engine).** Prior session's
+> SOS-coverage state is preserved below under §Critical context (still valid).
 
 ## Read first (in order)
-1. [docs/COVERAGE.md](docs/COVERAGE.md) — the SOS/GC coverage table (now 12 free states + Cobalt).
-2. [docs/RESEARCH-SOS-50-STATE.md](docs/RESEARCH-SOS-50-STATE.md) **§Complete matrix** — every
-   state's definitive verdict + the three free-access patterns (Socrata / open JSON API / ArcGIS).
-3. [docs/UX-AUDIT-RUBRIC.md](docs/UX-AUDIT-RUBRIC.md) — the design gate; **score every new surface**.
-4. [docs/PERSONA-E2E-PLAN.md](docs/PERSONA-E2E-PLAN.md) — the real-loan E2E harness
-   (`scripts/e2e-persona-loan.ts <key>` — keys: `nachman`|`pappas`|`fili`|`fkac`).
-5. [docs/UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md) §11.2 (verdict-first principles) · memory `MEMORY.md`.
+1. **[docs/ROADMAP.md](docs/ROADMAP.md) §Post-Damon-reset sequence** — the active ordered plan (UW-1 → INT-1) + the 2026-07-01 Decisions Log entry.
+2. **[docs/CALIBRATION-FINDINGS.md](docs/CALIBRATION-FINDINGS.md)** — findings #14–#17 (deal-type buy-box, `costSpentToDate`) + #18 (mandate reads raw results, still open). The evidence base for UW-1 + COH-2.
+3. **[STRATEGY.md](STRATEGY.md) §Sharpened by the Damon reset** — the "loan desk in a box" product-space synthesis + the sizer-vs-Solver reconciliation.
+4. **[docs/UX-REDESIGN-PLAN.md](docs/UX-REDESIGN-PLAN.md) §12** — the craft/de-AI + de-clutter pass (UX-1).
+5. **[docs/IDEAS.md](docs/IDEAS.md) §Damon engagement-reset demo** — the unscoped versions · memory `MEMORY.md` (esp. `project_damon_excel_model_moat`, `project_damon_engagement_reset_2026-07-01`).
 
 ---
 
 ## Where we are — headline (2026-07-01)
-All on `main`, deployed green; **migrations 00001–00051 (no new migrations)**; `npm run build`
-clean. The **entity pillar now resolves FREE across 12 states**; where it doesn't, the
-**re-keyed Cobalt** covers all 50 as paid fallback. The diligence + verdict layer is honest
-end-to-end (individual borrowers, weak matches, pending-review), the UI's raw-enum leakage is
-fixed site-wide, and the Summary/Fund-nav restructure shipped. FL + VA are full free entity+GC states.
+On `main`, deployed green; **migrations 00001–00051 (no new migrations)**; build clean. The
+prior session's **free-SOS coverage (12 free entity states + Cobalt fallback)** is live and
+unchanged. This session found the one gap that blocks the ICC trial: **the sizing engine is
+loan-type-agnostic, but ~27% of ICC's real book is construction+F&F, and the flagship #10049
+loan is Ground-Up Construction sized as bridge** — confirming Damon's "the LPB's wrong because
+it's a construction loan." That + two coherence breaks + a craft/de-AI UX pass are the plan.
 
-## Shipped this session
-
-### 1. UX-audit Thread A (`1fdc7a3`, `eb6a398` — verified live via `scripts/drive-verify-threadA.ts`)
-- **Two-column Summary** — the curated Summary (AI memo + why-this-rating + at-a-glance stats +
-  mandate stamps) promoted OUT of the "Full report" disclosure into a two-column layout under the
-  verdict hero; disclosure holds the deep drill only (default tab Evidence).
-- **Fund-tenant nav** — `org_type=fund` gets the mandator spine (**Mandates + Portfolio**);
-  Borrowers/Deals hidden (`src/components/dashboard/sidebar.tsx` reads `org_type` from `/api/settings`).
-- **Property-count reconcile** — Summary "Track record" stat + `UnifiedPropertyTable` share one
-  merge (`unifiedPropertyCounts`); the stat agrees with the table.
-- **LOW** — Borrowers-table AI column no longer clips; entity card shows a dynamic **free-source
-  note** listing only the fields THAT source actually left blank (`entity-result-card.tsx`).
-
-### 2. Free-SOS-coverage expansion (`c68101a` → `f82d553`) — 3 → 12 free entity states
-All in `src/lib/adapters/sos-free.ts` unless noted; each live-verified from a **datacenter IP**
-(our real constraint — Vercel + CI are datacenter IPs, so CAPTCHA/Cloudflare/Incapsula/WAF-403
-sources are unusable even when "free" in a browser).
-- **Free-LIVE (per-request):** **TX** (Comptroller franchise-tax open JSON API), **CT/PA/OR**
-  (Socrata), **DC** (DLCP ArcGIS FeatureServer), **ID/ND** (shared "FirstStop" open JSON API) —
-  joining the pre-existing **CA**(needs key)·**CO**·**NY**.
-- **Free-BULK (ingested → `sos_entities`, cron-refreshed):**
-  - **VA** — SCC LLC register (`csv-url` source kind in `scripts/sos-sources.ts`), **388k active
-    LLCs**. ⚠️ VA's `llc.csv` is **Excel-capped at 1,048,575 rows** → entities past the cap + all
-    **non-LLC corps (a separate `corp.xlsx` not ingested)** miss cache → Cobalt.
-  - **FL** — Sunbiz `cordata.zip`, **3.93M active entities** (see the FL fix below).
-- **Complete 50-state matrix** in RESEARCH-SOS-50-STATE.md §Complete matrix — every remaining
-  state is bot-walled or paid → Cobalt. `VA` corp.xlsx + `IA` (JSON dump) are the only unbuilt
-  free-bulk candidates left; `MT/NM/OH/MS` are free-but-datacenter-IP-blocked near-misses.
-
-### 3. FL bulk fixed — the Deflate64 discovery (`af220cd`, `6c15d7b`)
-FL `--full` had been failing at unzip (`too many length or distance symbols`). **Root cause was
-NOT a corrupt download** — `cordata.zip` uses **Deflate64** (compression method 9), which
-zlib/`unzipper` cannot inflate; it also has **10 entries** (cordata0-9.txt) and the old code read
-only the first. **Fix:** extract with **`7z e -so`** (7-Zip supports Deflate64), streaming all
-entries through the fixed-width parser — no multi-GB temp file (`scripts/ingest-sos.ts`; the
-workflow ensures `p7zip`). CI ran green: **read 12.6M → upserted 3.93M**.
-> **Diagnosis method worth remembering:** a **64-byte SFTP read** of the zip header (compression
-> method @ offset 8) + the EOCD told us everything — *don't burn 2h CI runs guessing.*
-
-### 4. Cobalt restored + #10049 E2E passed
-- **Cobalt key RESTORED (`.env.local` + Vercel prod, old trial key removed, prod redeployed,
-  auth-verified).** The 50-state paid fallback is live again.
-- **#10049 all-5-pillars-FREE E2E PASSED** (`scripts/e2e-persona-loan.ts fili` — 99 TO 100 LLC +
-  GC BP Construction `CGC1525790`, FL): entity `source=fl_sunbiz` (free cache, no Cobalt), GC free
-  (DBPR), litigation/sanctions/track-record free. Verdict **"Flagged · 1 issue"** (a mandate
-  legitimately fails) — **detail == batch == handoff ✓ consistent**.
+## Done this session (docs only — no code)
+- **Extracted the Damon reset transcript** (`~/Downloads/Damon Engagement Reset mtg 7.1.26.rtf`) →
+  memories `project_damon_engagement_reset_2026-07-01` + `project_damon_excel_model_moat`.
+- **Checked his assumptions vs. real data:** #10049 (99 TO 100 LLC) **is Ground-Up Construction**;
+  ICC book of 208 = **137 Bridge / 32 GUC / 24 F&F / 15 DSCR**. Construction feedback confirmed.
+- **Reconciled sizer-vs-Solver:** product has the **bridge** ladder (`sizing.ts`); the deal-type
+  construction buy-box was validated in `scripts/fidelity-score.ts` (6.9% mean |Δ|) **but never
+  ported to the engine**; the interest-reserve/holdback/draw math (Michael's local Excel Solver)
+  **exists in no repo.** ICC's real Excel models DO sit in `clients/insignia-capital/data/`.
+- **Wrote the plan into:** ROADMAP (new sequence + Decisions Log), STRATEGY (§Sharpened…),
+  UX-REDESIGN-PLAN (§12), IDEAS (§Damon reset). Cleaned memory to PulseClose-only.
 
 ---
 
-## Open / next (nothing blocked — pick any)
+## Trove decoded (2026-07-01) — the models are now in the repo
+ICC handed over a large data trove. Product-relevant models decoded + pulled into
+**`clients/insignia-capital/data/loan-sizer-trove-2026-07/`** (consulting repo) with a
+**README** documenting the decoded logic + golden fixtures. Crown jewel:
+**`RTL_Loan_Sizer_Fillable.xlsx`** (Noah, 6/23) — fix&flip sizer producing a *structured
+deal* (proceeds waterfall + initial-advance-vs-holdback + prepaid-interest + cash-to-close +
+Tier×Rehab buy-box with cushion per test). Also: Construction Budget, DSCR/PITIA calc, Colchis
+rate-stack pricing tool, Track Record schema. `Lenders.zip` = 10 real investor guides (A1 set).
+⚠️ A **16GB+ server image is still downloading** (`~/Downloads/Unconfirmed*.crdownload`) — analyze when it lands.
 
-1. **[USER ACTION] CALICO subscription approval** — the CA free unlock. See §Critical context;
-   chase `bizfile@sos.ca.gov` / (916) 653-6814 for the **CBC API Production** product; cancel the
-   irrelevant UCC UAT one. CA works via Cobalt (paid ~$5) meanwhile, so this is an optimization.
-2. **VA corp entities** (optional) — only VA **LLCs** are ingested; add the `corp.xlsx` file
-   (use `exceljs`, already a dep) as a second VA source url to cover corporations too. Also, VA's
-   LLC file is Excel-capped, so a chunk of newer LLCs miss cache → consider whether a non-capped
-   VA source exists, else accept Cobalt fallback.
-3. **Iowa free-bulk** (optional, low value ~0 loans) — `idh-be.iowa.gov/api/v1/datasets/554/rows.json`
-   JSON dump; would be a new source kind (active-only, no status/officers).
-4. **Residual UX LOW items** — Borrowers table Date column sits past the 1440 scroll edge; Mandate
-   Console "active" badge renders blue not green (rubric: active status = green). Both minor.
-5. **Product direction** — the SOS coverage infra is now strong; the natural next product thread is
-   calibration against real ICC loans (`docs/CALIBRATION-FINDINGS.md`) or further UX polish. Ask the user.
+## Active plan — ROADMAP Post-Damon-reset sequence (5 phases). NEXT: build UW-1.
+
+- **Phase 1 (do first, trial-blocking):** UW-1 structured RTL/construction sizing (waterfall +
+  holdback split + interest-reserve + deal-type buy-box + cushions, per the decoded RTL sizer) ·
+  UW-2 golden fixtures to-the-penny · UW-5 live-solve/goal-seek · UW-6 DSCR income-approach ·
+  UW-3 surface depth layers · UW-4 deposits/equity.
+- **Phase 2 (coherence+trust):** COH-2 mandate-reads-raw fix (HIGH) · UX-1 craft/de-AI ·
+  **UX-2 persona-agnostic coherence** (owner's top priority — one Deal object, one verdict,
+  Excel-parity layout, cushions everywhere, scenario compare; principle 13 / UX-REDESIGN §13).
+- **Phase 3 (best-execution+capital):** A1+ rate stack across 10 real investors · CAP-1
+  concentration + facility-aware sizing · CAP-2 pricing/margin overlay · COND-1 auto-conditions.
+- **Phase 4 (moat):** AN-1 cost benchmarking · AN-2 reserve adequacy · AN-3 sponsor capacity ·
+  AN-4 calibrate-to-outcomes.
+- **Phase 5:** INT-1 Salesforce · Consumer Bridge (logged adjacency, not built).
+
+**Starting now: UW-1** — read `src/lib/underwriting/sizing.ts` + `scripts/fidelity-score.ts`
+`buyBoxFor`, implement the structured waterfall + tier×rehab buy-box + cushions, then UW-2
+golden fixtures (RTL Option_1 → Max Loan $2,422,000, Net $2,200,000, CTC $294,999).
+
+**[USER / NON-PRODUCT ACTIONS]**
+- **Email Damon the AAPL conference info** (Nov 9–11, Vegas) — he asked, can't find it.
+- **~~Michael's ground-up Solver~~** — found in the trove (`Loan Sizer - Construction.xlsx`; the "Solver" is a closed-form-solvable circular interest reserve). Still: grab Damon's condo-project Excel + confirm `ICC SFR 1-4 Construction Deck V.1.01.xlsx` (likely in the 16GB download).
+- **Thursday 4:00** — run the **Livermore bridge-apartment live deal** through PulseClose with him.
+- **CALICO subscription approval** (carried) — chase `bizfile@sos.ca.gov`; CA works via Cobalt meanwhile.
 
 ---
 

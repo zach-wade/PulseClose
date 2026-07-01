@@ -158,5 +158,6 @@ vercel deploy --prod --yes                    # Manual fallback when webhook fai
 
 ## Cross-cutting design principles
 
-12 codified in [docs/ROADMAP.md](docs/ROADMAP.md). Read them before
-adding a new endpoint, matcher, dedup key, or Claude consumer.
+13 codified in [docs/ROADMAP.md](docs/ROADMAP.md) (principle 13 =
+persona-agnostic coherence, 2026-07-01). Read them before adding a new
+endpoint, matcher, dedup key, Claude consumer, or UI surface.

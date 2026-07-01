@@ -314,3 +314,20 @@ Morrison is NOT a critical flag in the Book (factors are disambiguation-aware) b
 FAILS 5 gates in the Mandate Console** — same data, opposite verdict, because the
 mandate path (#18) reads raw results. Mandate Console pass rate on the real loans:
 **33% (2 meet / 4 fail)**, with two clean distinctive-name borrowers among the fails.
+
+## Carried into the product plan (2026-07-01, Damon reset)
+
+The findings above are the evidence base for the ROADMAP
+[Post-Damon-reset sequence](ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).
+Two are load-bearing and **must move from this calibration harness into the product**:
+
+- **#14–#16 → UW-1.** The deal-type-aware buy-box (`buyBoxFor`), the "infer basis from
+  economics not the purpose dropdown" rule, and `costSpentToDate` were validated here
+  (6.9% mean |Δ|) but **live only in `scripts/fidelity-score.ts`.** UW-1 ports them into
+  `src/lib/underwriting/sizing.ts` + the deal stepper, and adds the still-missing
+  interest-reserve/holdback/draw math (Michael's Solver). Confirmed necessary by the
+  Damon reset: ~27% of the real book is construction+F&F, and #10049 (Ground-Up
+  Construction) is sized as generic bridge in the product today.
+- **#18 → COH-2 (HIGH).** The mandate console reading raw results (clean borrower fails 5
+  gates) is still open and now urgent — it's the trust-killer on the capital-partner
+  surface Damon-as-fund sees first in the July/Aug trial.
