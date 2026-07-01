@@ -46,6 +46,7 @@ export function EntityResultCard({
     ct_socrata: "CT Business Registry",
     pa_socrata: "PA Dept. of State",
     or_socrata: "OR SOS",
+    dc_arcgis: "DC DLCP",
   };
   const freeSourceLabel = entitySource ? (FREE_SOURCE_LABELS[entitySource] ?? null) : null;
   const hasError = data.raw_response?._error === true;

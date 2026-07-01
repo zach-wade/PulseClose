@@ -557,6 +557,90 @@ async function lookupSocrata(src: SocrataSOSSource, req: SOSLookupRequest): Prom
   return best ? src.map(best, req) : null;
 }
 
+// ── DC DLCP corporate registry (ArcGIS FeatureServer, free, no-auth) ─────────
+// DC publishes its full corporate register as an open Esri FeatureServer (verified
+// live 2026-06-30, ~500k rows, datacenter-IP-friendly). Richer than the PA/OR
+// presence-only feeds: real status vocab + formation date + registered agent.
+const DC_FEATURESERVER =
+  "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Business_Licensing_and_Grants_WebMercator/FeatureServer/0/query";
+
+interface DcAttributes {
+  BUSINESS_NAME?: string;
+  ENTITY_STATUS?: string;
+  EFFECTIVE_DATE?: number; // epoch ms
+  RA_NAME?: string;
+  MODELTYPE?: string;
+  FILE_NUMBER?: string;
+}
+
+function mapDcStatus(raw?: string): SOSLookupResult["sos_status"] {
+  const s = (raw ?? "").toLowerCase();
+  if (!s) return "not_found";
+  if (s.includes("not in good standing")) return "suspended";
+  if (s.includes("active")) return "active";
+  if (s.includes("revoked")) return "suspended";
+  if (
+    s.includes("dissolv") || s.includes("terminated") || s.includes("cancel") ||
+    s.includes("merged") || s.includes("consolidated") || s.includes("converted") ||
+    s.includes("domesticated") || s.includes("withdrawn")
+  ) return "dissolved";
+  return "active";
+}
+
+async function lookupDcArcgis(req: SOSLookupRequest): Promise<SOSLookupResult | null> {
+  // Build a positional LIKE from the name's significant tokens (same idea as the
+  // Socrata path; pickBest canonical-matches the ≤50 candidates afterward).
+  const tokens = req.entity_name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2 && !SQL_STOPWORDS.has(t))
+    .slice(0, 4);
+  if (tokens.length === 0) return null;
+  const pattern = `%${tokens.join("%")}%`.replace(/'/g, "''");
+  const where = `UPPER(BUSINESS_NAME) LIKE UPPER('${pattern}')`;
+  const params = new URLSearchParams({
+    where,
+    outFields: "BUSINESS_NAME,ENTITY_STATUS,EFFECTIVE_DATE,RA_NAME,MODELTYPE,FILE_NUMBER",
+    returnGeometry: "false",
+    resultRecordCount: "50",
+    f: "json",
+  });
+  const res = await fetch(`${DC_FEATURESERVER}?${params}`, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) {
+    console.warn(`[sos-free] DC ArcGIS ${res.status} for "${req.entity_name}" — falling back`);
+    return null;
+  }
+  const data = (await res.json()) as { features?: { attributes: DcAttributes }[] };
+  const cands = (data.features ?? []).map((f) => ({ ...f.attributes, _name: f.attributes.BUSINESS_NAME ?? "" }));
+  const best = pickBest(cands, req.entity_name);
+  if (!best) return null;
+  const status = mapDcStatus(best.ENTITY_STATUS);
+  if (status === "not_found") return null;
+  const formation =
+    typeof best.EFFECTIVE_DATE === "number" ? new Date(best.EFFECTIVE_DATE).toISOString().slice(0, 10) : null;
+  const flags: string[] = [];
+  if (status !== "active") flags.push(`Entity status: ${best.ENTITY_STATUS ?? "inactive"}`);
+  if (best.BUSINESS_NAME && !namesMatchCanonically(best.BUSINESS_NAME, req.entity_name))
+    flags.push(`Registered name "${best.BUSINESS_NAME}" differs from search "${req.entity_name}"`);
+  return {
+    entity_name: best.BUSINESS_NAME ?? req.entity_name,
+    state: "DC",
+    entity_type: best.MODELTYPE ?? null,
+    sos_status: status,
+    formation_date: formation,
+    last_filing_date: null,
+    registered_agent: best.RA_NAME?.trim() || null,
+    source_url: "https://corponline.dcra.dc.gov/Home.aspx/Landing",
+    flags,
+    raw_response: {
+      _source: "dc_arcgis",
+      _file_number: best.FILE_NUMBER ?? null,
+      status_raw: best.ENTITY_STATUS ?? null,
+      results: [{ officers: [] }],
+    },
+  };
+}
+
 /**
  * Try the free official SOS source for `req.state` (CALICO for CA, Socrata for
  * CO/NY). Returns a resolved SOSLookupResult (stamped with `_source`) or null when
@@ -582,6 +666,8 @@ export async function lookupEntityFreeSOS(
     // TX: SOSDirect is paid, but the Comptroller's franchise-tax status search is
     // a free, keyless JSON API — de-rents Cobalt for TX (the 2nd-biggest ICC state).
     if (state === "TX") return await lookupTxComptroller(req);
+    // DC: open ArcGIS FeatureServer — status + formation + registered agent.
+    if (state === "DC") return await lookupDcArcgis(req);
   } catch (err) {
     console.warn(`[sos-free] ${state} lookup error:`, err instanceof Error ? err.message : err);
   }
@@ -589,4 +675,4 @@ export async function lookupEntityFreeSOS(
 }
 
 /** States covered by a free source (CALICO requires a key to actually fire). */
-export const FREE_SOS_STATES = ["CA", "CO", "CT", "NY", "OR", "PA", "TX"] as const;
+export const FREE_SOS_STATES = ["CA", "CO", "CT", "DC", "NY", "OR", "PA", "TX"] as const;

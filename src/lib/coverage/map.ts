@@ -35,6 +35,7 @@ const FREE_LIVE_SOURCE: Record<string, string> = {
   CA: "CALICO (CA SOS API)",
   CO: "Socrata (open data)",
   CT: "Socrata (CT Business Registry)",
+  DC: "DC DLCP (ArcGIS FeatureServer)",
   NY: "Socrata + live DOS API",
   OR: "Socrata (OR active businesses)",
   PA: "Socrata (PA DOS registry)",
