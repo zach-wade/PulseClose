@@ -785,9 +785,12 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
    Solver `.xlsx` from Damon.* *Stage: Route.*
 3. **UW-5 — Live-solve / goal-seek (the 10× over their Excel).** Every ICC model is
    forward-calc; Michael reaches for Excel **Solver** to invert it. Make inversion native:
-   solve for max loan at a target DSCR, the rate that hits a target net-proceeds, the
-   purchase-advance% that caps cash-to-close. Sliders that re-solve live — what only
-   Michael can do today, instant and safe for the whole team. *Stage: Route.*
+   solve for max loan at a target DSCR, the advance that caps cash-to-close, the advance
+   that hits a target LTARV. **SHIPPED (logic):** [src/lib/underwriting/solve.ts](../src/lib/underwriting/solve.ts)
+   — a bisection `goalSeek()` + typed wrappers inverting the RTL / construction / DSCR
+   sizers; [scripts/verify-solve.ts](../scripts/verify-solve.ts) (11/11) proves it by
+   **round-trip** (solve → forward-run reproduces the target) + a pure-math root-finder
+   check. Remaining: the slider UI (with UX-2). *Stage: Route.*
 4. **UW-6 — DSCR / rental income-approach constraint.** Add the PITIA-DSCR path from the
    decoded DSCR calculator — max loan via `PV(rate/12, term, −(NOI/DSCR)/12)`, both
    amortizing and interest-only — as a first-class constraint (covers the 15 DSCR-rental
