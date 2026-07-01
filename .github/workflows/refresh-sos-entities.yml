@@ -47,6 +47,10 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      # FL's cordata.zip is Deflate64 (method 9) — zlib can't inflate it, 7-Zip can.
+      # Pre-installed on GitHub Ubuntu runners, but install explicitly to be safe.
+      - name: Ensure 7-Zip (Deflate64) is available
+        run: command -v 7z >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y p7zip-full; }
       - name: Determine mode
         id: m
         run: |

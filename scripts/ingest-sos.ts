@@ -19,11 +19,10 @@ import { mkdir, rm } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
 import { createInterface } from "node:readline";
 import { Readable } from "node:stream";
+import { spawn } from "node:child_process";
 import SftpClient from "ssh2-sftp-client";
-import { Open as unzipOpen } from "unzipper";
 import { getClient } from "./_contractor-ingest";
 import { upsertBatch, parseCsvFields, csvQuotesBalanced, type SosEntityRow } from "./_sos-ingest";
 import { SOURCES, type SosSource, type FixedWidthSource, type CsvUrlSource } from "./sos-sources";
@@ -63,10 +62,18 @@ async function parseFixedWidthFile(
   activeOnly: boolean,
   onFlush: (rows: SosEntityRow[]) => Promise<{ upserted: number; deduped: number }>,
 ): Promise<{ read: number; mapped: number; upserted: number; deduped: number }> {
-  const rl = createInterface({
-    input: createReadStream(localPath, { encoding: "latin1" }),
-    crlfDelay: Infinity,
-  });
+  return parseFixedWidthStream(createReadStream(localPath, { encoding: "latin1" }), src, activeOnly, onFlush);
+}
+
+// Core line-by-line parser over ANY latin1 stream — a file read stream (daily) or
+// 7z's stdout (the full Deflate64 zip, streamed). Bounded memory via FLUSH_SIZE.
+async function parseFixedWidthStream(
+  input: NodeJS.ReadableStream,
+  src: FixedWidthSource,
+  activeOnly: boolean,
+  onFlush: (rows: SosEntityRow[]) => Promise<{ upserted: number; deduped: number }>,
+): Promise<{ read: number; mapped: number; upserted: number; deduped: number }> {
+  const rl = createInterface({ input, crlfDelay: Infinity });
   let read = 0;
   let mapped = 0;
   let upserted = 0;
@@ -210,34 +217,38 @@ async function downloadFullParts(src: FixedWidthSource, workDir: string): Promis
     for (const zipName of src.fullFiles) {
       const remote = `${src.fullDir}/${zipName}`;
       const localZip = join(cacheDir, zipName);
-      const outPath = join(workDir, `${zipName}.txt`);
-      // Unzip the single entry to a .txt. If inflate fails, the cached zip is
-      // corrupt (a bad resume) — discard it and re-download clean, ONCE. This is
-      // the belt to the write-stream-close suspenders in fastGetWithRetry.
-      let unzipped = false;
-      for (let tryNum = 1; tryNum <= 2 && !unzipped; tryNum++) {
-        console.log(`  downloading ${remote} …${tryNum > 1 ? " (clean re-download after corrupt zip)" : ""}`);
-        await fastGetWithRetry(src, remote, localZip);
-        try {
-          const dir = await unzipOpen.file(localZip);
-          const entry = dir.files.find((f) => f.type === "File");
-          if (!entry) { console.warn(`  ${zipName}: no file entry, skipping`); break; }
-          await pipeline(entry.stream(), createWriteStream(outPath));
-          unzipped = true;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.warn(`  ${zipName}: unzip failed (${msg}) — discarding cached zip`);
-          await rm(localZip, { force: true });
-          if (tryNum === 2) throw new Error(`${zipName}: unzip failed after clean re-download — ${msg}`);
-        }
-      }
-      if (unzipped) {
-        txtPaths.push(outPath);
-        await rm(localZip, { force: true });
-      }
+      console.log(`  downloading ${remote} …`);
+      await fastGetWithRetry(src, remote, localZip);
+      txtPaths.push(localZip);
     }
   }
   return txtPaths;
+}
+
+// Extract + parse the full FL zip via `7z`. cordata.zip is compressed with
+// **Deflate64** (method 9) — zlib/unzipper can't inflate it ("too many length or
+// distance symbols"); 7-Zip can. `7z e -so` streams the decompressed content of
+// ALL entries (cordata0.txt … cordata9.txt — the old unzipper path read only the
+// first) to stdout, which we pipe straight through the fixed-width parser. No
+// multi-GB .txt on disk. 7z ships on the GitHub Ubuntu runners.
+async function parseFullZipVia7z(
+  localZip: string,
+  src: FixedWidthSource,
+  activeOnly: boolean,
+  onFlush: (rows: SosEntityRow[]) => Promise<{ upserted: number; deduped: number }>,
+): Promise<{ read: number; mapped: number; upserted: number; deduped: number }> {
+  const proc = spawn("7z", ["e", "-so", "-bd", localZip], { stdio: ["ignore", "pipe", "pipe"] });
+  proc.stdout.setEncoding("latin1");
+  let stderr = "";
+  proc.stderr.on("data", (d) => { stderr += String(d).slice(0, 2000); });
+  const exit = new Promise<number>((resolve, reject) => {
+    proc.on("error", (e) => reject(new Error(`7z spawn failed (is it installed?): ${e.message}`)));
+    proc.on("close", (code) => resolve(code ?? -1));
+  });
+  const parsed = await parseFixedWidthStream(proc.stdout, src, activeOnly, onFlush);
+  const code = await exit;
+  if (code !== 0) throw new Error(`7z exited ${code} extracting ${localZip}: ${stderr.trim()}`);
+  return parsed;
 }
 
 // Stream a CSV-over-HTTPS bulk source (VA SCC). Downloads each file, parses it
@@ -336,13 +347,12 @@ async function runSource(
     // Parse + upsert each file by streaming flushes so peak memory stays bounded
     // even for the multi-GB full file; the (state, normalized_name) PK makes
     // cross-flush collisions idempotent (later row overwrites — fine for refresh).
+    // Daily = a plain .txt read stream; full = the Deflate64 zip streamed via 7z.
     for (const file of files) {
-      const { read, mapped, upserted, deduped } = await parseFixedWidthFile(
-        file,
-        src,
-        opts.activeOnly,
-        (rows) => upsertBatch(supabase, rows),
-      );
+      const { read, mapped, upserted, deduped } =
+        opts.mode === "full"
+          ? await parseFullZipVia7z(file, src, opts.activeOnly, (rows) => upsertBatch(supabase, rows))
+          : await parseFixedWidthFile(file, src, opts.activeOnly, (rows) => upsertBatch(supabase, rows));
       totalRead += read;
       totalUpserted += upserted;
       totalDeduped += deduped;
