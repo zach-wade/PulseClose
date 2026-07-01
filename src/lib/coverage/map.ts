@@ -28,6 +28,16 @@ export interface SosRow {
 
 const SOS_FREE_BULK = ["FL"] as const;
 
+// Each free-live state resolves via a different official source, not all Socrata:
+// CA = CALICO API, CO = Socrata open-data, NY = Socrata + live DOS fallback,
+// TX = Comptroller franchise-tax API (SOSDirect itself is paid).
+const FREE_LIVE_SOURCE: Record<string, string> = {
+  CA: "CALICO (CA SOS API)",
+  CO: "Socrata (open data)",
+  NY: "Socrata + live DOS API",
+  TX: "TX Comptroller (franchise tax)",
+};
+
 export function sosCoverage(opts?: { calicoKeySet?: boolean }): SosRow[] {
   const rows: SosRow[] = [];
   for (const s of FREE_SOS_STATES) {
@@ -36,7 +46,7 @@ export function sosCoverage(opts?: { calicoKeySet?: boolean }): SosRow[] {
     rows.push({
       state: s,
       tier: "free-live",
-      source: s === "CA" ? "CALICO (CA SOS API)" : "Socrata (open data)",
+      source: FREE_LIVE_SOURCE[s] ?? "Free official source",
       cost: "$0",
       live: caGated ? Boolean(opts?.calicoKeySet) : true,
       note: caGated && !opts?.calicoKeySet ? "needs CALICO key (free, self-serve)" : undefined,

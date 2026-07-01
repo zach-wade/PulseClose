@@ -42,6 +42,9 @@ export function EntityResultCard({
     ca_calico: "CA SOS (CALICO)",
     co_socrata: "CO SOS",
     fl_sunbiz: "FL Sunbiz",
+    // NOTE: tx_comptroller intentionally omitted — TX returns registered agent +
+    // officers (only formation/filing dates are blank), so the "no officers/agent"
+    // note would misdescribe it.
   };
   const freeSourceLabel = entitySource ? (FREE_SOURCE_LABELS[entitySource] ?? null) : null;
   const hasError = data.raw_response?._error === true;

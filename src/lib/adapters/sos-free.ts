@@ -306,6 +306,117 @@ async function lookupNyDosLive(req: SOSLookupRequest): Promise<SOSLookupResult |
   };
 }
 
+// ── TX Comptroller franchise-tax lookup (free, no-auth JSON) ─────────────────
+// Texas SOS itself (SOSDirect) charges $1/search, but the Comptroller's public
+// "Franchise Tax Account Status" search — which every TX corp/LLC must register
+// for — is backed by an OPEN, keyless JSON API (verified live 2026-06-30). Two
+// hops mirror the NY DOS pattern: name search → detail by taxpayer number. The
+// detail record carries the good-standing signal ("right to transact business"),
+// SOS file number, registered agent, AND officers. The one field it does NOT give
+// reliably is a true formation date — `effectiveSosRegistrationDate` is the
+// CURRENT registration effective date (a renewal re-stamps it; Dell reads 2026),
+// so we deliberately leave formation_date null rather than print a wrong year.
+// Undocumented/scraping-grade → wrapped in try/catch, falls back to Cobalt.
+const TX_CPA_BASE = "https://comptroller.texas.gov/data-search/franchise-tax";
+
+interface TxCpaListRow {
+  name?: string;
+  taxpayerId?: string;
+  mailingAddressZip?: string;
+}
+interface TxCpaOfficer {
+  AGNT_NM?: string;
+  AGNT_TITL_TX?: string;
+}
+interface TxCpaDetail {
+  name?: string;
+  taxpayerId?: string;
+  rightToTransactTX?: string;
+  sosRegistrationStatus?: string;
+  sosFileNumber?: string;
+  effectiveSosRegistrationDate?: string;
+  stateOfFormation?: string;
+  registeredAgentName?: string;
+  officerInfo?: TxCpaOfficer[];
+}
+
+// TX status: SOS "INACTIVE" ⇒ dissolved; a live right-to-transact ⇒ active;
+// franchise-tax rights "ENDED"/"FORFEITED" while SOS still lists it ⇒ suspended.
+function mapTxStatus(rightToTransact?: string, sosStatus?: string): SOSLookupResult["sos_status"] {
+  const rtt = (rightToTransact ?? "").toUpperCase().trim();
+  const sos = (sosStatus ?? "").toUpperCase().trim();
+  if (sos === "INACTIVE") return "dissolved";
+  if (rtt === "ACTIVE") return "active";
+  if (rtt.includes("ENDED") || rtt.includes("FORFEIT")) return "suspended";
+  if (sos === "ACTIVE") return "active";
+  return "not_found";
+}
+
+async function lookupTxComptroller(req: SOSLookupRequest): Promise<SOSLookupResult | null> {
+  const name = req.entity_name.trim();
+  if (name.length < 2) return null;
+  // Hop 1: name search → candidate list ({name, taxpayerId, zip}).
+  const listRes = await fetch(`${TX_CPA_BASE}?name=${encodeURIComponent(name)}`, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!listRes.ok) {
+    console.warn(`[sos-free] TX CPA list ${listRes.status} for "${name}" — falling back`);
+    return null;
+  }
+  const list = (await listRes.json()) as { success?: boolean; data?: TxCpaListRow[] };
+  if (!list.success || !list.data?.length) return null;
+  const cands = list.data.map((e) => ({ ...e, _name: e.name ?? "" }));
+  const best = pickBest(cands, name);
+  if (!best?.taxpayerId) return null;
+
+  // Hop 2: detail by taxpayer number → status + agent + officers.
+  const detRes = await fetch(`${TX_CPA_BASE}/${encodeURIComponent(best.taxpayerId)}`, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!detRes.ok) {
+    console.warn(`[sos-free] TX CPA detail ${detRes.status} for "${name}" — falling back`);
+    return null;
+  }
+  const det = (await detRes.json()) as { success?: boolean; data?: TxCpaDetail };
+  if (!det.success || !det.data) return null;
+  const d = det.data;
+  const status = mapTxStatus(d.rightToTransactTX, d.sosRegistrationStatus);
+  if (status === "not_found") return null;
+
+  const officers = (d.officerInfo ?? [])
+    .filter((o) => o.AGNT_NM?.trim())
+    .map((o) => ({ name: o.AGNT_NM!.trim(), title: (o.AGNT_TITL_TX ?? "").trim() }));
+
+  const flags: string[] = [];
+  if (status !== "active")
+    flags.push(`Entity status: ${d.rightToTransactTX ?? d.sosRegistrationStatus ?? "inactive"}`);
+  if (d.name && !namesMatchCanonically(d.name, name))
+    flags.push(`Registered name "${d.name}" differs from search "${name}"`);
+
+  return {
+    entity_name: d.name ?? name,
+    state: "TX",
+    entity_type: null,
+    sos_status: status,
+    formation_date: null, // effectiveSosRegistrationDate is a renewal date, not formation
+    last_filing_date: null,
+    registered_agent: d.registeredAgentName?.trim() || null,
+    source_url: `${TX_CPA_BASE.replace("/data-search/franchise-tax", "/taxes/franchise/account-status/search")}/${best.taxpayerId}`,
+    flags,
+    raw_response: {
+      _source: "tx_comptroller",
+      sos_file_number: d.sosFileNumber ?? null,
+      right_to_transact: d.rightToTransactTX ?? null,
+      sos_registration_status: d.sosRegistrationStatus ?? null,
+      effective_registration_date: d.effectiveSosRegistrationDate ?? null,
+      taxpayer_id: best.taxpayerId,
+      results: [{ officers }],
+    },
+  };
+}
+
 // Articles + entity suffixes to drop when building the SQL pre-filter so it keys
 // on the distinctive words. Client-side canonical matching (pickBest) does the
 // authoritative, order-independent check afterward.
@@ -369,6 +480,9 @@ export async function lookupEntityFreeSOS(
     // NY: the Socrata export leaks (misses real active entities), so fall back to
     // the authoritative live DOS API — free, cookieless, and status-bearing.
     if (state === "NY") return await lookupNyDosLive(req);
+    // TX: SOSDirect is paid, but the Comptroller's franchise-tax status search is
+    // a free, keyless JSON API — de-rents Cobalt for TX (the 2nd-biggest ICC state).
+    if (state === "TX") return await lookupTxComptroller(req);
   } catch (err) {
     console.warn(`[sos-free] ${state} lookup error:`, err instanceof Error ? err.message : err);
   }
@@ -376,4 +490,4 @@ export async function lookupEntityFreeSOS(
 }
 
 /** States covered by a free source (CALICO requires a key to actually fire). */
-export const FREE_SOS_STATES = ["CA", "CO", "NY"] as const;
+export const FREE_SOS_STATES = ["CA", "CO", "NY", "TX"] as const;

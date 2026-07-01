@@ -166,3 +166,29 @@ the XHR before paying.
   open — the bot-wall was a false alarm. Probe each state's XHR for a free live API.
 - ☐ Next: probe TX/other high-volume states for an open live API (per the NY pattern);
   FL full Sunbiz ingest · WA open-data SOS · OpenCorporates only for genuinely paywalled DE/TX.
+
+### Update (2026-06-30) — TX shipped free; WA/SC dead-ends; CALICO likely instant
+
+Deep research (3 agents, live-verified endpoints) + a shipped adapter:
+
+- ✅ **TX is FREE — shipped** (`sos-free.ts lookupTxComptroller`). TX SOSDirect is paid,
+  but the **Comptroller** franchise-tax account-status search is an open, keyless JSON API
+  (`comptroller.texas.gov/data-search/franchise-tax` — name search → `/{taxpayerId}` detail).
+  Returns good-standing status, SOS file #, **registered agent + officers** (no formation
+  date — `effectiveSosRegistrationDate` is a renewal stamp, deliberately not mapped).
+  Verified on real ICC entities (Belfort Spec/Perfect Dream Homes = active; Winds Exploration
+  = dissolved w/ flag). TX was the **2nd-biggest uncovered state (11 loans)** — now $0.
+- ❌ **WA is NOT the low-effort win** this doc assumed. No free Socrata entity dataset
+  (`f9jk-mm39`/`4wur-kfnr` are link-stubs); the **bulk extract was discontinued Aug 2024**;
+  the legacy JSON API is dead; the only live source (CCFS `ccfs-api.prod.sos.wa.gov`) is
+  **Cloudflare-Turnstile-gated** → headless-browser + token, brittle. Not worth it for ~7 loans.
+- ❌ **SC has no free path.** `businessfilings.sc.gov` is a **reCAPTCHA-gated ASP.NET** form,
+  no open XHR/JSON, and the only bulk is paid (Tyler, UCC-only, ~$12k/yr). Stay on Cobalt.
+- 🔑 **CALICO is likely instant self-serve, not an approval queue.** The official CA SOS "BE
+  Public Search" API Guide v1.0.4 documents the standard Azure APIM flow (sign up → confirm
+  email → subscribe → copy `Ocp-Apim-Subscription-Key`) with **no approval step** — minutes,
+  not weeks. Only unconfirmed risk: a short admin-approval on the subscription. The API returns
+  status/formation/agent but **not officers**. → Worth just grabbing the key.
+- **Free-live SOS now: CA(key)·CO·NY·TX**; **free-bulk: FL** (loading). The "walled SPA ≠
+  walled API" thesis held for TX exactly as it did for NY; it FAILS where there's a real CAPTCHA
+  (SC) or enterprise bot-protection (WA Turnstile) — those are the genuine paid residual.

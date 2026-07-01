@@ -41,14 +41,29 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
 |---|---|---|---|---|---|
 | **CA** | CALICO (CA SOS API) | live-query + cache | **yes — CALICO key (free, self-serve)** | $0 | ⏳ once key set |
 | **CO** | Socrata (open data) | live-query + cache | no | $0 | ✅ |
-| **NY** | Socrata (open data) | live-query + cache | no | $0 | ✅ |
+| **NY** | Socrata + live DOS API | live-query + cache | no | $0 | ✅ |
+| **TX** | TX Comptroller (franchise-tax status API) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — status + registered agent + officers + SOS file #; **no formation date** |
 | **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ⚠️ **partial — only ~3,167 rows cached; statewide `--full` load pending (CI)**; arbitrary entity → Cobalt |
 | *all others* | Cobalt Intelligence (50-state) | live-query | yes — Cobalt key | ~$5 fresh / $0 cached | ⚠️ trial quota exhausted |
 
-- Lookup order: `sos_entities` cache → free source (CALICO/Socrata/FL bulk) →
+- Lookup order: `sos_entities` cache → free source (CALICO/Socrata/TX CPA/FL bulk) →
   Cobalt fallback → cache the result back.
-- CALICO key: free, instant self-serve at `calicodev.sos.ca.gov` → subscribe to
-  "BE Public Search". Set `CALICO_API_KEY` in Vercel + `.env.local`.
+- **CALICO key: free — the official CA SOS "BE Public Search" API Guide describes
+  instant self-serve** (sign up → confirm email → subscribe → copy
+  `Ocp-Apim-Subscription-Key`), **no documented approval queue** (minutes, not weeks;
+  a possible short admin-approval on the subscription is the only unconfirmed risk).
+  Prod base `https://calico.sos.ca.gov/cbc/v1/api/`; name search =
+  `BusinessEntityKeywordSearch?search-term=`; returns status/formation/agent but **not
+  officers**. Set `CALICO_API_KEY` in Vercel + `.env.local`.
+- **TX** (`sos-free.ts lookupTxComptroller`): SOSDirect is paid ($1/search), but the
+  Comptroller's franchise-tax account-status search is a free, keyless JSON API
+  (`comptroller.texas.gov/data-search/franchise-tax`) — name-search → detail hop, like
+  NY DOS. Undocumented/scraping-grade → try/catch + Cobalt fallback. Covers all
+  franchise-registered TX entities (nearly all corps/LLCs).
+- **WA / SC — no free path (researched 2026-06-30, staying on Cobalt):** WA killed its
+  bulk extract (Aug 2024) and its CCFS API is Cloudflare-Turnstile-gated (headless-only,
+  brittle); SC's search is Google-reCAPTCHA-gated ASP.NET with no open JSON API, only
+  paid UCC-only bulk. Neither justifies a build at their ICC volume (~7 / 6 loans).
 
 ## GC license
 

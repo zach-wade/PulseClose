@@ -39,6 +39,41 @@ const LOANS = {
       property_addresses: ["7 Spencer Pl, Scarsdale, NY 10583"],
     },
   },
+  // #10049 — the definitive all-5-pillars-free Underwriter run. FL ground-up
+  // construction: entity "99 TO 100 LLC" resolves free from the FL Sunbiz cache
+  // (statewide --full load); GC "BP Construction Group" (CGC1525790) resolves free
+  // from the ingested FL DBPR contractor_licenses cache; litigation/sanctions/
+  // track-record run free. No Cobalt, no CSLB key. (Backup: #10050 fkac below.)
+  fili: {
+    org: ORGS.underwriter,
+    persona: "Underwriter (all-5-free)",
+    input: {
+      borrower_name: "Michael Fili",
+      borrower_entity_name: "99 TO 100 LLC",
+      entity_state: "FL",
+      guarantor_name: "Michael Fili",
+      property_addresses: ["9390 SW 99th St, Miami, FL 33176"],
+      gc_name: "BP Construction Group",
+      gc_license_number: "CGC1525790",
+      gc_state: "FL",
+    },
+  },
+  // #10050 — backup all-5-free FL construction loan (entity FKAC 1 LLC, GC Norway
+  // Builders CGC1516589). Use if #10049 entity isn't in the Sunbiz cache.
+  fkac: {
+    org: ORGS.underwriter,
+    persona: "Underwriter (all-5-free)",
+    input: {
+      borrower_name: "Fouad Kraishan",
+      borrower_entity_name: "FKAC 1 LLC",
+      entity_state: "FL",
+      guarantor_name: "Fouad Kraishan",
+      property_addresses: ["6290 Chapman Field Dr, Pinecrest, FL 33156"],
+      gc_name: "Norway Builders",
+      gc_license_number: "CGC1516589",
+      gc_state: "FL",
+    },
+  },
   // #10288 — individual borrower, no entity, no GC (FL condo bridge). Entity + GC
   // pillars n/a; litigation/sanctions/track-record run free. Solo / verify-only.
   pappas: {
