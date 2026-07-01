@@ -114,13 +114,20 @@ Steers taken: **two-column Summary** + **fund-specific nav**. All shipped + re-d
 - **Cobalt key RESTORED (2026-06-30):** new working key set in `.env.local` +
   Vercel prod (old 64-day trial key removed), auth-verified live (SC search → 202+retryId),
   prod redeployed. The 50-state paid fallback is live again — un-parks every non-free state.
-- **Free-live SOS now CA(key)·CO·NY·TX·FL(bulk):** **TX shipped free** this session
-  (`sos-free.ts lookupTxComptroller` — Comptroller franchise-tax API, agent+officers+status,
-  no formation date). WA/SC have **no free path** (WA Turnstile + bulk killed Aug 2024; SC
-  reCAPTCHA + paid UCC-only bulk) → stay on Cobalt. See docs/RESEARCH-SOS-50-STATE.md §Update.
-- **FL bulk reality:** COVERAGE.md's "FL fully covered" is **optimistic** — the `fl_sunbiz`
-  cache has only **3,167 partial rows** (one daily file); the statewide load hasn't run
-  (path fixed this session; needs CI). **FL GC (DBPR) IS fully cached** (~142k rows).
+- **Free-live SOS now 10 states: CA(key)·CO·CT·DC·ID·ND·NY·OR·PA·TX** + **VA/FL bulk.**
+  Shipped this session (`sos-free.ts`): **TX** (Comptroller API), **CT/PA/OR** (Socrata),
+  **DC** (ArcGIS FeatureServer), **ID/ND** (FirstStop open JSON API). Full **50-state matrix**
+  in docs/RESEARCH-SOS-50-STATE.md §Complete matrix — the rest are bot-walled (Cloudflare/
+  Incapsula/DataDome/reCAPTCHA/WAF-403 that 403 our datacenter IPs) → Cobalt.
+- **VA shipped as free BULK** (`csv-url` source kind — SCC LLC CKAN CSV): **388k active VA
+  LLCs cached** (status+formation+agent). With VA GC (DPOR) already cached → **VA is a full
+  free entity+GC state.** ⚠️ VA's `llc.csv` is **Excel-capped at 1,048,575 rows** → entities
+  past the cap + non-LLC corps miss cache → Cobalt. Load: `mode=full state=VA` dispatch.
+- **⚠️ FL `--full` is BROKEN.** Downloads the 1.74 GB `cordata.zip` (1h35m) then fails at
+  unzip: **`too many length or distance symbols`** (corrupt deflate — the resumable-download
+  append corrupts the zip on SFTP reconnect). Cache still ~8.9k rows. **Fix: stream-unzip
+  DURING download** (pipe SFTP→unzip→parse, no resumable intermediate file). Blocks #10049
+  all-5-free (could run via Cobalt ~$5 meanwhile). **FL GC (DBPR) IS fully cached** (~142k).
 - **Disambiguation rule, now enforced END-TO-END:** weak = filtered noise (hidden),
   possible/probable = "review", confirmed = hit — across verdict, handoff, litigation card,
   and mandate gates. DOB stays transient (never persisted, never to AI).

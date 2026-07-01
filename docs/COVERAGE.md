@@ -46,7 +46,7 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
 | **CT** | Socrata `n7gp-d28j` (Business Registry) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — real status column + formation; agent/principals in sibling datasets (later join) |
 | **PA** | Socrata `xvd7-5r2c` (DOS registry, 4M rows) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — "Current" ⇒ presence=active; formation (creationdate); officers via party_type (v1 status+formation) |
 | **OR** | Socrata `tckn-sxa6` (Active Businesses) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — presence=active; formation + entity type. **OR also has free GC → full free E2E state** |
-| **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ⚠️ **partial — only ~3,167 rows cached; statewide `--full` load pending (CI)**; arbitrary entity → Cobalt |
+| **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ⚠️ **still ~8.9k rows — `--full` BROKEN**: the 1.74 GB `cordata.zip` downloads (1h35m) then fails at unzip (`too many length or distance symbols`) — the resumable-download append corrupts the zip. Needs stream-unzip-during-download fix. Arbitrary FL entity → Cobalt. |
 | *all others* | Cobalt Intelligence (50-state) | live-query | yes — Cobalt key | ~$5 fresh / $0 cached | ✅ **re-keyed 2026-06-30** (working key in prod + `.env.local`) |
 
 - Lookup order: `sos_entities` cache → free source (CALICO/Socrata/TX CPA/FL bulk) →
@@ -55,9 +55,14 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
   via three datacenter-friendly patterns: Socrata (CO/NY/CT/OR/PA), open JSON API
   (TX Comptroller · NY DOS · ID/ND FirstStop), open ArcGIS (DC). See the **complete
   50-state matrix** in [RESEARCH-SOS-50-STATE.md](RESEARCH-SOS-50-STATE.md) §Complete matrix.
-- **`VA` + `IA` are the two remaining free wins** but are **bulk-file** ingests (CI cron →
-  `sos_entities`, like FL) — not yet built. VA is highest-value (full fields incl. officers,
-  and we already ingest VA GC → full free entity+GC E2E state).
+- **`VA` shipped as free bulk (2026-06-30)** — SCC LLC register via data.virginia.gov CKAN
+  CSV (`csv-url` source kind in `scripts/sos-sources.ts`). **Loaded 388k active VA LLCs**
+  into `sos_entities` (status + formation + agent). **With VA GC (DPOR) already cached, VA is
+  now a full free entity+GC state.** ⚠️ **Caveat:** VA's published `llc.csv` is Excel-capped at
+  **1,048,575 rows**, so entities beyond the cap (and all non-LLC corps — a separate XLSX we
+  didn't ingest) miss the cache and fall to Cobalt. Refresh runs on the `--full` cron.
+- **`IA` remains a free-bulk candidate** (Iowa Data Hub JSON dump — active-only, no status/
+  officers) — not built (lower value, ~0 ICC loans).
 - **Everything else → Cobalt** (re-keyed): the dominant blocker is bot-protection
   (Cloudflare/Incapsula/DataDome/reCAPTCHA/WAF-403 that 403s our datacenter IPs), not paywalls.
 - **CALICO key: free — the official CA SOS "BE Public Search" API Guide describes
