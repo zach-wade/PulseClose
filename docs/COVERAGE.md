@@ -46,7 +46,7 @@ Free official sources de-rent Cobalt; everything else falls through to Cobalt
 | **CT** | Socrata `n7gp-d28j` (Business Registry) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — real status column + formation; agent/principals in sibling datasets (later join) |
 | **PA** | Socrata `xvd7-5r2c` (DOS registry, 4M rows) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — "Current" ⇒ presence=active; formation (creationdate); officers via party_type (v1 status+formation) |
 | **OR** | Socrata `tckn-sxa6` (Active Businesses) | live-query + cache | no | $0 | ✅ **shipped 2026-06-30** — presence=active; formation + entity type. **OR also has free GC → full free E2E state** |
-| **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ⚠️ **still ~8.9k rows — `--full` BROKEN**: the 1.74 GB `cordata.zip` downloads (1h35m) then fails at unzip (`too many length or distance symbols`) — the resumable-download append corrupts the zip. Needs stream-unzip-during-download fix. Arbitrary FL entity → Cobalt. |
+| **FL** | Sunbiz (SFTP bulk → `sos_entities`) | bulk | no | $0 | ✅ **fully loaded 2026-07-01 — 3.93M active entities.** The 1.74 GB `cordata.zip` is **Deflate64** (method 9, 10 entries) — extracted via `7z e -so` (zlib/unzipper can't). Refreshes on the `--full` cron. **FL is a full free entity+GC state.** |
 | *all others* | Cobalt Intelligence (50-state) | live-query | yes — Cobalt key | ~$5 fresh / $0 cached | ✅ **re-keyed 2026-06-30** (working key in prod + `.env.local`) |
 
 - Lookup order: `sos_entities` cache → free source (CALICO/Socrata/TX CPA/FL bulk) →

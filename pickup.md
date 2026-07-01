@@ -123,11 +123,19 @@ Steers taken: **two-column Summary** + **fund-specific nav**. All shipped + re-d
   LLCs cached** (status+formation+agent). With VA GC (DPOR) already cached → **VA is a full
   free entity+GC state.** ⚠️ VA's `llc.csv` is **Excel-capped at 1,048,575 rows** → entities
   past the cap + non-LLC corps miss cache → Cobalt. Load: `mode=full state=VA` dispatch.
-- **⚠️ FL `--full` is BROKEN.** Downloads the 1.74 GB `cordata.zip` (1h35m) then fails at
-  unzip: **`too many length or distance symbols`** (corrupt deflate — the resumable-download
-  append corrupts the zip on SFTP reconnect). Cache still ~8.9k rows. **Fix: stream-unzip
-  DURING download** (pipe SFTP→unzip→parse, no resumable intermediate file). Blocks #10049
-  all-5-free (could run via Cobalt ~$5 meanwhile). **FL GC (DBPR) IS fully cached** (~142k).
+- **✅ FL FIXED + LOADED (3.9M active entities).** Root cause was NOT a corrupt download —
+  `cordata.zip` uses **Deflate64** (compression method 9), which zlib/`unzipper` can't inflate
+  (→ "too many length or distance symbols"); it also has **10 entries** (cordata0-9.txt), and
+  the old code read only the first. Fix: extract with **`7z e -so`** (7-Zip supports Deflate64)
+  streaming ALL entries through the fixed-width parser (`scripts/ingest-sos.ts`; workflow ensures
+  p7zip). CI `--full --state FL` ran green: **read 12.6M → upserted 3.93M active FL entities.**
+  Diagnosis method worth remembering: a **64-byte SFTP read** of the zip header (method @off 8)
+  + EOCD — don't burn 2h CI runs guessing.
+- **✅ #10049 all-5-pillars-FREE E2E PASSED** (`scripts/e2e-persona-loan.ts fili` — 99 TO 100 LLC
+  + GC BP Construction CGC1525790, FL): entity `source=fl_sunbiz` (free cache, no Cobalt), GC free
+  (DBPR), litigation/sanctions/track-record free. Verdict **"Flagged · 1 issue"** (a mandate
+  legitimately fails) — **detail == batch == handoff ✓ consistent** (harness was fixed to pass the
+  mandate standing; earlier "mismatch" was a harness artifact, not a product bug).
 - **Disambiguation rule, now enforced END-TO-END:** weak = filtered noise (hidden),
   possible/probable = "review", confirmed = hit — across verdict, handoff, litigation card,
   and mandate gates. DOB stays transient (never persisted, never to AI).
