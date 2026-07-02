@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserProfile } from "@/lib/supabase/get-user-profile";
+import { orgUnderwritingAssumptionsV1 } from "@/lib/schemas/jsonb";
 
 export async function GET() {
   const profile = await getUserProfile();
@@ -52,6 +53,7 @@ export async function PATCH(request: Request) {
     ai_extraction_enabled?: unknown;
     monitor_new_validations_by_default?: unknown;
     monitor_paused_until?: unknown;
+    underwriting_assumptions?: unknown;
   };
   try {
     body = await request.json();
@@ -91,6 +93,21 @@ export async function PATCH(request: Request) {
       );
     }
     update.monitor_paused_until = body.monitor_paused_until;
+  }
+  if ("underwriting_assumptions" in body) {
+    // null clears (org reverts to app defaults); otherwise validate + store the set.
+    if (body.underwriting_assumptions === null) {
+      update.underwriting_assumptions = null;
+    } else {
+      const parsed = orgUnderwritingAssumptionsV1.safeParse(body.underwriting_assumptions);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: `Invalid underwriting_assumptions: ${parsed.error.message}` },
+          { status: 400 },
+        );
+      }
+      update.underwriting_assumptions = parsed.data;
+    }
   }
   if (Object.keys(update).length === 1) {
     return NextResponse.json({ error: "No supported fields in body" }, { status: 400 });

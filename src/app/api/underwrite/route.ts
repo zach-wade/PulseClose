@@ -20,6 +20,7 @@ import {
 } from "@/lib/evaluate/engine";
 import { underwrite, type SizingInputs, type SizingResult } from "@/lib/underwriting/sizing";
 import { sizeTakeout, stressTakeout } from "@/lib/underwriting/exit";
+import { resolveUwAssumptions } from "@/lib/underwriting/org-assumptions";
 import { stabilizationPath } from "@/lib/underwriting/stabilization";
 import { sizeInterestReserve } from "@/lib/underwriting/reserve";
 import { sizeAllInvestors } from "@/lib/underwriting/per-investor";
@@ -173,6 +174,17 @@ export async function POST(request: Request) {
 
   const rate = asRatio(body.rate);
 
+  // Per-org underwriting assumptions (principle 14) — the house sizing caps,
+  // exit/takeout terms, and DSCR target as CONFIG, used as fallbacks below when
+  // the deal doesn't override them. Absent/invalid → app defaults (fails safe).
+  const supabase = createAdminClient();
+  const { data: orgRow } = await supabase
+    .from("organizations")
+    .select("underwriting_assumptions")
+    .eq("id", profile.org_id)
+    .maybeSingle();
+  const assumptions = resolveUwAssumptions(orgRow?.underwriting_assumptions);
+
   // Resolve the sizing mode from loan_type, letting the economics override a
   // mislabeled deal (CALIBRATION #14): heavy build cost vs. as-is ⇒ construction.
   const mode = sizingModeForLoanType(body.loan_type, {
@@ -233,11 +245,13 @@ export async function POST(request: Request) {
       rate,
       termMonths: num(body.term_months),
       amortizationMonths: num(body.amortization_months),
-      maxLTV: asRatio(body.max_ltv),
-      maxLTC: asRatio(body.max_ltc),
-      maxLoanToARV: asRatio(body.max_ltarv),
-      minDSCR: num(body.min_dscr),
-      minDebtYield: asRatio(body.min_debt_yield),
+      // House caps/floors fall back to the org's assumptions (principle 14) when
+      // the deal doesn't send them — so a bridge deal always sizes on house policy.
+      maxLTV: asRatio(body.max_ltv) ?? assumptions.house_max_ltv,
+      maxLTC: asRatio(body.max_ltc) ?? assumptions.house_max_ltc,
+      maxLoanToARV: asRatio(body.max_ltarv) ?? assumptions.house_max_ltarv,
+      minDSCR: num(body.min_dscr) ?? assumptions.house_min_dscr,
+      minDebtYield: asRatio(body.min_debt_yield) ?? assumptions.house_min_debt_yield,
       coverageBasis: body.coverage_basis ?? undefined,
       sellingCostPct: asRatio(body.selling_cost_pct),
     };
@@ -283,12 +297,14 @@ export async function POST(request: Request) {
         stabilizedValue: sizing.stabilizedValue,
         stabilizedNOI: sizingInputs.stabilizedNOI,
         bridgeBalanceAtExit: sizing.maxLoan, // interest-only bridge => balance = loan
-        takeoutMaxLTV: asRatio(body.takeout_max_ltv) ?? 0.7,
-        takeoutMinDSCR: num(body.takeout_min_dscr) ?? 1.25,
+        takeoutMaxLTV: asRatio(body.takeout_max_ltv) ?? assumptions.takeout_max_ltv,
+        takeoutMinDSCR: num(body.takeout_min_dscr) ?? assumptions.takeout_min_dscr,
         takeoutMinDebtYield:
           asRatio(body.takeout_min_debt_yield) ?? sizingInputs.minDebtYield,
-        takeoutRate: asRatio(body.takeout_rate) ?? Math.max(0.06, sizingInputs.rate - 0.025),
-        takeoutAmortizationMonths: num(body.takeout_amort_months) ?? 360,
+        takeoutRate:
+          asRatio(body.takeout_rate) ??
+          Math.max(assumptions.takeout_rate_floor, sizingInputs.rate - assumptions.takeout_rate_spread_bps / 10_000),
+        takeoutAmortizationMonths: num(body.takeout_amort_months) ?? assumptions.takeout_amort_months,
         bridgeTermMonths: sizingInputs.termMonths,
         monthsToStabilize: num(body.months_to_stabilize),
       };
@@ -314,7 +330,7 @@ export async function POST(request: Request) {
         loanAmount: sizing.maxLoan,
         rate: sizingInputs.rate,
         amortizationMonths: sizingInputs.amortizationMonths,
-        targetDSCR: num(body.target_dscr) ?? 1.25,
+        targetDSCR: num(body.target_dscr) ?? assumptions.dscr_target,
       });
       const interestReserve = sizeInterestReserve({
         loanAmount: sizing.maxLoan,
@@ -329,8 +345,6 @@ export async function POST(request: Request) {
       // Additive depth — never block sizing.
     }
   }
-
-  const supabase = createAdminClient();
 
   // Resolve validation linkage. When the model is sized from a deal
   // evaluation (the usual evaluate-page path) but no validation_id was

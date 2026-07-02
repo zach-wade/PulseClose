@@ -632,6 +632,31 @@ export type UwAdjustmentItemV1 = z.infer<typeof uwAdjustmentItemV1>;
 export type UwAdjustmentsV1 = z.infer<typeof uwAdjustmentsV1>;
 export const parseUwAdjustmentsV1Strict = strict(uwAdjustmentsV1, "uw_models.adjustments");
 
+// Per-org underwriting assumptions (principle 14, migration 00054) — the house
+// defaults (sizing caps/floors, exit/takeout terms, DSCR target) as CONFIG, not
+// code. All fields optional: a missing field falls back to DEFAULT_UW_ASSUMPTIONS
+// (src/lib/underwriting/org-assumptions.ts). Ratios stored as decimals (0.75),
+// months/bps as whole numbers. Resolution + merge live in org-assumptions.ts.
+export const orgUnderwritingAssumptionsV1 = z.object({
+  schema_version: schemaVersion,
+  house_max_ltv: z.number().positive().max(2).optional(),
+  house_max_ltc: z.number().positive().max(2).optional(),
+  house_max_ltarv: z.number().positive().max(2).optional(),
+  house_min_dscr: z.number().positive().max(5).optional(),
+  house_min_debt_yield: z.number().positive().max(1).optional(),
+  takeout_max_ltv: z.number().positive().max(2).optional(),
+  takeout_min_dscr: z.number().positive().max(5).optional(),
+  takeout_amort_months: z.number().int().positive().max(600).optional(),
+  takeout_rate_spread_bps: z.number().min(0).max(2000).optional(),
+  takeout_rate_floor: z.number().min(0).max(1).optional(),
+  dscr_target: z.number().positive().max(5).optional(),
+});
+export type OrgUnderwritingAssumptionsV1 = z.infer<typeof orgUnderwritingAssumptionsV1>;
+export const parseOrgUnderwritingAssumptionsV1Strict = strict(
+  orgUnderwritingAssumptionsV1,
+  "organizations.underwriting_assumptions",
+);
+
 const uwDimensionReadV1 = z.object({
   dimension: z.enum(["sponsor", "economics", "market", "structure", "exit"]),
   severity: z.enum(["strength", "neutral", "concern", "dealkiller"]),

@@ -36,6 +36,7 @@ import {
   Bell,
   Webhook,
 } from "lucide-react";
+import { UnderwritingAssumptionsCard } from "@/components/dashboard/settings/underwriting-assumptions-card";
 import { NotificationsTab } from "./notifications-tab";
 import { ApiKeysTab } from "./api-keys-tab";
 import { WebhooksTab } from "./webhooks-tab";
@@ -58,6 +59,7 @@ interface SettingsData {
     ai_extraction_enabled: boolean;
     monitor_new_validations_by_default: boolean;
     monitor_paused_until: string | null;
+    underwriting_assumptions: Record<string, number> | null;
   } | null;
   team: {
     id: string;
@@ -327,6 +329,14 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          <UnderwritingAssumptionsCard
+            initial={data.org?.underwriting_assumptions ?? null}
+            canEdit={data.user.role === "owner" || data.user.role === "admin"}
+            onSaved={(stored) =>
+              setData((d) => (d && d.org ? { ...d, org: { ...d.org, underwriting_assumptions: stored } } : d))
+            }
+          />
 
           <Card>
             <CardHeader>
