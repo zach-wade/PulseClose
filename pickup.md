@@ -1,15 +1,19 @@
-# PulseClose — Session Pickup & Execution Plan (2026-07-01, rev. UW-ENGINE-SHIPPED)
+# PulseClose — Session Pickup & Execution Plan (2026-07-01, rev. UX-2-SHIPPED)
 
 > **Self-contained handoff — start a fresh session from here.**
 > Arc of this session: from the **2026-07-01 Damon engagement-reset** (ICC trialing PulseClose
 > **July + August across both Insignia businesses**) → decoded ICC's real Excel models from the
 > data trove → **BUILT + shipped the whole deal-sizing engine** (RTL/fix&flip, ground-up
-> construction, DSCR, goal-seek, dispatcher — all math-verified **to the penny**) → **merged to
-> `main` + deployed.** All green; migrations unchanged (00001–00051).
+> construction, DSCR, goal-seek, dispatcher — all math-verified **to the penny**) → **WIRED it
+> into the deal stepper (UX-2) + drive-verified on prod.**
 >
-> **The engine is DORMANT** — imported by no UI yet, so the deploy is additive/safe. **NEXT =
-> wire the shipped sizers into the deal stepper (UX-2)** — precise steps + a prod-drive gate in
-> §NEXT below.
+> **UX-2 is LIVE + drive-verified (2026-07-01 (e)).** The deal stepper now resolves the sizing
+> **mode** from loan_type, shows mode-specific inputs, and renders the mode-tagged result through
+> the Excel-parity `<StructuredSizing>` (proceeds waterfall + constraint ladder). A Playwright
+> prod drive of all three modes matched the golden fixtures **to the penny**: Fix&Flip
+> **$2,422,000** (CTC $294,999.996) · Ground-Up **$1,444,444** · DSCR **$297,477**. Migration
+> **00052** applied to prod (`structured` col; inputs/sizing nullable). Migrations now 00001–00052.
+> Commits `0a1ea53 → c68d99b`. **NEXT = the remaining UW-7/Tier-2 pieces** (see §NEXT).
 >
 > **⭐ NORTH STAR for the underwriting thread: REPLACE THE EXCEL → port into the CRM → API
 > backbone into the LOS** (owner-set; sharpened + stress-tested 2026-07-01 (c) after mining the
@@ -106,31 +110,29 @@ The 85% RentCast burn is **NOT PulseClose** (70 req lifetime, 0 last week) — i
 Build-Folio on its own RentCast account or upgrade; audit its 17.5% error rate. See VENDOR-LEDGER
 §4 + the new Plan snapshot (⚠️ CONFIRM rows = costs not yet verified against dashboards).
 
-## NEXT (paused by choice) — finish wiring the sizers into the deal stepper (UX-2)
-The engine layer is done + dormant; the remaining work is a real feature needing a **prod visual
-drive** to verify (never mark UI done without a drive — memory `feedback_verify_the_ui_not_just_data`).
-Precise steps:
-1. **Input schema** — extend `UnderwriteBody` + `uwSizingInputsV1` (Zod, `src/lib/schemas/`) with the
-   mode-specific fields: RTL (asIsValue, arv, purchaseAdvancePct, rehabFundingPct, prepaidInterestMonths,
-   closingCostsPct, tier, fico, rehabType); construction (reserveMonths, reserveDiscount, holdbackPct,
-   originationFeePct, fixedClosingCosts, maxLTC, maxLoanToARV); DSCR (monthlyRent, taxes, insurance, hoa).
-2. **API dispatch** — in `src/app/api/underwrite/route.ts` (377 lines): call `sizingModeForLoanType(loan_type, {rehabBudget, asIsValue})`
-   → `sizeDeal({mode, ...})`; return the mode-tagged `structured` result **alongside** the existing
-   `sizing` (additive, backward-compatible). Persist in `uw_models`.
-3. **Stepper form** — `src/components/dashboard/deal/deal-stepper.tsx` (1,227 lines; the audit's
-   `:851` refs are in THIS file, the `deal/` subfolder). Step ③ Sizing: show the mode-specific inputs
-   for the chosen loan_type; keep bridge inputs for Bridge.
-4. **Excel-parity result UI (UX-2)** — new components `<ProceedsWaterfall>` (advance+holdback−prepaid−closing→net→cash-to-close→equity%)
-   on the LEFT, `<ConstraintLadder cushion>` (pass/fail + headroom per test) on the RIGHT — mirroring the
-   RTL/Construction sheets. Add UW-5 `<SolveControl>` sliders (goal-seek). Spec: UX-REDESIGN-PLAN §13.2.
-5. **Prod drive** — deploy, drive `/dashboard/evaluate` for a Fix&Flip + a Ground-Up + a DSCR deal
-   (Playwright + screenshots), read them, verify the numbers match the golden fixtures on-screen.
-Then UW-3 (surface depth layers) · UW-4 (deposits/equity).
-- **Phase 2 (coherence+trust):** COH-2 mandate-reads-raw fix (HIGH) · UX-1 craft/de-AI ·
-  **UX-2 persona-agnostic coherence** (owner's top priority; principle 13 / UX-REDESIGN §13).
-- **Phase 3:** A1+ rate stack (10 real investors) · CAP-1 concentration + facility-aware · CAP-2 pricing · COND-1 auto-conditions.
-- **Phase 4 (moat):** AN-1 cost benchmarking · AN-2 reserve adequacy · AN-3 sponsor capacity · AN-4 calibrate-to-outcomes.
-- **Phase 5:** INT-1 Salesforce · Consumer Bridge (logged adjacency, not built).
+## ✅ UX-2 SHIPPED + drive-verified (2026-07-01 (e)) — the sizers are wired into the stepper
+Done end-to-end: input schema (`UnderwriteBody` + structured fields), mode-first
+`/api/underwrite` dispatch (`sizingModeForLoanType` → `sizeDeal`, persists the
+`uwStructuredResultV1` envelope; bridge path unchanged), stepper mode-specific inputs, and the
+Excel-parity **`<StructuredSizing>`** (`<ProceedsWaterfall>` + `<ConstraintLadder cushion>`) in
+`src/components/dashboard/deal/structured-sizing.tsx`. Migration **00052** applied. Prod
+Playwright drive matched golden fixtures to the penny (F&F $2,422,000 / GUC $1,444,444 / DSCR
+$297,477). Finding **#23** resolved (DSCR sizes via closed-form residential-PITIA `sizeDscr`).
+Fixed `sizingModeForLoanType` to normalize `_`/`-` so the `ground_up`/`fix_flip` enum values route.
+
+## NEXT — the remaining UW-7 / Tier-2 depth (all on top of the now-live sizing UI)
+1. **Tier-2 `<CustomInputs>` (override-any-cell)** — the mode INPUTS are wired; the "structured
+   core, open edges" Tier-2 override-any-computed-cell + named custom adjustments + per-org
+   assumption sets is still to build (ROADMAP UW-7 + principle 14; IDEAS Tier-3 logged).
+2. **UW-5 `<SolveControl>` sliders** — goal-seek is shipped in `solve.ts`; add the drag-to-solve UI.
+3. **UW-7 dual sizer + refi stress grid** — `<DualSizer>` (in-place | stabilized, finding #25) +
+   `<RefiStressGrid>` (NOI −0/5/10/15/20% → LTV/DSCR/refi proceeds, finding #26). Highest-value
+   "does the bridge exit?" surface. Dual-LTC (incl/excl IR) per finding #34.
+4. **UW-3 depth layers** (surface exit/stabilization) · **UW-4 deposits/equity + operational shortfall** (#27).
+- **Phase 2 (coherence+trust):** COH-2 mandate-reads-raw fix (HIGH) · UX-1 craft/de-AI.
+- **Phase 3:** A1+ rate stack (**~35-lender Lender Grid**, finding #31) · CAP-1 concentration + facility-aware (**Colchis warehouse LOC**, #32) · CAP-2 pricing · COND-1 auto-conditions.
+- **Phase 4 (moat):** AN-1 cost benchmarking (**CSI taxonomy**, #29) · AN-2 reserve adequacy · AN-3 sponsor capacity · AN-4 calibrate-to-outcomes.
+- **Phase 5:** INT-1 Salesforce embed (Layer 2) · INT-2 LOS push (Nexys/Encompass, Layer 3) · Consumer Bridge (logged adjacency, not built).
 
 **[USER / NON-PRODUCT ACTIONS]**
 - **Email Damon the AAPL conference info** (Nov 9–11, Vegas) — he asked, can't find it.
