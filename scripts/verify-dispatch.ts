@@ -62,6 +62,20 @@ const con = sizeDeal({
 check("sizeDeal(mode:construction).mode === 'construction'", con.mode === "construction");
 check("construction total loan = $1,444,444.44", con.mode === "construction" && Math.abs(con.result.totalLoan - 1_444_444.4444444444) <= 0.01);
 
+// #23: DSCR mode now SIZES (returns a max loan), and the DSCR at that max loan
+// round-trips back to the target — so all four modes give a size.
+const dscr = sizeDeal({
+  mode: "dscr",
+  monthlyRent: 3_000, targetDSCR: 1.2, rate: 0.075, amortizationMonths: 360,
+  monthlyTaxes: 300, monthlyInsurance: 120, monthlyHoa: 0, propertyValue: 500_000,
+});
+check("sizeDeal(mode:dscr).mode === 'dscr'", dscr.mode === "dscr");
+check("dscr mode SIZES (maxLoan > 0)", dscr.mode === "dscr" && dscr.result.maxLoan > 0);
+check(
+  "dscr round-trip: DSCR at maxLoan ≈ target 1.20",
+  dscr.mode === "dscr" && Math.abs(dscr.result.atMaxLoan.dscrAmortizing - 1.2) <= 1e-6,
+);
+
 console.log("");
 if (failures > 0) { console.error(`Dispatch: ${failures} check(s) FAILED.`); process.exit(1); }
 console.log("Dispatch: all checks passed — loan_type routes correctly; economics override honored.");

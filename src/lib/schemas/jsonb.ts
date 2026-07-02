@@ -569,6 +569,31 @@ export const uwSizingResultV1 = z.object({
 export type UwSizingResultV1 = z.infer<typeof uwSizingResultV1>;
 export const parseUwSizingResultV1Strict = strict(uwSizingResultV1, "uw_models.sizing");
 
+// ── uw_models.structured (UX-2 / UW-7) ─────────────────────────────────────
+// The deal-type-aware STRUCTURED result: the dispatcher routes a deal's loan_type
+// to one of {rtl, construction, dscr} and returns a mode-specific structured deal
+// (proceeds waterfall / Sources+Uses / DSCR sizing) that does NOT fit the bridge-
+// shaped `sizing` column above. Persisted in the nullable `structured` column
+// (migration 00052), null for bridge-only models.
+//
+// DESIGN: we store a strictly-typed ENVELOPE (schema_version + mode + a raw echo
+// of the sized inputs) wrapping the engine's `result` as a versioned payload.
+// The engine modules (src/lib/underwriting/{rtl-sizer,construction-sizer,dscr-sizer}.ts)
+// are the single source of truth for the result shape and are covered to the penny
+// by scripts/verify-*.ts — hand-mirroring their 40+ fields here would only create a
+// second definition that can silently drift (the very failure principle 9 warns
+// about). The envelope is validated strictly; the payload is engine-owned + tested.
+export const uwStructuredModeV1 = z.enum(["rtl", "construction", "dscr"]);
+export const uwStructuredResultV1 = z.object({
+  schema_version: schemaVersion,
+  mode: uwStructuredModeV1,
+  loanType: z.string().nullable().optional(), // the raw Nexys loan_type that routed here
+  inputs: z.record(z.string(), z.unknown()), // audit echo of the sized inputs (validated at the API boundary)
+  result: z.record(z.string(), z.unknown()), // the mode's structured result — engine-owned, penny-tested
+});
+export type UwStructuredResultV1 = z.infer<typeof uwStructuredResultV1>;
+export const parseUwStructuredResultV1Strict = strict(uwStructuredResultV1, "uw_models.structured");
+
 const uwDimensionReadV1 = z.object({
   dimension: z.enum(["sponsor", "economics", "market", "structure", "exit"]),
   severity: z.enum(["strength", "neutral", "concern", "dealkiller"]),

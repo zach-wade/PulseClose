@@ -82,6 +82,63 @@ export function dscrForLoan(d: ResidentialDscrInputs): ResidentialDscrResult {
   };
 }
 
+// ── residential PITIA DSCR — SIZE the loan (resolves CALIBRATION #23) ──
+// The dispatcher routes a rental/DSCR deal here to SIZE (get a max loan), with
+// dscrForLoan() above kept as the "check my requested number" affordance. This is
+// the PITIA convention (T&I inside the ratio), so it inverts dscrForLoan rather
+// than maxLoanByDscr (which is the commercial NOI convention). Closed-form, no
+// search: the payment a target DSCR supports is rent ÷ DSCR; strip T&I to get the
+// P&I the loan may carry; present-value it back to a loan (amortizing or IO).
+export interface ResidentialDscrSizeInputs {
+  monthlyRent: number; // gross scheduled rent
+  targetDSCR: number; // the DSCR floor to size to (e.g. 1.20)
+  rate: number; // annual, decimal
+  amortizationMonths?: number; // 0/undefined => interest-only
+  monthlyTaxes?: number;
+  monthlyInsurance?: number;
+  monthlyHoa?: number;
+  propertyValue?: number; // for LTV at the sized loan
+}
+
+export interface ResidentialDscrSizeResult {
+  convention: "PITIA";
+  targetDSCR: number;
+  supportablePitia: number; // rent ÷ target DSCR
+  tia: number; // taxes + insurance + HOA (monthly)
+  supportablePI: number; // max(0, supportablePitia − tia)
+  maxLoan: number; // present value of the supportable P&I
+  ltvAtMax: number | null;
+  atMaxLoan: ResidentialDscrResult; // ratios at maxLoan (DSCR ≈ target — the round-trip check)
+}
+
+/** Given rent + a target PITIA DSCR, compute the max supportable loan. */
+export function sizeDscr(d: ResidentialDscrSizeInputs): ResidentialDscrSizeResult {
+  const tia = (d.monthlyTaxes ?? 0) + (d.monthlyInsurance ?? 0) + (d.monthlyHoa ?? 0);
+  const supportablePitia = d.monthlyRent / d.targetDSCR;
+  const supportablePI = Math.max(0, supportablePitia - tia);
+  const maxLoan = presentValue(supportablePI, d.rate, d.amortizationMonths);
+  const atMaxLoan = dscrForLoan({
+    monthlyRent: d.monthlyRent,
+    loanAmount: maxLoan,
+    rate: d.rate,
+    amortizationMonths: d.amortizationMonths,
+    monthlyTaxes: d.monthlyTaxes,
+    monthlyInsurance: d.monthlyInsurance,
+    monthlyHoa: d.monthlyHoa,
+    propertyValue: d.propertyValue,
+  });
+  return {
+    convention: "PITIA",
+    targetDSCR: d.targetDSCR,
+    supportablePitia,
+    tia,
+    supportablePI,
+    maxLoan,
+    ltvAtMax: d.propertyValue ? maxLoan / d.propertyValue : null,
+    atMaxLoan,
+  };
+}
+
 // ─────────────────────────── commercial NOI DSCR max loan ───────────────────────────
 
 export interface MaxLoanByDscrInputs {

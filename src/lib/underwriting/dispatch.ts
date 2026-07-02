@@ -18,7 +18,7 @@
 
 import { sizeRtl, type RtlSizingInputs, type RtlSizingResult } from "./rtl-sizer";
 import { sizeConstruction, type ConstructionSizingInputs, type ConstructionSizingResult } from "./construction-sizer";
-import { dscrForLoan, type ResidentialDscrInputs, type ResidentialDscrResult } from "./dscr-sizer";
+import { sizeDscr, type ResidentialDscrSizeInputs, type ResidentialDscrSizeResult } from "./dscr-sizer";
 import { underwrite, type SizingInputs, type SizingResult } from "./sizing";
 
 export type SizingMode = "rtl" | "construction" | "dscr" | "bridge";
@@ -58,13 +58,13 @@ export function sizingModeForLoanType(loanType: string | null | undefined, econ?
 export type SizeDealInput =
   | ({ mode: "rtl" } & RtlSizingInputs)
   | ({ mode: "construction" } & ConstructionSizingInputs)
-  | ({ mode: "dscr" } & ResidentialDscrInputs)
+  | ({ mode: "dscr" } & ResidentialDscrSizeInputs)
   | ({ mode: "bridge" } & SizingInputs);
 
 export type SizeDealResult =
   | { mode: "rtl"; result: RtlSizingResult }
   | { mode: "construction"; result: ConstructionSizingResult }
-  | { mode: "dscr"; result: ResidentialDscrResult }
+  | { mode: "dscr"; result: ResidentialDscrSizeResult }
   | { mode: "bridge"; result: SizingResult };
 
 /** Route a deal to its sizing engine and return the mode-tagged result. */
@@ -75,7 +75,9 @@ export function sizeDeal(input: SizeDealInput): SizeDealResult {
     case "construction":
       return { mode: "construction", result: sizeConstruction(input) };
     case "dscr":
-      return { mode: "dscr", result: dscrForLoan(input) };
+      // #23: DSCR mode SIZES (max loan at the target PITIA DSCR). dscrForLoan()
+      // stays the separate "check my requested number" affordance.
+      return { mode: "dscr", result: sizeDscr(input) };
     case "bridge":
       return { mode: "bridge", result: underwrite(input) };
   }

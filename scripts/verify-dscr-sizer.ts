@@ -10,7 +10,7 @@
 //
 // Run:  npx tsx scripts/verify-dscr-sizer.ts   (exit 0 all-pass, 1 on fail)
 
-import { dscrForLoan, maxLoanByDscr, monthlyPayment } from "../src/lib/underwriting/dscr-sizer";
+import { dscrForLoan, maxLoanByDscr, monthlyPayment, sizeDscr, presentValue } from "../src/lib/underwriting/dscr-sizer";
 
 let failures = 0;
 const eqCents = (got: number, want: number) => Math.abs(got - want) <= 0.01;
@@ -58,6 +58,19 @@ check("IO DSCR ≥ amortizing DSCR (lower payment)", res.dscrInterestOnly >= res
 const mxIO = maxLoanByDscr({ annualNOI: 53_200, targetDSCR: 0.8, rate: 0.07625 }); // interest-only
 check("IO max loan ≥ amortizing max loan", mxIO.maxLoan >= mx.maxLoan, `${mxIO.maxLoan} vs ${mx.maxLoan}`);
 
+console.log("\n4. sizeDscr() — residential PITIA SIZING (resolves #23; inverts dscrForLoan):");
+// rent $3,000; target 1.20; 7.5% / 360; T&I $420/mo. supportable PITIA = 3000/1.2 = 2500;
+// supportable P&I = 2500 − 420 = 2080; maxLoan = PV(2080, 7.5%, 360).
+const sz = sizeDscr({ monthlyRent: 3_000, targetDSCR: 1.2, rate: 0.075, amortizationMonths: 360, monthlyTaxes: 300, monthlyInsurance: 120, monthlyHoa: 0, propertyValue: 500_000 });
+check("supportable PITIA = $2,500", eqCents(sz.supportablePitia, 2500), `${sz.supportablePitia}`);
+check("supportable P&I = $2,080", eqCents(sz.supportablePI, 2080), `${sz.supportablePI}`);
+check("maxLoan == PV(supportable P&I)", eqCents(sz.maxLoan, presentValue(2080, 0.075, 360)), `${sz.maxLoan}`);
+check("round-trip: DSCR at maxLoan == target 1.20 (amortizing)", eqCents(sz.atMaxLoan.dscrAmortizing, 1.2), `${sz.atMaxLoan.dscrAmortizing}`);
+check("LTV at max computed against value", sz.ltvAtMax != null && Math.abs(sz.ltvAtMax - sz.maxLoan / 500_000) <= 1e-9);
+// IO sizes larger than amortizing (lower payment carries more loan).
+const szIO = sizeDscr({ monthlyRent: 3_000, targetDSCR: 1.2, rate: 0.075, monthlyTaxes: 300, monthlyInsurance: 120 });
+check("IO maxLoan ≥ amortizing maxLoan", szIO.maxLoan >= sz.maxLoan, `${szIO.maxLoan} vs ${sz.maxLoan}`);
+
 console.log("");
 if (failures > 0) { console.error(`DSCR sizer: ${failures} check(s) FAILED.`); process.exit(1); }
-console.log("DSCR sizer: all checks passed — reproduces the DSCR Calculator; PV path == underwrite() DSCR.");
+console.log("DSCR sizer: all checks passed — reproduces the DSCR Calculator; PV path == underwrite() DSCR; sizeDscr round-trips.");
