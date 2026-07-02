@@ -48,6 +48,11 @@ export interface StructuredRequestBody {
 const pos = (v: number | null | undefined): v is number => typeof v === "number" && !Number.isNaN(v) && v > 0;
 const nn = (v: number | null | undefined): number | undefined =>
   v == null || Number.isNaN(v) ? undefined : v;
+// Always-percent fields: the UI sends the percent NUMBER (89 → 0.89, 0.2 → 0.002,
+// 100 → 1.0). Unlike the bridge path's asRatio(>1?/100:v), these divide by 100
+// unconditionally so a "0.2%" closing cost maps to 0.002, not 0.2.
+const pctNum = (v: number | null | undefined): number | undefined =>
+  v == null || Number.isNaN(v) ? undefined : v / 100;
 
 function coerceTier(v: number | null | undefined): BorrowerTier | null {
   return v === 1 || v === 2 || v === 3 ? v : null;
@@ -81,11 +86,11 @@ export function buildStructuredInput(mode: SizingMode, b: StructuredRequestBody)
       mode: "rtl", name,
       asIsValue: b.as_is_value!, arv: b.arv!, purchasePrice: b.purchase_price!,
       rehabBudget: nn(b.rehab_budget) ?? 0,
-      purchaseAdvancePct: b.purchase_advance_pct!,
-      rehabFundingPct: nn(b.rehab_funding_pct),
+      purchaseAdvancePct: pctNum(b.purchase_advance_pct)!,
+      rehabFundingPct: pctNum(b.rehab_funding_pct),
       interestRate: rate,
       prepaidInterestMonths: nn(b.prepaid_interest_months),
-      closingCostsPct: nn(b.closing_costs_pct),
+      closingCostsPct: pctNum(b.closing_costs_pct),
       tier, fico: b.borrower_fico!, rehabType,
     };
   }
@@ -99,13 +104,13 @@ export function buildStructuredInput(mode: SizingMode, b: StructuredRequestBody)
       arv: b.arv!, asIsValue: nn(b.as_is_value),
       rate,
       reserveMonths: nn(b.reserve_months),
-      reserveDiscount: nn(b.reserve_discount),
-      originationFeePct: nn(b.origination_fee_pct),
+      reserveDiscount: pctNum(b.reserve_discount),
+      originationFeePct: pctNum(b.origination_fee_pct),
       fixedClosingCosts: nn(b.fixed_closing_costs),
-      purchaseAdvancePct: b.purchase_advance_pct!,
-      constructionHoldbackPct: nn(b.construction_holdback_pct),
-      maxLTC: nn(b.max_ltc),
-      maxLoanToARV: nn(b.max_ltarv),
+      purchaseAdvancePct: pctNum(b.purchase_advance_pct)!,
+      constructionHoldbackPct: pctNum(b.construction_holdback_pct),
+      maxLTC: pctNum(b.max_ltc),
+      maxLoanToARV: pctNum(b.max_ltarv),
     };
   }
 

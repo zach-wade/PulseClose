@@ -53,6 +53,8 @@ import {
   OCCUPANCIES,
   LOAN_PURPOSES,
 } from "@/lib/deal/view-model";
+import { StructuredSizing } from "@/components/dashboard/deal/structured-sizing";
+import { sizingModeForLoanType, type SizeDealResult, type SizingMode } from "@/lib/underwriting/dispatch";
 
 type StepId = "terms" | "eligibility" | "sizing" | "judgment" | "handoff";
 
@@ -64,7 +66,7 @@ type Action =
   | { type: "setJudgmentCtx"; key: keyof JudgmentContext; value: string }
   | { type: "runStart"; step: "eligibility" | "sizing" | "judgment" }
   | { type: "eligibilityDone"; evaluationId: string | null; results: EligibilityResult[]; hash: string }
-  | { type: "sizingDone"; uwModelId: string | null; sizing: SizingResult; perInvestor: PerInvestorSizing[]; hash: string }
+  | { type: "sizingDone"; uwModelId: string | null; sizing: SizingResult | null; mode: SizingMode | null; structured: SizeDealResult | null; perInvestor: PerInvestorSizing[]; hash: string }
   | { type: "judgmentDone"; judgment: Judgment }
   | { type: "runError"; step: "eligibility" | "sizing" | "judgment"; error: string }
   | { type: "optInSizing" }
@@ -108,6 +110,8 @@ function reducer(d: Deal, a: Action): Deal {
         ...d,
         uw_model_id: a.uwModelId,
         sizingResult: a.sizing,
+        mode: a.mode,
+        structured: a.structured,
         perInvestor: a.perInvestor,
         judgmentResult: null, // a fresh size invalidates any prior judgment
         computedFrom: { ...d.computedFrom, sizing: a.hash },
@@ -225,6 +229,27 @@ export function DealStepper({
           takeout_min_dscr: numOrNull(s.takeout_min_dscr),
           takeout_rate: numOrNull(s.takeout_rate),
           months_to_stabilize: numOrNull(s.months_to_stabilize),
+          // structured-mode inputs (RTL / ground-up / DSCR). Percent fields are
+          // sent as-is; the API normalizes >1 as a percent.
+          as_is_value: numOrNull(s.as_is_value),
+          purchase_advance_pct: numOrNull(s.purchase_advance_pct),
+          rehab_funding_pct: numOrNull(s.rehab_funding_pct),
+          prepaid_interest_months: numOrNull(s.prepaid_interest_months),
+          closing_costs_pct: numOrNull(s.closing_costs_pct),
+          tier: numOrNull(s.tier),
+          rehab_type: s.rehab_type || null,
+          construction_budget: numOrNull(s.construction_budget),
+          reserve_months: numOrNull(s.reserve_months),
+          reserve_discount: numOrNull(s.reserve_discount),
+          construction_holdback_pct: numOrNull(s.construction_holdback_pct),
+          origination_fee_pct: numOrNull(s.origination_fee_pct),
+          fixed_closing_costs: numOrNull(s.fixed_closing_costs),
+          monthly_rent: numOrNull(s.monthly_rent),
+          target_dscr: numOrNull(s.target_dscr),
+          monthly_taxes: numOrNull(s.monthly_taxes),
+          monthly_insurance: numOrNull(s.monthly_insurance),
+          monthly_hoa: numOrNull(s.monthly_hoa),
+          property_value: numOrNull(s.property_value),
           deal_evaluation_id: deal.evaluation_id,
           validation_id: deal.validation_id,
         }),
@@ -234,7 +259,9 @@ export function DealStepper({
       dispatch({
         type: "sizingDone",
         uwModelId: json.uw_model_id ?? null,
-        sizing: json.sizing,
+        sizing: json.sizing ?? null,
+        mode: json.mode ?? null,
+        structured: json.structured ?? null,
         perInvestor: json.per_investor ?? [],
         hash: hashTerms(deal.terms) + "|" + hashSizing(deal.sizing),
       });
@@ -721,6 +748,12 @@ function StepSizing({
   const sizing = deal.sizingResult;
   const maxLadder = sizing ? Math.max(...sizing.constraints.map((c) => c.maxLoan)) : 0;
   const hadDefaults = defaultSizingConstraintsFromResults(deal.eligibilityResults) != null;
+  // Resolve the sizing mode from the loan type + economics (mirrors the API).
+  const mode = sizingModeForLoanType(deal.terms.loan_type, {
+    rehabBudget: numOrNull(deal.terms.rehab_budget) ?? undefined,
+    asIsValue: numOrNull(s.as_is_value) ?? undefined,
+    constructionBudget: numOrNull(s.construction_budget) ?? undefined,
+  });
 
   return (
     <Card>
@@ -748,6 +781,63 @@ function StepSizing({
             </select>
           </div>
         </div>
+
+        {/* Mode-specific inputs (UX-2). The loan type routes to a deal-type sizer;
+            these fields feed it. Bridge uses the NOI/cap economics above. Purchase
+            price / ARV / rehab / FICO come from the Terms step. */}
+        {mode !== "bridge" && (
+          <div className="rounded-md border border-info/30 bg-info/5 px-3 py-3 space-y-2">
+            <p className="text-xs uppercase tracking-wide text-info font-medium">
+              {mode === "rtl" ? "Fix & Flip / RTL sizing inputs" : mode === "construction" ? "Ground-Up Construction sizing inputs" : "DSCR (Rental) sizing inputs"}
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {mode === "rtl" && (
+                <>
+                  <NumField id="rtl_aiv" label="As-is value" value={s.as_is_value} onChange={(v) => set("as_is_value", v)} placeholder="2480000" />
+                  <NumField id="rtl_adv" label="Purchase advance %" step="0.5" value={s.purchase_advance_pct} onChange={(v) => set("purchase_advance_pct", v)} placeholder="89" />
+                  <NumField id="rtl_fund" label="Rehab funding %" value={s.rehab_funding_pct} onChange={(v) => set("rehab_funding_pct", v)} placeholder="100" />
+                  <NumField id="rtl_prepaid" label="Prepaid interest (mo)" value={s.prepaid_interest_months} onChange={(v) => set("prepaid_interest_months", v)} placeholder="1" />
+                  <NumField id="rtl_close" label="Closing costs %" step="0.1" value={s.closing_costs_pct} onChange={(v) => set("closing_costs_pct", v)} placeholder="0.2" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rtl_tier">Borrower tier</Label>
+                    <select id="rtl_tier" className={selectCls()} value={s.tier} onChange={(e) => set("tier", e.target.value)}>
+                      <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rtl_rehab_type">Rehab type</Label>
+                    <select id="rtl_rehab_type" className={selectCls()} value={s.rehab_type} onChange={(e) => set("rehab_type", e.target.value)}>
+                      <option value="Light">Light</option><option value="Moderate">Moderate</option><option value="Heavy">Heavy</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              {mode === "construction" && (
+                <>
+                  <NumField id="con_budget" label="Construction budget" value={s.construction_budget} onChange={(v) => set("construction_budget", v)} placeholder="2178318" />
+                  <NumField id="con_aiv" label="As-is value" value={s.as_is_value} onChange={(v) => set("as_is_value", v)} placeholder="1400000" />
+                  <NumField id="con_adv" label="Initial advance %" step="0.5" value={s.purchase_advance_pct} onChange={(v) => set("purchase_advance_pct", v)} placeholder="20" />
+                  <NumField id="con_hold" label="Construction holdback %" value={s.construction_holdback_pct} onChange={(v) => set("construction_holdback_pct", v)} placeholder="100" />
+                  <NumField id="con_rmo" label="Interest-reserve months" value={s.reserve_months} onChange={(v) => set("reserve_months", v)} placeholder="18" />
+                  <NumField id="con_rdisc" label="Reserve draw-weight %" value={s.reserve_discount} onChange={(v) => set("reserve_discount", v)} placeholder="78" />
+                  <NumField id="con_orig" label="Origination fee %" step="0.1" value={s.origination_fee_pct} onChange={(v) => set("origination_fee_pct", v)} placeholder="2" />
+                  <NumField id="con_fixed" label="Fixed closing costs" value={s.fixed_closing_costs} onChange={(v) => set("fixed_closing_costs", v)} placeholder="5000" />
+                </>
+              )}
+              {mode === "dscr" && (
+                <>
+                  <NumField id="dscr_rent" label="Monthly rent" value={s.monthly_rent} onChange={(v) => set("monthly_rent", v)} placeholder="3000" />
+                  <NumField id="dscr_target" label="Target DSCR" step="0.05" value={s.target_dscr} onChange={(v) => set("target_dscr", v)} placeholder="1.20" />
+                  <NumField id="dscr_tax" label="Monthly taxes" value={s.monthly_taxes} onChange={(v) => set("monthly_taxes", v)} placeholder="300" />
+                  <NumField id="dscr_ins" label="Monthly insurance" value={s.monthly_insurance} onChange={(v) => set("monthly_insurance", v)} placeholder="120" />
+                  <NumField id="dscr_hoa" label="Monthly HOA" value={s.monthly_hoa} onChange={(v) => set("monthly_hoa", v)} placeholder="0" />
+                  <NumField id="dscr_val" label="Property value (LTV)" value={s.property_value} onChange={(v) => set("property_value", v)} placeholder="500000" />
+                </>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">Rate {mode === "dscr" ? "+ amortization months" : ""} above; purchase price / ARV / rehab / FICO from the Terms step.</p>
+          </div>
+        )}
         {/* Progressive disclosure (UX-REDESIGN §10 #3): the 10 advanced caps +
             exit/takeout inputs default from the matched investors, so a basic
             user never has to touch them. Collapsed by default → the sizing step
@@ -785,6 +875,13 @@ function StepSizing({
         <div className="flex justify-end">
           <Button onClick={onSize} disabled={running}>{running ? "Sizing…" : "Size loan"}</Button>
         </div>
+
+        {/* Structured (RTL / construction / DSCR) result — Excel-parity layout. */}
+        {deal.structured && deal.structured.mode !== "bridge" && (
+          <div className="space-y-4 pt-2 border-t border-border">
+            <StructuredSizing result={deal.structured} />
+          </div>
+        )}
 
         {sizing && (
           <div className="space-y-4 pt-2 border-t border-border">

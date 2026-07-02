@@ -34,7 +34,9 @@ export interface SizingEconomics {
  *  override the label when they clearly disagree. Case-insensitive, tolerant of
  *  the exact Nexys enum spellings and common variants. */
 export function sizingModeForLoanType(loanType: string | null | undefined, econ?: SizingEconomics): SizingMode {
-  const t = (loanType ?? "").toLowerCase();
+  // Normalize separators so both the Nexys strings ("Ground Up Construction") and the
+  // product enum values ("ground_up", "fix_flip") match the same substring checks.
+  const t = (loanType ?? "").toLowerCase().replace(/[_-]+/g, " ");
 
   // Label-based first pass.
   let mode: SizingMode;

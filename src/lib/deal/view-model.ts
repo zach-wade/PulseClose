@@ -9,6 +9,9 @@
 // preserves "blank = null / IO" semantics); conversion to numbers happens only
 // at API-call time. Result types are declared locally — like the page/panel they
 // supersede — to keep this module client-safe (no server-only imports).
+// Exception: type-only imports from the pure (client-safe) underwriting engine are
+// erased at compile, so we reuse its structured-result types rather than re-declare them.
+import type { SizeDealResult, SizingMode } from "@/lib/underwriting/dispatch";
 
 // ── Result shapes (the API JSON, stored verbatim) ──────────────────────────
 
@@ -189,6 +192,29 @@ export interface SizingTerms {
   takeout_min_dscr: string;
   takeout_rate: string;
   months_to_stabilize: string;
+  // ── structured-mode inputs (RTL / ground-up / DSCR) — UX-2 ──
+  // RTL fix&flip
+  as_is_value: string;
+  purchase_advance_pct: string; // % (shared with construction initial advance)
+  rehab_funding_pct: string; // %
+  prepaid_interest_months: string;
+  closing_costs_pct: string; // %
+  tier: string; // 1 | 2 | 3
+  rehab_type: string; // Light | Moderate | Heavy
+  // ground-up construction
+  construction_budget: string;
+  reserve_months: string;
+  reserve_discount: string; // % (draw-weight on the interest reserve)
+  construction_holdback_pct: string; // %
+  origination_fee_pct: string; // %
+  fixed_closing_costs: string;
+  // DSCR (rental)
+  monthly_rent: string;
+  target_dscr: string;
+  monthly_taxes: string;
+  monthly_insurance: string;
+  monthly_hoa: string;
+  property_value: string;
 }
 
 export interface JudgmentContext {
@@ -212,7 +238,9 @@ export interface Deal {
 
   // results
   eligibilityResults: EligibilityResult[] | null;
-  sizingResult: SizingResult | null;
+  sizingResult: SizingResult | null; // bridge income model
+  mode: SizingMode | null; // resolved sizing mode (rtl | construction | dscr | bridge)
+  structured: SizeDealResult | null; // deal-type structured result (RTL/construction/DSCR)
   perInvestor: PerInvestorSizing[] | null;
   judgmentResult: Judgment | null;
 
@@ -288,10 +316,32 @@ export function emptyDeal(prefill: DealPrefill = {}): Deal {
       takeout_min_dscr: "1.25",
       takeout_rate: "",
       months_to_stabilize: "",
+      // structured-mode inputs
+      as_is_value: "",
+      purchase_advance_pct: "",
+      rehab_funding_pct: "100",
+      prepaid_interest_months: "",
+      closing_costs_pct: "",
+      tier: "1",
+      rehab_type: "Light",
+      construction_budget: "",
+      reserve_months: "",
+      reserve_discount: "100",
+      construction_holdback_pct: "100",
+      origination_fee_pct: "",
+      fixed_closing_costs: "",
+      monthly_rent: "",
+      target_dscr: "1.2",
+      monthly_taxes: "",
+      monthly_insurance: "",
+      monthly_hoa: "",
+      property_value: "",
     },
     judgmentCtx: { sponsor: "", market: "", businessPlan: "", notes: "" },
     eligibilityResults: null,
     sizingResult: null,
+    mode: null,
+    structured: null,
     perInvestor: null,
     judgmentResult: null,
     computedFrom: { eligibility: null, sizing: null },
@@ -443,6 +493,7 @@ export function dealFromEvaluation(d: EvaluationResumeData): Deal {
   const blank = emptyDeal().sizing;
   const sizing: SizingTerms = inp
     ? {
+        ...blank, // structured-mode fields default here; bridge fields overridden below
         current_noi: toNumStr(inp.currentNOI),
         stabilized_noi: toNumStr(inp.stabilizedNOI),
         going_in_cap: toPctStr(inp.goingInCapRate, blank.going_in_cap),
@@ -494,6 +545,8 @@ export function dealFromEvaluation(d: EvaluationResumeData): Deal {
     judgmentCtx: { sponsor: "", market: "", businessPlan: "", notes: "" },
     eligibilityResults: hasEligibility ? eligibilityResults : null,
     sizingResult,
+    mode: null, // resumed structured models re-hydrate on next size (fresh-size path is primary)
+    structured: null,
     perInvestor: d.uw_model?.per_investor ?? null,
     judgmentResult,
     computedFrom: {
