@@ -400,8 +400,15 @@ north star.
     → **UW-3 / `<DualSizer>`**: present both side-by-side. Forward NOI comes from a full 5-yr
     operating pro-forma (rent-roll, rent/expense growth vectors, opex, capital reserves); that
     ramp is the build gap.
-26. **🔵 The bridge exit is a modeled REFINANCE with a NOI-stress grid — the highest-value
-    surface we don't have.** The construction-MF `Loan Analysis` sheet caps terminal NOI at a
+26. **✅ SHIPPED + drive-verified (2026-07-02, commit `bb48afe`). The bridge exit is a modeled
+    REFINANCE with a NOI-stress grid — was the highest-value surface we didn't have.**
+    `stressTakeout()` (`src/lib/underwriting/exit.ts`) re-runs the base takeout across NOI haircuts
+    (−0/5/10/15/20%): value = NOI ÷ exit cap scales 1:1, so coverage scales linearly and the
+    break-even haircut (coverage = 1.0) has a closed form. `<RefiStressGrid>` renders it in the
+    exit/takeout panel — headline ("exits cleanly to a −X% NOI haircut" / "shorts at plan NOI") +
+    per-level table with color+icon+shape verdicts. Persisted via `uwTakeoutResultV1.stressGrid`
+    (no migration). `scripts/verify-refi-stress.ts` 16/16; prod-drive `scripts/drive-refi-stress.ts`
+    (Westbrook exits to a −21% haircut, coverage 1.27x→1.02x). *(Original finding:)* The construction-MF `Loan Analysis` sheet caps terminal NOI at a
     terminal cap rate → valuation → refi proceeds at **MIN(market-LTV, market-DSCR via PV,
     market-debt-yield)** − existing balance, then runs a **sensitivity grid: NOI −0/5/10/15/20%
     → recomputed LTV, DSCR, refi proceeds at each level.** The bridge's real risk *is* the

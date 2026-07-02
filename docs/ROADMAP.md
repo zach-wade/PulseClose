@@ -890,8 +890,12 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
      SHIPPED + drive-verified (2026-07-02, commit `0faab04`)** — `solveDeal()`/`trySolveDeal()`
      invert a whole mode-tagged deal (bisection over `sizeDeal()`); the stepper control back-solves
      the lever from a target (RTL advance→cash-to-close|loan; construction advance→LTARV|total loan;
-     DSCR floor→max loan), Apply writes it back. `scripts/verify-solve-live.ts` 11/11. Remaining depth:
-     UW-3 (depth layers), UW-4 (deposits), UW-7 (dual sizer + refi grid + custom-inputs override).
+     DSCR floor→max loan), Apply writes it back. `scripts/verify-solve-live.ts` 11/11.
+     **UW-7 refi NOI-stress grid SHIPPED + drive-verified (2026-07-02, commit `bb48afe`)** —
+     `stressTakeout()` re-runs the takeout across NOI haircuts (−0/5/10/15/20%) with a closed-form
+     break-even; `<RefiStressGrid>` renders it in the exit/takeout panel (finding #26). Dual-LTC for
+     construction also shipped (#34). Remaining depth: UW-7 `<DualSizer>` (in-place|stabilized, #25) +
+     `<CustomInputs>` (Tier-2 override-any-cell); UW-3 (depth layers); UW-4 (deposits).
    *Stage: Route / underwrite. **SHIPPED.***
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
    trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
@@ -1117,6 +1121,19 @@ never sets the number or the tier (same spine as always).
 ---
 
 ## Decisions log (append-only)
+
+### 2026-07-02 (b) — UW-7 refi NOI-stress grid shipped ("does the bridge exit under stress?")
+Shipped the highest-value exit surface (finding #26, commit `bb48afe`). **Key design choice:
+reuse, don't rebuild** — the base takeout (`sizeTakeout()`) was already trusted, so `stressTakeout()`
+just re-runs it across NOI haircuts. The insight that made it clean + verifiable: value = NOI ÷ exit
+cap, so a NOI haircut scales every perm constraint (LTV·value, NOI/(DSCR·k), NOI/DY) by the same
+(1−h) — the binding constraint is stress-invariant and coverage is exactly linear, giving a
+**closed-form break-even haircut** (1 − 1/baseCoverage) cross-checked against the per-level grid.
+Persisted via `uwTakeoutResultV1.stressGrid` (bounded strict schema, no migration — lives in the
+existing `sizing` jsonb). `<RefiStressGrid>` renders in the exit/takeout panel; rubric-clean status =
+color+icon+shape. `verify-refi-stress.ts` 16/16; prod-drive-verified (Westbrook exits to a −21% NOI
+haircut). **Next:** `<DualSizer>` (in-place|stabilized, #25 — needs the forward pro-forma ramp) +
+`<CustomInputs>` (Tier-2 override-any-computed-cell, the last replace-the-Excel commitment).
 
 ### 2026-07-02 — UW-5 live goal-seek shipped; COH-2/#18 found already done
 Shipped the drag-to-solve control (commit `0faab04`): `solve.ts` gained the dispatch-aware
