@@ -38,7 +38,7 @@
 ---
 
 ## Where we are — headline (2026-07-01)
-On `main`, deployed green; **migrations 00001–00053** (00053 = uw_models.adjustments, applied to prod; 00052 = uw_models.structured, applied to
+On `main`, deployed green; **migrations 00001–00054** (00054 = organizations.underwriting_assumptions, 00053 = uw_models.adjustments — both applied to prod; 00052 = uw_models.structured, applied to
 prod); build clean; **UX-2 sizing UI live + prod-drive-verified to the penny**. The
 prior session's **free-SOS coverage (12 free entity states + Cobalt fallback)** is live and
 unchanged. The gap that blocked the ICC trial — the engine was loan-type-agnostic while ~27%
@@ -129,8 +129,14 @@ Fixed `sizingModeForLoanType` to normalize `_`/`-` so the `ground_up`/`fix_flip`
    adjustments to the engine's sized loan (seller credit / cross-collateral / holdback) → a final
    approved loan, base derived server-side + audited (`PATCH /api/underwrite/[id]/adjust`). Renders on
    both bridge + structured results. Prod-drive: +$150k → **$2,572,000** (base $2,422,000). `verify-
-   adjustments.ts` 11/11. **Still to build:** per-org **assumption sets** (principle 14 — parameterize
-   house caps/rates/floors as per-org config) + Tier-3 formula canvas (IDEAS, demand-gated).
+   adjustments.ts` 11/11.
+   **✅ Per-org assumption sets SHIPPED + drive-verified (2026-07-02, commits `fd85b76`+`8598462`,
+   migration 00054).** House caps/floors + exit/takeout terms + DSCR target as per-org CONFIG
+   (`organizations.underwriting_assumptions`), edited in Settings → Org tab; used as the API fallbacks
+   AND seeded into the stepper's fresh-deal defaults. Prod-drive: perm LTV 55% → a bridge deal sizes
+   the takeout at "55% of stabilized value" (was 70%). `verify-uw-assumptions.ts` 15/15. **This was the
+   last of the five "replace the Excel" commitments — all five now done.** Only the Tier-3 formula
+   canvas remains (IDEAS, demand-gated).
 2. **✅ UW-5 `<SolveControl>` SHIPPED + drive-verified (2026-07-02).** Live goal-seek in the deal
    stepper: `solve.ts` gained dispatch-aware `solveDeal()`/`trySolveDeal()` (invert a whole
    mode-tagged deal — vary a lever, re-run `sizeDeal()`, read a metric via bisection) + `SOLVE_OPTIONS`

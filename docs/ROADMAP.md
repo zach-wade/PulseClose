@@ -1125,6 +1125,24 @@ never sets the number or the tier (same spine as always).
 
 ## Decisions log (append-only)
 
+### 2026-07-02 (d) — per-org underwriting assumptions shipped; "replace the Excel" 5/5 done
+Shipped principle 14 (parameterize, don't hardcode) end-to-end (commits `fd85b76` + `8598462`,
+migration 00054): the house defaults an org sets once (sizing caps/floors, exit/takeout terms, DSCR
+target) are now **config, not code** — the literals that were hardcoded in `/api/underwrite`
+(`?? 0.7`, `?? 1.25`, `?? 360`, the 250bps/6%-floor takeout rate) moved into `DEFAULT_UW_ASSUMPTIONS`
++ a per-org `organizations.underwriting_assumptions` override, edited on Settings → Org. **The
+load-bearing lesson (caught by the drive, not the build):** storing + applying assumptions as SERVER
+fallbacks wasn't enough — the stepper *hardcoded* the same defaults as prefilled field values, so the
+client always sent them and the fallback never fired. The first prod-drive showed the takeout still at
+70% despite a 55% org setting. The fix was to **seed the stepper's fresh-deal defaults from the org
+assumptions** (GET /api/underwrite/assumptions → `emptyDeal(prefill, assumptions)`); the re-drive then
+showed "55% of stabilized value". Reinforces `feedback_verify_the_ui_not_just_data` — a data-layer/API
+check would have passed while the real flow was broken. `verify-uw-assumptions.ts` 15/15; fails safe to
+app defaults on absent/invalid config. **This was the last of the five "replace the Excel" design
+commitments — all five now shipped** (drill-through transparency · parameterize · override-any-cell ·
+Quick-Quote→Full-Model · export-to-Excel). Remaining underwriting depth: `<DualSizer>` (#25, needs the
+forward pro-forma ramp) + the demand-gated Tier-3 formula canvas (IDEAS).
+
 ### 2026-07-02 (c) — UW-7 Tier-2 human override layer shipped (`<CustomAdjustments>`)
 Shipped the last of the five "replace the Excel" design commitments (commit `8cfe75c`, migration
 00053): the escape hatch that keeps a bespoke, deal-specific tweak in-product instead of a
