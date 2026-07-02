@@ -127,12 +127,22 @@ Fixed `sizingModeForLoanType` to normalize `_`/`-` so the `ground_up`/`fix_flip`
 1. **Tier-2 `<CustomInputs>` (override-any-cell)** — the mode INPUTS are wired; the "structured
    core, open edges" Tier-2 override-any-computed-cell + named custom adjustments + per-org
    assumption sets is still to build (ROADMAP UW-7 + principle 14; IDEAS Tier-3 logged).
-2. **UW-5 `<SolveControl>` sliders** — goal-seek is shipped in `solve.ts`; add the drag-to-solve UI.
+2. **✅ UW-5 `<SolveControl>` SHIPPED + drive-verified (2026-07-02).** Live goal-seek in the deal
+   stepper: `solve.ts` gained dispatch-aware `solveDeal()`/`trySolveDeal()` (invert a whole
+   mode-tagged deal — vary a lever, re-run `sizeDeal()`, read a metric via bisection) + `SOLVE_OPTIONS`
+   (RTL: advance→cash-to-close|loan; construction: advance→LTARV|total loan; DSCR: floor→max loan).
+   `<SolveControl>` (`src/components/dashboard/deal/solve-control.tsx`) renders in the sizing step for
+   structured modes; Apply writes the solved lever back (marks size stale). Prod-drive verified: target
+   cash-to-close $250,000 → advance 90.82% → re-size shows cash-to-close $250,000 / max loan $2,422,000
+   to the penny. Test `scripts/verify-solve-live.ts` (11/11). Commit `0faab04`.
+   **Note found this session: COH-2 (finding #18, mandate-reads-raw) is ALREADY FIXED** (commits
+   `2e527a2`/`dadcd9e`/`a67f9fe`, test `scripts/verify-mandate-fix.ts`) — the doc entries below listing
+   it as open HIGH were stale.
 3. **UW-7 dual sizer + refi stress grid** — `<DualSizer>` (in-place | stabilized, finding #25) +
    `<RefiStressGrid>` (NOI −0/5/10/15/20% → LTV/DSCR/refi proceeds, finding #26). Highest-value
    "does the bridge exit?" surface. Dual-LTC (incl/excl IR) per finding #34.
 4. **UW-3 depth layers** (surface exit/stabilization) · **UW-4 deposits/equity + operational shortfall** (#27).
-- **Phase 2 (coherence+trust):** COH-2 mandate-reads-raw fix (HIGH) · UX-1 craft/de-AI.
+- **Phase 2 (coherence+trust):** ~~COH-2 mandate-reads-raw fix (HIGH)~~ — **DONE** (already shipped; the mandate reads through disambiguation/classification/not-run, `verify-mandate-fix.ts` green). · UX-1 craft/de-AI.
 - **Phase 3:** A1+ rate stack (**~35-lender Lender Grid**, finding #31) · CAP-1 concentration + facility-aware (**Colchis warehouse LOC**, #32) · CAP-2 pricing · COND-1 auto-conditions.
 - **Phase 4 (moat):** AN-1 cost benchmarking (**CSI taxonomy**, #29) · AN-2 reserve adequacy · AN-3 sponsor capacity · AN-4 calibrate-to-outcomes.
 - **Phase 5:** INT-1 Salesforce embed (Layer 2) · INT-2 LOS push (Nexys/Encompass, Layer 3) · Consumer Bridge (logged adjacency, not built).

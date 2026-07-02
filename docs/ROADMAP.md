@@ -886,7 +886,11 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
      `sizeDeal()` returns a mode-tagged result; [verify-dispatch.ts](../scripts/verify-dispatch.ts)
      14/14). **The engine is wired into the deal stepper and LIVE (UX-2, 2026-07-01 (e))** —
      mode-specific inputs + Excel-parity `<StructuredSizing>` render, mode-first `/api/underwrite`,
-     migration 00052, prod-drive-verified to the penny. Remaining depth: UW-5 solve sliders,
+     migration 00052, prod-drive-verified to the penny. **UW-5 live goal-seek `<SolveControl>`
+     SHIPPED + drive-verified (2026-07-02, commit `0faab04`)** — `solveDeal()`/`trySolveDeal()`
+     invert a whole mode-tagged deal (bisection over `sizeDeal()`); the stepper control back-solves
+     the lever from a target (RTL advance→cash-to-close|loan; construction advance→LTARV|total loan;
+     DSCR floor→max loan), Apply writes it back. `scripts/verify-solve-live.ts` 11/11. Remaining depth:
      UW-3 (depth layers), UW-4 (deposits), UW-7 (dual sizer + refi grid + custom-inputs override).
    *Stage: Route / underwrite. **SHIPPED.***
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
@@ -1113,6 +1117,22 @@ never sets the number or the tier (same spine as always).
 ---
 
 ## Decisions log (append-only)
+
+### 2026-07-02 — UW-5 live goal-seek shipped; COH-2/#18 found already done
+Shipped the drag-to-solve control (commit `0faab04`): `solve.ts` gained the dispatch-aware
+`solveDeal()`/`trySolveDeal()` (invert a whole mode-tagged deal — vary one input lever, re-run
+`sizeDeal()`, read one output metric via bisection) + a declarative `SOLVE_OPTIONS` table per
+structured mode + `readDealMetric()` for the baseline; `<SolveControl>` renders in the sizing step,
+runs the pure engine client-side (live per keystroke/drag), and Apply writes the solved lever back
+into the inputs (which marks the size stale to re-run). **Design choice: client-side pure solve, no
+server round-trip** — the sizers are dependency-free, so goal-seek is instant and truly "live" (the
+"10× over Excel Solver" claim, made real). Verified: `scripts/verify-solve-live.ts` 11/11 round-trips
++ a prod Playwright drive (target cash-to-close $250,000 → advance 90.82% → re-size reproduces
+$250,000 CTC / $2,422,000 max, to the penny). **Also corrected doc staleness:** COH-2 (finding #18,
+mandate-reads-raw) was listed as open HIGH but is **already shipped** (commits `2e527a2`/`dadcd9e`/
+`a67f9fe`, `verify-mandate-fix.ts` green — the mandate reads through disambiguation/classification/
+not-run; a clean common-name borrower no longer fails the gates). Findings doc + pickup updated.
+**Next:** UW-7 depth — `<CustomInputs>` (Tier-2 override-any-cell), `<DualSizer>` (#25), `<RefiStressGrid>` (#26).
 
 ### 2026-07-01 (e) — UX-2 shipped: the sizing engine is wired into the product + drive-verified
 Took the dormant deal-sizing engine to a live, verified feature in five increments (commits

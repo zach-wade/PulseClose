@@ -267,9 +267,17 @@ Drove 3 real loans through prod end-to-end as the underwriter org
   the common-name explanation; the track-record deed-verify pill shows the verified
   flip on 286-virginia. The Validate→Evaluate→Hand-off stepper + drill-downs exist.
 
-**🔴 18. The capital-provider MANDATE bypasses disambiguation + classification +
-not-run — the trust-killer on the wedge surface.** `buildDiligence`
-(`src/lib/mandates/assess.ts:86-90`) reads RAW results:
+**✅ FIXED (2026-07-01, commits `2e527a2`/`dadcd9e`/`a67f9fe`; verified `scripts/verify-mandate-fix.ts`).
+18. The capital-provider MANDATE bypasses disambiguation + classification +
+not-run — the trust-killer on the wedge surface.** `loadValidationDiligence`
+(`src/lib/mandates/assess.ts`) now reads diligence through the same disambiguation +
+list-type-classification + not-run layers the risk factors use: only a `confirmed` litigation
+match trips the active-litigation gate; only a real `sanction`/`pep` match at qualifying confidence
+trips the sanctions gate; a 429/`not_run` check makes the verdict *conditional* ("re-run"), never an
+auto-fail. Verified live: Mark Morrison (common name) fails ONLY the experience-tier gate, not
+litigation/sanctions/entity; clean distinctive-name borrowers with a 429'd entity check go
+CONDITIONAL, not FAIL. *(Original finding, for the record:)* `buildDiligence`
+(`src/lib/mandates/assess.ts:86-90`) read RAW results:
   - `has_active_litigation` = any `result === "found"` — ignores
     `raw_response._disambiguation.confidence`, so 10228's **1 name-only "possible"**
     match (19 filtered unlikely) trips the gate **"Active federal litigation found."**
@@ -511,6 +519,7 @@ Two are load-bearing and **must move from this calibration harness into the prod
   interest-reserve/holdback/draw math (Michael's Solver). Confirmed necessary by the
   Damon reset: ~27% of the real book is construction+F&F, and #10049 (Ground-Up
   Construction) is sized as generic bridge in the product today.
-- **#18 → COH-2 (HIGH).** The mandate console reading raw results (clean borrower fails 5
-  gates) is still open and now urgent — it's the trust-killer on the capital-partner
-  surface Damon-as-fund sees first in the July/Aug trial.
+- **#18 → COH-2 — ✅ DONE (shipped 2026-07-01).** The mandate console now reads through the
+  disambiguation/classification/not-run layers (commits `2e527a2`/`dadcd9e`/`a67f9fe`,
+  `scripts/verify-mandate-fix.ts` green). The clean-borrower-fails-5-gates trust-killer is closed
+  on the capital-partner surface Damon-as-fund sees in the July/Aug trial.
