@@ -55,6 +55,7 @@ import {
 } from "@/lib/deal/view-model";
 import { StructuredSizing } from "@/components/dashboard/deal/structured-sizing";
 import { SolveControl } from "@/components/dashboard/deal/solve-control";
+import { RefiStressGrid } from "@/components/dashboard/deal/refi-stress-grid";
 import { buildStructuredInput } from "@/lib/underwriting/structured-request";
 import { sizingModeForLoanType, type SizeDealResult, type SizingMode } from "@/lib/underwriting/dispatch";
 
@@ -1081,6 +1082,7 @@ function StepSizing({
                     ))}
                   </ul>
                 )}
+                {sizing.takeout.stressGrid && <RefiStressGrid grid={sizing.takeout.stressGrid} />}
               </div>
             )}
             {sizing.stabilization && (

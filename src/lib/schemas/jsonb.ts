@@ -493,6 +493,25 @@ const uwTakeoutConstraintV1 = z.object({
   binding: z.boolean(),
   basis: z.string(),
 });
+// Refi NOI-stress grid (src/lib/underwriting/exit.ts stressTakeout) — the takeout
+// re-sized across NOI haircuts (−0/5/10/15/20%). Optional: present only when the
+// deal carries an exit/takeout.
+const uwRefiStressRowV1 = z.object({
+  haircut: z.number(),
+  stabilizedNOI: z.number(),
+  stabilizedValue: z.number(),
+  maxTakeout: z.number(),
+  bindingConstraint: z.enum(["PermLTV", "PermDSCR", "PermDebtYield"]),
+  coverage: z.number(),
+  refinanceable: z.boolean(),
+  shortfall: z.number(),
+});
+export const uwRefiStressResultV1 = z.object({
+  bridgeBalanceAtExit: z.number(),
+  baseCoverage: z.number(),
+  breakEvenHaircut: z.number().nullable(),
+  levels: z.array(uwRefiStressRowV1),
+});
 export const uwTakeoutResultV1 = z.object({
   stabilizedValue: z.number(),
   bridgeBalanceAtExit: z.number(),
@@ -508,6 +527,7 @@ export const uwTakeoutResultV1 = z.object({
   takeoutDebtYield: z.number(),
   termSufficient: z.boolean().nullable(),
   flags: z.array(z.string()),
+  stressGrid: uwRefiStressResultV1.optional(),
 });
 
 // Stabilization-path coverage (src/lib/underwriting/stabilization.ts) — the

@@ -168,3 +168,73 @@ export function sizeTakeout(d: TakeoutInputs): TakeoutResult {
     flags,
   };
 }
+
+// ── Refi NOI-stress grid (UW-7 / CALIBRATION #26) ────────────────────────────
+//
+// The base takeout answers "does the exit make sense at the plan NOI?" The real
+// bridge risk is whether it STILL exits if stabilized NOI comes in light. ICC's
+// construction-MF Loan Analysis sheet runs exactly this: haircut terminal NOI
+// −0/5/10/15/20% → recompute the takeout at each level. We reuse sizeTakeout()
+// per level — the deterministic engine, no new ratio math.
+//
+// Every perm constraint (LTV·value, NOI/(DSCR·k), NOI/DY) scales linearly with the
+// NOI haircut (value = NOI/exitCap scales 1:1), so the binding constraint is
+// stress-invariant and maxTakeout(h) = maxTakeout(0)·(1−h). That gives a closed-form
+// break-even haircut, cross-checked against the per-level grid in verify-refi-stress.ts.
+
+export const DEFAULT_STRESS_LEVELS = [0, 0.05, 0.1, 0.15, 0.2] as const;
+
+export interface RefiStressRow {
+  haircut: number; // fraction NOI is reduced (0 = base case)
+  stabilizedNOI: number; // NOI at this haircut
+  stabilizedValue: number; // value at this haircut (scales with NOI)
+  maxTakeout: number; // permanent loan supportable here
+  bindingConstraint: TakeoutConstraintKey;
+  coverage: number; // maxTakeout / bridge balance (≥1 => refinanceable)
+  refinanceable: boolean;
+  shortfall: number; // equity the sponsor must inject if it shorts
+}
+
+export interface RefiStressResult {
+  bridgeBalanceAtExit: number;
+  baseCoverage: number; // coverage at the plan NOI (haircut 0)
+  levels: RefiStressRow[];
+  // The NOI haircut (fraction) at which coverage crosses 1.0 — how much stabilized
+  // NOI can come in light before the bridge no longer fully refinances. 0 => it
+  // already shorts at the plan NOI; null => no bridge balance to repay (trivial).
+  breakEvenHaircut: number | null;
+}
+
+/** Re-size the takeout across a grid of NOI haircuts — "does the bridge still
+ *  exit under stress?" Pure; reuses sizeTakeout() per level. */
+export function stressTakeout(
+  d: TakeoutInputs,
+  levels: readonly number[] = DEFAULT_STRESS_LEVELS,
+): RefiStressResult {
+  const rows: RefiStressRow[] = levels.map((h) => {
+    const stabilizedNOI = d.stabilizedNOI * (1 - h);
+    const stabilizedValue = d.stabilizedValue * (1 - h);
+    const r = sizeTakeout({ ...d, stabilizedNOI, stabilizedValue });
+    return {
+      haircut: h,
+      stabilizedNOI,
+      stabilizedValue,
+      maxTakeout: r.maxTakeout,
+      bindingConstraint: r.bindingConstraint,
+      coverage: r.takeoutCoverage,
+      refinanceable: r.refinanceable,
+      shortfall: r.shortfall,
+    };
+  });
+
+  const base = rows.find((r) => r.haircut === 0) ?? rows[0];
+  const baseCoverage = base.coverage;
+  // coverage(h) = baseCoverage·(1−h) ⇒ break-even at coverage = 1.
+  const breakEvenHaircut = !Number.isFinite(baseCoverage)
+    ? null
+    : baseCoverage <= 1
+      ? 0
+      : 1 - 1 / baseCoverage;
+
+  return { bridgeBalanceAtExit: d.bridgeBalanceAtExit, baseCoverage, levels: rows, breakEvenHaircut };
+}

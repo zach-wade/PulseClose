@@ -59,6 +59,25 @@ export interface TakeoutResult {
   takeoutDebtYield: number;
   termSufficient: boolean | null;
   flags: string[];
+  stressGrid?: RefiStressResult;
+}
+
+// Refi NOI-stress grid — mirrors src/lib/underwriting/exit.ts (RefiStressResult).
+export interface RefiStressRow {
+  haircut: number;
+  stabilizedNOI: number;
+  stabilizedValue: number;
+  maxTakeout: number;
+  bindingConstraint: TakeoutConstraintKey;
+  coverage: number;
+  refinanceable: boolean;
+  shortfall: number;
+}
+export interface RefiStressResult {
+  bridgeBalanceAtExit: number;
+  baseCoverage: number;
+  breakEvenHaircut: number | null;
+  levels: RefiStressRow[];
 }
 
 // Stabilization-path coverage — mirrors src/lib/underwriting/stabilization.ts.

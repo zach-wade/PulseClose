@@ -19,7 +19,7 @@ import {
   type InvestorRules,
 } from "@/lib/evaluate/engine";
 import { underwrite, type SizingInputs, type SizingResult } from "@/lib/underwriting/sizing";
-import { sizeTakeout } from "@/lib/underwriting/exit";
+import { sizeTakeout, stressTakeout } from "@/lib/underwriting/exit";
 import { stabilizationPath } from "@/lib/underwriting/stabilization";
 import { sizeInterestReserve } from "@/lib/underwriting/reserve";
 import { sizeAllInvestors } from "@/lib/underwriting/per-investor";
@@ -279,7 +279,7 @@ export async function POST(request: Request) {
   // bridge rate floored at 6%) so the exit story always surfaces.
   if (sizing && sizingInputs && sizing.stabilizedValue != null && sizingInputs.stabilizedNOI != null) {
     try {
-      const takeout = sizeTakeout({
+      const takeoutInputs = {
         stabilizedValue: sizing.stabilizedValue,
         stabilizedNOI: sizingInputs.stabilizedNOI,
         bridgeBalanceAtExit: sizing.maxLoan, // interest-only bridge => balance = loan
@@ -291,7 +291,10 @@ export async function POST(request: Request) {
         takeoutAmortizationMonths: num(body.takeout_amort_months) ?? 360,
         bridgeTermMonths: sizingInputs.termMonths,
         monthsToStabilize: num(body.months_to_stabilize),
-      });
+      };
+      // Base takeout + the NOI-stress grid ("does the bridge STILL exit if NOI
+      // comes in light?" — CALIBRATION #26). The grid reuses the same engine.
+      const takeout = { ...sizeTakeout(takeoutInputs), stressGrid: stressTakeout(takeoutInputs) };
       sizing = { ...sizing, takeout };
     } catch {
       // Takeout is additive depth — never block sizing if it can't resolve.
