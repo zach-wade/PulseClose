@@ -80,7 +80,13 @@ export interface ConstructionSizingResult {
   equityRequired: number; // uses − loan (positive = borrower cash in / shortage)
 
   // ── metrics ──
-  ltc: number; // loan ÷ cost basis
+  ltc: number; // loan ÷ cost basis (flag-driven denominator; = ltcInclReserve by default)
+  // Dual LTC (CALIBRATION #34): ICC reports loan-to-cost BOTH ways on the hard-cost
+  // basis (purchase + construction) — excluding and including the capitalized interest
+  // reserve in the denominator. Verified to the penny vs. funded deal #10049
+  // (excl 78.72% / incl 71.50%). Closing costs are a separate line, never in ICC's LTC.
+  ltcExclReserve: number; // loan ÷ (purchase + construction)
+  ltcInclReserve: number; // loan ÷ (purchase + construction + interest reserve)
   ltarv: number; // loan ÷ ARV
   initialLtais: number | null; // initial disbursement ÷ as-is value
 
@@ -129,6 +135,10 @@ export function sizeConstruction(d: ConstructionSizingInputs): ConstructionSizin
   const equityRequired = totalUses - totalLoan;
 
   const ltc = totalLoan / costBasis;
+  // Dual LTC on the hard-cost basis (CALIBRATION #34 — how ICC reports it).
+  const hardCost = d.purchasePrice + d.constructionBudget;
+  const ltcExclReserve = totalLoan / hardCost;
+  const ltcInclReserve = totalLoan / (hardCost + interestReserve);
   const ltarv = totalLoan / d.arv;
   const initialLtais = d.asIsValue ? initialDisbursement / d.asIsValue : null;
 
@@ -151,6 +161,8 @@ export function sizeConstruction(d: ConstructionSizingInputs): ConstructionSizin
     totalUses,
     equityRequired,
     ltc,
+    ltcExclReserve,
+    ltcInclReserve,
     ltarv,
     initialLtais,
     maxLoanByLTC,

@@ -135,7 +135,7 @@ function ConstructionView({ r }: { r: ConstructionSizingResult }) {
   return (
     <div className="space-y-5">
       <HeadlineMax label="Total loan (sized)" value={r.totalLoan}
-        sub={`LTC ${ratioPct(r.ltc)} · LTARV ${ratioPct(r.ltarv)}${r.initialLtais != null ? ` · LTAIS ${ratioPct(r.initialLtais)}` : ""} · equity required ${usd(r.equityRequired)}`} />
+        sub={`LTC ${ratioPct(r.ltcExclReserve)} excl. reserve · ${ratioPct(r.ltcInclReserve)} incl. · LTARV ${ratioPct(r.ltarv)}${r.initialLtais != null ? ` · LTAIS ${ratioPct(r.initialLtais)}` : ""} · equity required ${usd(r.equityRequired)}`} />
       <div className="grid md:grid-cols-2 gap-6">
         <ProceedsWaterfall rows={sources} />
         {ladder.length > 0 && <ConstraintLadder rows={ladder} sizedLoan={r.recommendedMaxLoan ?? r.totalLoan} />}

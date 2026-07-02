@@ -16,8 +16,8 @@
 import { sizeConstruction, type ConstructionSizingInputs } from "../src/lib/underwriting/construction-sizer";
 
 let failures = 0;
-const eqCents = (got: number, want: number) => Math.abs(got - want) <= 0.01;
-const eqRatio = (got: number, want: number) => Math.abs(got - want) <= 1e-6;
+const eqCents = (got: number, want: number, tol = 0.01) => Math.abs(got - want) <= tol;
+const eqRatio = (got: number, want: number, tol = 1e-6) => Math.abs(got - want) <= tol;
 function check(label: string, pass: boolean, detail = "") {
   if (pass) console.log(`  ✓ ${label}`);
   else { failures++; console.error(`  ✗ ${label}${detail ? ` — ${detail}` : ""}`); }
@@ -82,6 +82,39 @@ check("LTC = loan/costBasis = 0.611995", eqRatio(pp.loan / pp.costBasis, 0.61199
 check("LTARV = loan/ARV = 0.571428", eqRatio(pp.loan / pp.arv, 0.5714285714285714), `${pp.loan / pp.arv}`);
 check("initial LTAIS = advance/as-is = 0.503636", eqRatio(pp.initialAdvance / pp.asIs, 0.50363636363636366), `${pp.initialAdvance / pp.asIs}`);
 check("shortage = uses − loan = $313,999", eqCents(pp.payoff + pp.fees + pp.reserve - pp.loan, 313_999), `${pp.payoff + pp.fees + pp.reserve - pp.loan}`);
+
+console.log("\n5. Dual LTC (CALIBRATION #34) — mechanical + funded deal #10049:");
+// Mechanical: the two LTCs are on the hard-cost basis (purchase + construction),
+// excluding / including the capitalized interest reserve in the denominator.
+const hard = DEAL.purchasePrice + DEAL.constructionBudget;
+check("ltcExclReserve == loan / (purchase + construction)", eqRatio(r.ltcExclReserve, r.totalLoan / hard), `${r.ltcExclReserve}`);
+check("ltcInclReserve == loan / (purchase + construction + reserve)", eqRatio(r.ltcInclReserve, r.totalLoan / (hard + r.interestReserve)), `${r.ltcInclReserve}`);
+check("excl > incl (reserve enlarges the denominator)", r.ltcExclReserve > r.ltcInclReserve, `${r.ltcExclReserve} vs ${r.ltcInclReserve}`);
+
+// Funded deal #10049 (99 To 100 LLC, ground-up-to-flip) — de-identified economics
+// from the funded ICC sizer. Reconstruct it through OUR sizer (initial advance +
+// full construction holdback + a draw-weighted reserve) and confirm it reproduces
+// the sheet's Total Loan, reserve, and BOTH LTCs.
+const TL = 2_816_807, IR = 361_188; // sheet's typed Total Loan + Interest Reserve
+const kTarget = IR / TL; // reserve factor implied by the funded numbers
+const D10049: ConstructionSizingInputs = {
+  purchasePrice: 1_400_000,
+  constructionBudget: 2_178_318,
+  arv: 5_350_000,
+  asIsValue: 1_400_000,
+  rate: 0.1099,
+  reserveMonths: 18,
+  reserveDiscount: kTarget / ((0.1099 / 12) * 18), // the ~0.78 draw-weight that yields IR $361,188
+  purchaseAdvancePct: 277_301 / 1_400_000, // funded "Initial Loan" $277,301
+  constructionHoldbackPct: 1,
+};
+const f = sizeConstruction(D10049);
+check("#10049 total loan = $2,816,807", eqCents(f.totalLoan, TL, 1), `${f.totalLoan}`);
+check("#10049 interest reserve = $361,188", eqCents(f.interestReserve, IR, 1), `${f.interestReserve}`);
+check("#10049 LTC excl-IR = 78.72%", eqRatio(f.ltcExclReserve, 0.7871945, 1e-4), `${f.ltcExclReserve}`);
+check("#10049 LTC incl-IR = 71.50%", eqRatio(f.ltcInclReserve, 0.7150076, 1e-4), `${f.ltcInclReserve}`);
+check("#10049 LTARV = 52.65%", eqRatio(f.ltarv, 0.5265060, 1e-4), `${f.ltarv}`);
+check("#10049 initial LTAIS = 19.807%", eqRatio(f.initialLtais as number, 0.1980721, 1e-4), `${f.initialLtais}`);
 
 console.log("");
 if (failures > 0) { console.error(`Construction sizer: ${failures} check(s) FAILED.`); process.exit(1); }
