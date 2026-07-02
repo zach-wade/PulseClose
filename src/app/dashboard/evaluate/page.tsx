@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { enumLabel } from "@/lib/format/labels";
 import { Calculator, ChevronRight, Settings } from "lucide-react";
 import { DealStepper } from "@/components/dashboard/deal/deal-stepper";
+import type { ResolvedUwAssumptions } from "@/lib/underwriting/org-assumptions";
 
 interface RecentEvaluation {
   id: string;
@@ -44,6 +45,9 @@ function EvaluatePageInner() {
   const [recent, setRecent] = useState<RecentEvaluation[]>([]);
   const [investorCount, setInvestorCount] = useState<number | null>(null);
   const [investorLoadError, setInvestorLoadError] = useState<string | null>(null);
+  // The org's resolved house assumptions seed the stepper's sizing defaults
+  // (principle 14). Fetched once; the stepper renders on app defaults until it lands.
+  const [assumptions, setAssumptions] = useState<ResolvedUwAssumptions | undefined>(undefined);
 
   const refreshRecent = useCallback(async () => {
     const res = await fetch("/api/evaluate");
@@ -63,6 +67,10 @@ function EvaluatePageInner() {
       } else {
         setInvestorLoadError(`Couldn't load investors (${invsRes.status})`);
       }
+    })();
+    (async () => {
+      const res = await fetch("/api/underwrite/assumptions");
+      if (res.ok) setAssumptions((await res.json()).assumptions);
     })();
   }, []);
 
@@ -104,7 +112,13 @@ function EvaluatePageInner() {
         </Card>
       ) : null}
 
-      <DealStepper prefill={prefill} investorCount={investorCount} onEvaluated={refreshRecent} />
+      <DealStepper
+        key={assumptions ? "seeded" : "default"}
+        prefill={prefill}
+        investorCount={investorCount}
+        onEvaluated={refreshRecent}
+        assumptions={assumptions}
+      />
 
       {recent.length > 0 && (
         <Card>

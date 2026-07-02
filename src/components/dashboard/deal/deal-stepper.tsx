@@ -58,6 +58,7 @@ import { SolveControl } from "@/components/dashboard/deal/solve-control";
 import { RefiStressGrid } from "@/components/dashboard/deal/refi-stress-grid";
 import { CustomAdjustments } from "@/components/dashboard/deal/custom-adjustments";
 import { buildStructuredInput, summarizeStructured } from "@/lib/underwriting/structured-request";
+import type { ResolvedUwAssumptions } from "@/lib/underwriting/org-assumptions";
 import { sizingModeForLoanType, type SizeDealResult, type SizingMode } from "@/lib/underwriting/dispatch";
 
 type StepId = "terms" | "eligibility" | "sizing" | "judgment" | "handoff";
@@ -169,6 +170,7 @@ export function DealStepper({
   investorCount,
   onEvaluated,
   resume,
+  assumptions,
 }: {
   prefill: DealPrefill;
   investorCount: number | null;
@@ -176,8 +178,11 @@ export function DealStepper({
   // When present, the stepper resumes a saved evaluation (eligibility + sizing
   // + judgment already done) rather than starting empty (evaluate/[id]).
   resume?: Deal;
+  // The org's resolved underwriting assumptions — seed a fresh deal's sizing
+  // defaults on this org's house box (principle 14). Undefined → prior literals.
+  assumptions?: ResolvedUwAssumptions;
 }) {
-  const [deal, dispatch] = useReducer(reducer, null as unknown as Deal, () => resume ?? emptyDeal(prefill));
+  const [deal, dispatch] = useReducer(reducer, null as unknown as Deal, () => resume ?? emptyDeal(prefill, assumptions));
   const [active, setActive] = useState<StepId>(
     resume?.steps.sizing === "done" ? "sizing" : resume?.steps.eligibility === "done" ? "eligibility" : "terms",
   );

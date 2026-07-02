@@ -12,6 +12,7 @@
 // Exception: type-only imports from the pure (client-safe) underwriting engine are
 // erased at compile, so we reuse its structured-result types rather than re-declare them.
 import type { SizeDealResult, SizingMode } from "@/lib/underwriting/dispatch";
+import type { ResolvedUwAssumptions } from "@/lib/underwriting/org-assumptions";
 
 // ── Result shapes (the API JSON, stored verbatim) ──────────────────────────
 
@@ -291,11 +292,16 @@ export interface DealPrefill {
 
 const TIER_TO_EXPERIENCE: Record<string, string> = { "1": "10", "2": "5", "3": "2", "4": "0" };
 
-export function emptyDeal(prefill: DealPrefill = {}): Deal {
+export function emptyDeal(prefill: DealPrefill = {}, assumptions?: ResolvedUwAssumptions): Deal {
   const experience =
     prefill.experience_tier && TIER_TO_EXPERIENCE[prefill.experience_tier]
       ? TIER_TO_EXPERIENCE[prefill.experience_tier]
       : "5";
+  // Seed the sizing defaults from the org's house assumptions (principle 14) so a
+  // fresh deal opens on THIS org's box, not a code literal. Fall back to the prior
+  // hardcoded strings when no assumptions were passed. Stored as decimals → display.
+  const a = assumptions;
+  const pct = (v: number) => String(Math.round(v * 1000) / 10);
   return {
     validation_id: prefill.validation_id ?? null,
     evaluation_id: null,
@@ -324,15 +330,15 @@ export function emptyDeal(prefill: DealPrefill = {}): Deal {
       rate: "9.5",
       amort_months: "",
       closing_costs: "",
-      max_ltv: "75",
-      max_ltc: "70",
-      max_ltarv: "65",
-      min_dscr: "1.0",
-      min_debt_yield: "8",
+      max_ltv: a ? pct(a.house_max_ltv) : "75",
+      max_ltc: a ? pct(a.house_max_ltc) : "70",
+      max_ltarv: a ? pct(a.house_max_ltarv) : "65",
+      min_dscr: a ? String(a.house_min_dscr) : "1.0",
+      min_debt_yield: a ? pct(a.house_min_debt_yield) : "8",
       coverage_basis: "current",
       term_months: "24",
-      takeout_max_ltv: "70",
-      takeout_min_dscr: "1.25",
+      takeout_max_ltv: a ? pct(a.takeout_max_ltv) : "70",
+      takeout_min_dscr: a ? String(a.takeout_min_dscr) : "1.25",
       takeout_rate: "",
       months_to_stabilize: "",
       // structured-mode inputs
@@ -350,7 +356,7 @@ export function emptyDeal(prefill: DealPrefill = {}): Deal {
       origination_fee_pct: "",
       fixed_closing_costs: "",
       monthly_rent: "",
-      target_dscr: "1.2",
+      target_dscr: a ? String(a.dscr_target) : "1.2",
       monthly_taxes: "",
       monthly_insurance: "",
       monthly_hoa: "",
