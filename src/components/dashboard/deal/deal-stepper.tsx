@@ -54,6 +54,8 @@ import {
   LOAN_PURPOSES,
 } from "@/lib/deal/view-model";
 import { StructuredSizing } from "@/components/dashboard/deal/structured-sizing";
+import { SolveControl } from "@/components/dashboard/deal/solve-control";
+import { buildStructuredInput } from "@/lib/underwriting/structured-request";
 import { sizingModeForLoanType, type SizeDealResult, type SizingMode } from "@/lib/underwriting/dispatch";
 
 type StepId = "terms" | "eligibility" | "sizing" | "judgment" | "handoff";
@@ -754,6 +756,47 @@ function StepSizing({
     asIsValue: numOrNull(s.as_is_value) ?? undefined,
     constructionBudget: numOrNull(s.construction_budget) ?? undefined,
   });
+  // Build the current structured input for the live goal-seek control. Mirrors the
+  // API's rate normalization (>1 ⇒ percent); everything else is passed raw exactly
+  // as buildStructuredInput expects (it divides pct fields itself). null when the
+  // mode is bridge or the minimum inputs aren't present yet → the control hides.
+  const solveRate = (() => {
+    const r = numOrNull(s.rate);
+    return r == null || Number.isNaN(r) ? null : r > 1 ? r / 100 : r;
+  })();
+  const solveInput =
+    mode === "bridge"
+      ? null
+      : buildStructuredInput(mode, {
+          loan_type: deal.terms.loan_type,
+          rate: solveRate,
+          purchase_price: numOrNull(deal.terms.purchase_price),
+          as_is_value: numOrNull(s.as_is_value),
+          arv: numOrNull(deal.terms.arv),
+          rehab_budget: numOrNull(deal.terms.rehab_budget),
+          construction_budget: numOrNull(s.construction_budget),
+          purchase_advance_pct: numOrNull(s.purchase_advance_pct),
+          rehab_funding_pct: numOrNull(s.rehab_funding_pct),
+          prepaid_interest_months: numOrNull(s.prepaid_interest_months),
+          closing_costs_pct: numOrNull(s.closing_costs_pct),
+          tier: numOrNull(s.tier),
+          borrower_fico: numOrNull(deal.terms.borrower_fico),
+          rehab_type: s.rehab_type || null,
+          reserve_months: numOrNull(s.reserve_months),
+          reserve_discount: numOrNull(s.reserve_discount),
+          construction_holdback_pct: numOrNull(s.construction_holdback_pct),
+          origination_fee_pct: numOrNull(s.origination_fee_pct),
+          fixed_closing_costs: numOrNull(s.fixed_closing_costs),
+          max_ltc: numOrNull(s.max_ltc),
+          max_ltarv: numOrNull(s.max_ltarv),
+          monthly_rent: numOrNull(s.monthly_rent),
+          target_dscr: numOrNull(s.target_dscr),
+          amortization_months: numOrNull(s.amort_months),
+          monthly_taxes: numOrNull(s.monthly_taxes),
+          monthly_insurance: numOrNull(s.monthly_insurance),
+          monthly_hoa: numOrNull(s.monthly_hoa),
+          property_value: numOrNull(s.property_value),
+        });
 
   return (
     <Card>
@@ -836,6 +879,17 @@ function StepSizing({
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">Rate {mode === "dscr" ? "+ amortization months" : ""} above; purchase price / ARV / rehab / FICO from the Terms step.</p>
+            {solveInput && (
+              <SolveControl
+                mode={mode}
+                input={solveInput}
+                onApply={(patch) => {
+                  if (patch.advancePctNumber != null)
+                    set("purchase_advance_pct", String(Number(patch.advancePctNumber.toFixed(2))));
+                  if (patch.targetDscr != null) set("target_dscr", String(Number(patch.targetDscr.toFixed(3))));
+                }}
+              />
+            )}
           </div>
         )}
         {/* Progressive disclosure (UX-REDESIGN §10 #3): the 10 advanced caps +
