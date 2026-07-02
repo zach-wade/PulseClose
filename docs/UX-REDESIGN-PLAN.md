@@ -560,15 +560,47 @@ pass. It builds on §11 (verdict-first) — this is §11 extended from "answer-f
   net → cash-to-close → equity%), from the decoded RTL sizer. The artifact that makes it
   *replace* the Excel.
 - **`<ConstraintLadder cushion>`** — the binding-constraint table with **headroom per test**
-  surfaced (Damon's "art of massaging the deal"), not just pass/fail. Reused on sizing,
-  handoff, and per-investor.
+  surfaced (Damon's "art of massaging the deal"), not just pass/fail. Each row carries an
+  **include/exclude toggle** — ICC's actual Quick Form has an "Include YES/NO → MINIFS" column;
+  underwriters turn a constraint off and re-size live (finding #28; a per-org config value, not
+  a code change — principle 14). Reused on sizing, handoff, and per-investor.
+- **`<DualSizer>`** — **in-place bridge | stabilized/takeout** side-by-side (finding #25): the
+  same deal sized on in-place NOI at the bridge rate AND on forward NOI at the takeout rate.
+  This is the "coverage in place now AND at stabilization" matrix Damon asked for; it's how
+  ICC's institutional MFR sheet is actually laid out. Feeds UW-3.
+- **`<RefiStressGrid>`** — the "does the bridge exit?" surface (finding #26): NOI −0/5/10/15/20%
+  → recomputed LTV, DSCR, and refi proceeds at each level, from the construction-MF `Loan
+  Analysis` sheet. The bridge's real risk is the takeout; this is higher-value than another
+  point estimate and pairs with AN-2 (reserve adequacy).
 - **`<ScenarioColumns>`** — native Option_1 / Option_2 / Option_3 comparison (the RTL sizer
   and Colchis tool both do this by hand today).
 - **`<SolveControl>`** — the live goal-seek sliders (UW-5): drag a target DSCR / rate /
   cash-to-close, watch the deal re-solve. The 10× over their Excel.
+- **`<CustomInputs>` (Tier 2 — the "put my own variables in" affordance).** Inside a known
+  mode: **override any computed cell** (extends override-and-rerun to sizing inputs/
+  intermediates), **named custom adjustments** ("+ $50k seismic holdback"), and saved per-org
+  assumption sets. Every override is visibly flagged + drill-through preserved. This is how we
+  give the on-the-fly-variables feel without a spreadsheet; the full **"structured core, open
+  edges"** tiering (incl. the Tier-3 governed formula canvas, logged in
+  [IDEAS.md](IDEAS.md#user-authored-model-layer-formula-canvas--tier-3-governed)) is the
+  north-star endgame — Tier 3 gated on real trial demand, never speculative.
 - **`<PersonaNextStep>`** — the wayfinding CTA block, persona-aware.
 
-### 13.3 Success test
+### 13.3 Two patterns that let PulseClose actually *beat* Excel (not just match it)
+The north-star stress test (ROADMAP) named the two reasons an underwriter keeps a sheet open —
+input burden and opacity. Answer both in the UX:
+- **Quick-Quote → Full-Model progressive disclosure.** Size on the few binding inputs
+  (as-is / ARV / rate / advance) in *seconds* and show the number; the 40-line budget + 5-yr
+  pro-forma discloses only when they want precision. ICC already splits this — their file is
+  the *"Loan Submission **Quick** Form."* A stepper that demands 40 inputs before a number
+  loses to Excel.
+- **Show-the-math / drill-to-formula + export.** Every number drills to its inputs and the
+  constraint/formula that produced it (principle 8) — Excel's formulas are opaque spaghetti, a
+  clean drill-through is the thing Excel *can't* do. And an **"export to Excel"** affordance on
+  the sized deal (→ their rate-offer-letter format) means leaving PulseClose never means
+  leaving empty-handed. These are what turn "replace the Excel" from a claim into trust.
+
+### 13.4 Success test
 Sit a broker, an underwriter, and a capital partner in front of the same deal. Each should
 (a) immediately see the verdict/answer for *their* job, (b) never hit a screen that
 contradicts another or asks for data already given, (c) find their next action without a

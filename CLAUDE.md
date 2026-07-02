@@ -20,6 +20,7 @@ the authority + distribution stack.
 - [docs/E2E-TEST-PLAN.md](docs/E2E-TEST-PLAN.md) — full feature inventory as a customer walkthrough
 - [docs/DISTRIBUTION-STRATEGY.md](docs/DISTRIBUTION-STRATEGY.md) — 2026 distribution playbook
 - [docs/PRIVACY-POSTURE.md](docs/PRIVACY-POSTURE.md) — AI privacy bundle + compliance posture (Insignia/Damon answer-able)
+- [docs/DATA-GOVERNANCE.md](docs/DATA-GOVERNANCE.md) — how we handle ICC/third-party confidential data (Box PII policy; in-bounds vs off-limits)
 - [docs/VENDOR-LEDGER.md](docs/VENDOR-LEDGER.md) — every external dependency + rotation calendar
 - [docs/IDEAS.md](docs/IDEAS.md) — unscoped feature ideas with "unblocks when" conditions (NOT the prioritized roadmap)
 - Memory: `~/.claude/projects/-Users-zachwade-code-active-pulseclose/memory/MEMORY.md`

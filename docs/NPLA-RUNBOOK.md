@@ -1,5 +1,10 @@
 # PulseClose — NPLA Atlantic City Runbook
 
+> **⏳ HISTORICAL (as of 2026-07-01):** NPLA (June 22-23, 2026) has **concluded**. Preserved as
+> the reusable template for the next event — the current GTM-debut target is the **AAPL
+> conference, Nov 9-11 2026 (Las Vegas)**. Live sequencing is the ROADMAP
+> [Post-Damon-reset sequence](ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).
+
 **Conference:** NPLA Atlantic City — June 22-23, 2026
 **Posture:** Attendee mode (no booth, no sponsorship). Walk in with Damon (Insignia) as plus-one.
 **Goal:** 8-12 lender intros, 3-5 design-partner-quality conversations.

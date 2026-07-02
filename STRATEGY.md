@@ -125,6 +125,52 @@ The deep-think on going *beyond* the incumbent Excel (live goal-seek instead of 
 cost-benchmarking, reserve-adequacy, and calibrate-to-realized-outcomes — analysis a
 single-laptop spreadsheet can't do) is captured as Phases 3–4 of the ROADMAP sequence.
 
+### The platform stack + the honest read on "replace the Excel" (2026-07-01, Box-informed)
+
+Going through ICC's full operational Box (72GB — models + process docs + pricing artifacts;
+[CALIBRATION-FINDINGS #24–#30](docs/CALIBRATION-FINDINGS.md)) both confirmed the wedge and
+told us how far it goes.
+
+**Is "replace the Excel" doable?** Yes — for this **bounded family of deterministic, closed-
+form** sizing sheets (RTL, ground-up, DSCR, MFR value-add, stabilized takeout), which is not
+"all of Excel." ICC's own institutional MFR model sizes with a `MIN(LTV/Debt-Yield/DSCR)`
+dropdown — the exact engine we shipped. But the honest framing is **not** "kill Excel": Excel's
+moat is open-ended cell flexibility, and the moment it opens for one odd deal it stays open.
+The win condition is **replace the Excel for the 80–90% of standard deals to the penny, and be
+the system of record even for the 10% that still touch a sheet.** Five commitments make that
+real (detailed in [ROADMAP North Star](docs/ROADMAP.md#is-replace-the-excel-actually-doable-stress-test-2026-07-01-c-box-informed)):
+radical drill-through transparency (beats Excel's opaque formulas), **parameterize-don't-
+hardcode** the model, override-any-computed-cell, Quick-Quote→Full-Model progressive
+disclosure, and **export *to* Excel** (their rate-offer letters are `.xlsx`; leaving PulseClose
+must never mean leaving empty-handed).
+
+**The platform stack — how the engine travels.** PulseClose is the **decision layer between
+origination (CRM/POS) and closing/servicing (LOS/loan system)** — confirmed by ICC's real
+pipeline in the Box (LO Workflow: Salesforce → digital app → UW review → pre-approval/"needs
+list" → **founders discuss lenders + pricing** → rate-offer letter → into the LOS). The
+sequence, owner-set and stress-tested:
+1. **Replace the Excel** — the app an underwriter opens instead of a sheet (Layer 1).
+2. **Port into the CRM** — Salesforce is confirmed as ICC's system-of-intake and *step 1*;
+   the deal is *born* there, pre-LOS, so a Salesforce panel that sizes + validates on the
+   opportunity is the right first embed (Layer 2 / INT-1).
+3. **API backbone into the LOS** — push the *decided* deal downstream (Nexys for bridge,
+   Encompass for resi) for docgen/disclosure/funding (Layer 3 / INT-2).
+CRM **before** LOS because our value is a *pre-LOS decision* function; the LOS is downstream.
+App→CRM→LOS, never inverted. Everything is **API-first** (ROADMAP principle 14) so all three
+layers are clients of one engine.
+
+**What the Box revealed about the buyer.** ICC is **two businesses through one relationship** —
+Insignia Capital Corp (bridge/commercial) *and* Insignia Mortgage (consumer/resi), plus a
+defunct NPL-servicing venture (BFC/BMSI/BMC) in the principals' history. This is why the trial
+is "both businesses." Two durable implications: (a) there is a **real private-lender network**
+behind ICC's bridge deals (individual capital providers served via FCI sub-servicing, e.g.
+"Nomad One LLC") — the seed roster for Module 1 / the A1 rate stack, alongside the 10 seller
+guides in `Lenders.zip`; and (b) Insignia Mortgage's signature **"DREAM Program"** (100%
+financing, no-PMI, physician/attorney + census-tract/CRA) is a live consumer-mortgage book —
+the concrete anchor for the roadmap's Consumer-Bridge adjacency (logged, not built). The
+long-horizon TAM hint: the same principals once priced **distressed whole-loan / NPL pools** at
+portfolio scale — the far edge of where a loan-level decision engine could eventually go.
+
 ## Where we are today (2026-06-23)
 
 Live at `app.pulseclose.com`, multi-tenant SaaS, Stripe billing, real

@@ -369,6 +369,104 @@ sizer ships with a `scripts/verify-*.ts` golden test; these are the model-level 
     the RTL "requested vs. sized" duality (finding #21) and keeps the dispatcher's contract
     ("give me a deal, get a size") honest.
 
+## ICC operational Box — the Excel long-tail (2026-07-01 (c))
+
+Decoded from ICC's full operational Box (`~/Downloads/Private Folder.zip`, 72GB / 94,751
+files — the 60GB+ download the trove entry was waiting on). **Synthesis only** — mined the
+underwriting models + process/pricing docs; stayed out of borrower-PII packets, QuickBooks/
+accounting files, and captured-server-data (governance note in pickup + memory); **nothing
+persisted to the repo.** These are the evidence base for the expanded UW-7 + the platform-stack
+north star.
+
+24. **🟢 ICC's institutional MFR sheet sizes with `MIN(LTV / Debt-Yield / DSCR)` — validates
+    the engine.** `Insignia Multi & Value Add.xlsx` picks loan size via a **`Size Type`
+    dropdown** (INDEX/MATCH over LTV 70% / Debt-Yield 10% / DSCR 1.25), and `Loan Submission
+    Quick Form.xlsx` uses **`MINIFS` across LTC/LTARV**. This is exactly `sizing.ts`'s MIN-of-
+    constraints + binding-constraint model — confirmation that the shipped engine is *how ICC
+    actually sizes*, not our invention. The trial-confidence signal.
+25. **🔵 The MFR model is a DUAL sizer — in-place bridge AND stabilized takeout.** It sizes
+    twice: (a) an **in-place bridge** sizer on in-place NOI at the bridge rate (~11%, IO), and
+    (b) a separate **Stabilized Loan Sizer** on **forward NOI** at a takeout rate (~6.5%, 30yr
+    amort), each with its own LTV/Debt-Yield/DSCR. This is the "in-place + stabilized DSCR
+    feedback" Damon asked for (memory `project_damon_excel_model_moat`) — real and in the sheet.
+    → **UW-3 / `<DualSizer>`**: present both side-by-side. Forward NOI comes from a full 5-yr
+    operating pro-forma (rent-roll, rent/expense growth vectors, opex, capital reserves); that
+    ramp is the build gap.
+26. **🔵 The bridge exit is a modeled REFINANCE with a NOI-stress grid — the highest-value
+    surface we don't have.** The construction-MF `Loan Analysis` sheet caps terminal NOI at a
+    terminal cap rate → valuation → refi proceeds at **MIN(market-LTV, market-DSCR via PV,
+    market-debt-yield)** − existing balance, then runs a **sensitivity grid: NOI −0/5/10/15/20%
+    → recomputed LTV, DSCR, refi proceeds at each level.** The bridge's real risk *is* the
+    takeout; this proves whether it clears under stress. → **UW-7 `<RefiStressGrid>`**, pairs
+    with **AN-2** (reserve adequacy). Higher-value than another point estimate.
+27. **🟢 Operational-shortfall reserve is a sized USE of funds.** Both the SFR-construction
+    (`Operating Shortfall` soft-cost line) and MFR (`Operational Shortfall` = MIN of cumulative
+    hold-period cashflow) sheets fund negative carry from loan proceeds. Neither `rtl-sizer.ts`
+    nor `dscr-sizer.ts` models it; it belongs in the construction/value-add sources-and-uses.
+    → bundle with **UW-4** (deposits/equity) + the construction path.
+28. **🟡 Underwriters turn constraints OFF by hand — the ladder needs an include/exclude
+    toggle.** `Loan Submission Quick Form` computes max loan via `MINIFS(..., Include, "YES")`
+    with a **per-constraint "Include YES/NO" column**. The `<ConstraintLadder>` must let a user
+    toggle a test in/out and re-size live. Per **principle 14** this is a per-org config value,
+    not a code change (the sizer already takes the constraint set as input).
+29. **🟢 The construction cost taxonomy for AN-1 is decoded — benchmark per CSI division.**
+    `Construction Ground Up Multi-Family.xlsx` carries a **40+ line CSI-division development
+    budget** (acquisition; soft costs: permitting/A&E/survey/legal/municipal/contingency;
+    direct: demo, site+structural concrete, steel, roofing, windows, doors, drywall, plumbing,
+    HVAC, electrical, elevator, fire sprinkler, landscaping, **general conditions**,
+    **construction management**, contingency 5%; FF&E; development fee) — each as **%-of-total
+    AND $/unit**. SFR variant has a hard/soft split (concrete/framing/electrical/roof/GC-fee/
+    contingency · architect/engineering/municipal/taxes-during-construction/builders-risk).
+    → **AN-1** benchmarks per-division $/unit + $/sqft, not a blended number; also the
+    construction stepper's budget input schema.
+30. **🟢 ICC's own loan app IS the intake schema — and its declarations map to our pillars.**
+    The blank ICC **Short-Form Business/Commercial Application** gives the canonical stepper
+    field set: **Loan Type** (Purchase / Refi-cash-out / Refi-no-cash-out / Rehab / **Ground-Up
+    Construction** / Business Expansion) → the dispatcher's `loan_type` routing; property
+    (Present Value / Proposed Budget / **Estimated Final Value = ARV**); **entity** (Corp/LLC/
+    LP/Trust, State of Org, TIN, **members + title + % ownership**) → the entity pillar exactly;
+    and **declaration questions** (outstanding judgments, bankruptcy-7yr, party to a lawsuit,
+    foreclosure/deed-in-lieu, federal-debt default). The borrower already *self-declares*
+    litigation/bankruptcy/foreclosure — **PulseClose is the verify half**: reframe pillars as
+    *"borrower declared X, we verified Y."* Process context: ICC's LO Workflow confirms
+    **Salesforce** as step 1 (→ INT-1 is the right first embed), the **"needs list"** as a
+    named real step (→ COND-1), and the founders' manual **"discuss lenders + pricing"** step
+    as exactly what A1+/per-investor automates.
+
+## Downloads re-scan (2026-07-01 (d)) — the corporate zip + workflow archive
+
+A full re-scan of `~/Downloads` (beyond the Box) surfaced net-new, non-PII, product-relevant
+material — chiefly inside `Insignia Capital Corp.zip` (1.48GB / 1,410 files). Governance held:
+inventory + structure only; no PII / financials / accounting / captured-server-data opened.
+
+31. **🟢 HIGH — The "Lender Grid" is a ~35-lender fixture universe; we've encoded 2.**
+    `Insignia Capital Corp.zip` → `Lender Grid/` (117 files) + `Lenders/` (138 files) + master
+    **`ICC Lender Grid 1.20.24.xlsx`** = rate sheets + program guidelines for ~35 real bridge/
+    DSCR/construction lenders (Bloomfield, Corevest, Dunmor, Stormfield, YouLand, Penstock,
+    GreenLake, Kennedy Funding, Conventus, Constructive, West Bay, Wilshire, Archwest,
+    LendingOne, LendSure, Seattle Funding Group, Velocity, Futures Financial, KDM, F2 Finance,
+    FK Capital, IronFund, Jcap, ACRA, Center Street, Banc of Cal, Eastview, …). Only Colchis +
+    Oakhurst have captured buy-boxes today ([BUYBOX-COLCHIS-OAKHURST.md](BUYBOX-COLCHIS-OAKHURST.md)).
+    → **A1+ / Module 1**: the real fixture set to take best-execution from a 2-investor demo to
+    ~35; seed `scripts/seed-sample-investors.ts` from it. Highest-value net-new material.
+32. **🔵 HIGH — ICC's own capital stack is a Colchis warehouse LOC (facility-capacity model
+    for CAP-1).** `Insignia Capital Corp.zip` → `ICC Funding I, LLC` (121 files): ICC funds
+    loans off a **Colchis line of credit** with monthly **Borrowing-Base Certificates +
+    Covenant-Compliance Certificates** + consolidated financials. This is the "how ICC actually
+    funds" layer above the loan sizer, and the concrete model **CAP-1 facility-aware sizing**
+    sizes against. Confidential financials — structure noted, figures NOT opened (see
+    [DATA-GOVERNANCE.md](DATA-GOVERNANCE.md)).
+33. **🟡 MED — "ICC Deal Spotlight" = 4 fully-packaged real deals (calibration + case-study
+    source).** `Insignia Capital Corp.zip` → `ICC Deal Spotlight` (23 files): deals #1–4 each
+    bundle property docs (appraisal, proforma, construction budget, OM — usable) + borrower docs
+    (credit/PFS/track record — **PII, not opened**). → real end-to-end calibration deals + demo
+    case-study material (DEMO-WALKTHROUGH), property/economics side only. Also noted: the
+    `Consumer Bridge` adjacency has real draft artifacts (HPML policy manual + APR calc +
+    UW checklist + TaliMar program), and `_ICC Workflow Management.zip` carries the freshest
+    `_Nexys Conditions - NEW - MASTER.xlsx` + HMDA field universes (→ COND-1). *(The `Acorn`
+    drive-download zips are a separate fintech DD engagement — out of PulseClose/ICC scope;
+    the HDSR "Agentic AI" PDFs are academic, no proprietary signal.)*
+
 ## Carried into the product plan (2026-07-01, Damon reset)
 
 The findings above are the evidence base for the ROADMAP

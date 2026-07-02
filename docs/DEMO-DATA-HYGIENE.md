@@ -3,6 +3,11 @@
 **Tactical reference for keeping the demo tenant clean and reproducible.**
 **Last updated:** 2026-05-05.
 
+> **NOTE (2026-07-01):** "NPLA" references below are **historical** (event concluded June 22-23,
+> 2026). The current GTM forcing function is the **AAPL conference, Nov 9-11 2026**; treat the
+> NPLA prep structure here as the template for the AAPL demo scrub. The demo tenant remains
+> **seeded/synthetic** (Westbrook) per the spine.
+
 > **What this is for:** every script, every cleanup procedure, every checklist needed to keep Test Co (or any demo tenant) in a state where you can confidently click through the full E2E flow in front of a customer or partner. Not strategic. Operational.
 >
 > **Sibling docs:**
@@ -86,7 +91,7 @@ The migration order is fixed; run them as a stack. `supabase db push` from a cle
 # 1. Create the new tenant org via signup (or via SQL if you have service-role).
 #    A signup auto-creates user + org via 00002 handle_new_user trigger.
 
-# 2. Apply all 25 migrations on the Supabase project:
+# 2. Apply all 51 migrations (00001–00051) on the Supabase project:
 supabase db push
 
 # 3. Seed lender + ZHVI reference data (idempotent — safe to run on existing tenants):

@@ -108,6 +108,32 @@ teaching-oriented (human-on-top: "a common framework to evaluate the deal," neve
 black box — his stated fear was "not knowing shit when the investor calls").
 - **Unblocks when:** NOW — before the AAPL Nov demo and during the July-Aug ICC trial.
 
+### Box mine (2026-07-01 (c)) — unscoped ideas from ICC's operational Box (72GB)
+Synthesis-only from ICC's operational Box; models validated the engine and surfaced these.
+Committed items landed in the ROADMAP (UW-7 refi-stress-grid / dual-sizer / operational-
+shortfall / constraint toggle, AN-1 CSI taxonomy, COND-1 "needs list", INT-2 LOS push,
+principle 14). What stays *unscoped* here:
+
+- **Export *to* Excel / round-trip.** The escape hatch that makes "replace the Excel" safe:
+  emit a sized deal as an `.xlsx` mirroring their sheet (and ideally re-import an edited one).
+  Paradoxically, generating the Excel is part of replacing it — their rate-offer letters and
+  investor sheets are `.xlsx`. *Unblocks when:* UW-7 LOI/rate-offer-letter work.
+- **Override any computed cell.** Extend override-and-rerun (already the product for tiers)
+  to sizing inputs + intermediates, so the reason-to-open-Excel (a bespoke one-deal tweak) is
+  in-product. *Unblocks when:* stepper (UX-2) is live and a real deal needs a manual override.
+- **Rate-offer-letter generator.** Step 5 of ICC's real LO Workflow; they store one per deal.
+  A sibling output to the investor handoff. *Unblocks when:* UW-7.
+- **"Verify the declaration" pillar framing.** ICC's loan app already makes the borrower
+  self-declare judgments / bankruptcy-7yr / lawsuits / foreclosure / entity members + %
+  ownership (finding #30). Reframe the pillars as *"borrower declared X — we verified Y"* — a
+  sharper trust story than standalone checks. *Unblocks when:* intake stepper + a UX pass.
+- **Private-lender network onboarding.** ICC's bridge deals are funded by individual capital
+  providers via FCI sub-servicing (e.g. Nomad One LLC). These are real Module-1 investors /
+  A1 rate-stack seeds beyond the 10 `Lenders.zip` guides. *Unblocks when:* A1+ / fund persona.
+- **NPL / pool-level underwriting (long-horizon TAM).** The principals' history includes
+  distressed whole-loan pool pricing (Bayview/DebtX/etc., 2009–11). If PulseClose ever moves
+  from single-deal to *portfolio/pool* valuation, this is the far edge. Logged, not scoped.
+
 ---
 
 ## Adjacent market: CRE bridge *lenders* (not brokers) — 2026-06-23
@@ -140,6 +166,59 @@ to Elementix's data layer).
 - **Unblocks when:** we want a cold/standalone entry point distinct from the
   capital-provider wedge — e.g., a lender who won't adopt the full gateway but
   will pay to kill their Excel UW model. Pairs with the $1,499 Underwriting tier.
+
+## User-authored model layer (formula canvas) — Tier 3, governed
+
+The deep-think (2026-07-01) on how far to push "replace the Excel." The **"structured core,
+open edges"** model has three tiers:
+- **Tier 1 (shipped):** structured verified sizer modes (RTL / construction / DSCR / MFR),
+  to-the-penny, drill-through. Covers the 80–90%. The default + trust anchor.
+- **Tier 2 (committed — ROADMAP UW-7):** custom-inputs layer *inside* a known mode —
+  override-any-computed-cell, named custom adjustments, constraint include/exclude toggle,
+  per-org assumption sets. ~80% of the "on-the-fly variables" feel, safely.
+- **Tier 3 (THIS entry — the open canvas):** let an underwriter define variables/formulas
+  on the fly, or **import their existing `.xlsx`**, and review it in PulseClose's clean UI.
+  The literal ~100% "replace Excel" endgame — but only worth it if Tier 1+2 provably leave
+  Excel open too often.
+
+**Why it's tempting:** covers the infinite long tail without infinite dev; "import your model"
+crushes switching cost; generalizes to lender #2 for free; and the moat moves to the layer
+Sheets/Excel *can't* touch — cells that bind to *verified* data, versioning, audit trail,
+drill-through, and one-click CRM/LOS push.
+
+**Why it's dangerous (stress-tested):** (1) you'd be building a spreadsheet engine against free,
+excellent incumbents — a red ocean; (2) you **inherit liability for models you can't verify** —
+a user's buggy formula prints a wrong number under *your* brand; (3) it muddies the
+deterministic-engine / AI-never-sets-the-number spine; (4) faithful arbitrary-`.xlsx` import is
+near-impossible on the real corpus (ICC's own sheets have 16k-col cashflow tabs, array formulas,
+live `#REF!`, external links); (5) rendering a semantics-free grid *is* just a spreadsheet — the
+UI magic needs to know which cell is "max loan."
+
+**Build it only with these guardrails (they dodge every risk above):**
+1. **Embed, don't build, the calc engine** (e.g. HyperFormula — Excel-function-compatible; or a
+   sandboxed expression evaluator). Never write your own recalc/dependency graph.
+2. **Anchor to a structured output skeleton** — *we* define the output slots (max loan, binding
+   constraint, cash-to-close); the user fills the computation. So the semantic UI still works and
+   we never render a meaning-less grid.
+3. **Cells can reference *verified* PulseClose data** (pillar outputs, sizer results) — the thing
+   Sheets can't do; this is the differentiation.
+4. **Label user formulas "custom — not PulseClose-verified"** with a visible trust boundary.
+   Preserves the golden-fixture credibility + the AI-never-sets-the-number spine, and is itself a
+   governance selling point (reviewer sees house-verified vs. user-authored per number).
+5. **"Import my Excel" = AI-*assisted mapping*, not magic full-fidelity render** — AI reads the
+   sheet → proposes which cells map to our output slots → human confirms. Turns an impossible
+   problem into a tractable one, reusing the investor-PDF-parser muscle.
+
+**The reframed north star this enables:** structured modes replace the Excel for the common case;
+Tier 2 custom inputs + Tier 3 governed formulas + assisted import absorb the long tail — so
+PulseClose is system-of-record for **all** models: verified where we authored them,
+clearly-labeled-custom where the user did.
+
+- **Hard line (never cross):** don't render an arbitrary user grid without a structured output
+  skeleton — that's the boundary between "governed model layer" and "worse Google Sheets."
+- **Unblocks when:** a July/Aug ICC trial user (or a standalone-wedge customer) hits a model our
+  Tier-1 modes don't cover and **won't abandon Excel for it** — real demand, not speculation.
+  Until then: ship Tier 1+2, and let the trial tell us the true frequency of the 10% edge case.
 
 ## Continuous title / collateral monitoring (CRE moat)
 

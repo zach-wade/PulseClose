@@ -13,11 +13,11 @@
 
 ## North Star — what we're optimizing for
 
-**NPLA conference, June 22-23, 2026 (Atlantic City), attendee mode** is the forcing function. Damon facilitates warm intros to fund people, lenders, and consulting prospects. Win = land **3 of**: fund introductions, lender intros, product demos, consulting leads.
+**Forcing function (updated 2026-07-01):** NPLA (June 22-23, 2026, Atlantic City) has **concluded** — the current GTM-debut target is the **AAPL conference, Nov 9-11 2026 (Las Vegas)**, chosen with Damon over another East-Coast event. Everything in the [Post-Damon-reset sequence](#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft) should land before it, most inside the **July/Aug ICC trial** (Insignia is trialing PulseClose across both its businesses). Damon remains the sole warm-intro conduit (memory `feedback_damon_only_outreach`). *(NPLA-era tactical prep is preserved historically in [NPLA-RUNBOOK.md](NPLA-RUNBOOK.md).)*
 
 **Strategic structure:** Zach owns all PulseClose IP. Insignia (Damon + Noah) is design partner + first paid customer. Partnership structure leans toward a JV-type venture or JV-fund where the tech goes in-house and Zach holds equity, with the multi-tenant SaaS option staying live as a parallel track. Compensation structure is what gets negotiated; tech ownership is settled. See [memory: project_insignia_partnership_paths](../../../.claude/projects/-Users-zachwade-code-active-pulseclose/memory/project_insignia_partnership_paths.md).
 
-**Distribution thesis:** Lenders don't refer UW tools peer-to-peer. Capital-provider endorsement is the only organic distribution path. Investor handoff Excel/PDF is the strategic artifact. NPLA serves both potential business models — SaaS customer acquisition AND fund-LP intros — without committing to either.
+**Distribution thesis:** Lenders don't refer UW tools peer-to-peer. Capital-provider endorsement is the only organic distribution path. Investor handoff Excel/PDF is the strategic artifact. The **July/Aug ICC trial + AAPL debut** serve both potential business models — SaaS customer acquisition AND fund-LP intros — without committing to either. *(Throughout this doc, "pre-NPLA / post-NPLA" persist as phase-boundary shorthand; the live sequencing is the [Post-Damon-reset sequence](#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).)*
 
 **The product mental model that everything serves:** **a verification + underwriting gateway between front-end CRM and the LOS that turns a deal package into a tier'd, override-aware, deed-verified borrower record AND a sized, judged loan — then routes the cleared deal to the right capital provider with one click and writes the result back to the lender's system of record.** Each pillar (entity, track record, litigation, sanctions, GC) is one adapter underneath; the sizing engine + AI judgment layer turn the cleared record into a loan recommendation; each downstream surface (handoff, evaluate/underwrite, monitor, outcomes) is one consumer of that record.
 
@@ -43,6 +43,15 @@
 
 **Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor
 data flowing. **51 migrations applied (00001–00051).**
+
+> **Update (2026-07-01):** the **deal-sizing engine layer shipped + deployed** (dormant —
+> imported by no UI yet, so additive/safe): `src/lib/underwriting/{rtl-sizer, construction-sizer,
+> dscr-sizer, solve, dispatch}.ts` — RTL/fix&flip + ground-up construction + DSCR + live-solve
+> goal-seek + dispatcher, all math-verified to the penny (**91 assertions**; the "Solver" proven a
+> closed-form circular interest reserve — no iteration needed). **Next = wire into the deal stepper
+> (UX-2).** North star sharpened to **"replace the Excel → CRM (Salesforce) → LOS API backbone"**
+> (see below). The full ICC operational Box (72GB) was mined 2026-07-01 (c) — findings in
+> [CALIBRATION-FINDINGS #24–#30](CALIBRATION-FINDINGS.md).
 
 **Shipped since the last snapshot (2026-06-22 → 06-23):**
 - **Underwriting Workbench (Module 10) + AI UW Copilot (Module 6)** — ported from
@@ -107,6 +116,7 @@ Where a feature was previously catalogued under a Tier letter, the original tier
 11. **Any place we `JSON.parse` a Claude response is a truncation hazard.** Claude returns `stop_reason: "max_tokens"` when it ran out of room mid-output, and the regex pattern `\{[\s\S]*\}` happily matches truncated JSON that then fails `JSON.parse`. Three rules: (a) `max_tokens` defaults to 4096 unless a smaller bound has been measured to fit; (b) the parse path must inspect `stop_reason` and surface "Document too large — Claude truncated" rather than a generic parse error; (c) for response shapes with a known cardinality (e.g., "up to 50 addresses"), tell Claude the cap in the prompt and slice the response defensively. See [src/app/api/ingest/borrower-doc/route.ts](../src/app/api/ingest/borrower-doc/route.ts) for the canonical shape — every `client.messages.create` site copies that pattern.
 12. **Every Claude consumer routes through the AI privacy bundle.** Three layers: (a) `requireAiEnabled(orgId)` gate from [src/lib/ai/check-enabled.ts](../src/lib/ai/check-enabled.ts) — fails CLOSED on lookup error so a DB hiccup never silently sends opted-out PII; returns 503 with code `AI_DISABLED` to the caller. (b) `scrubPii()` from [src/lib/ai/redact-pii.ts](../src/lib/ai/redact-pii.ts) on text-derived inputs (xlsx / csv / txt) — strips SSN/phone/email pre-call. PDFs ride the per-org toggle as the strict-mode answer because pre-extracting text loses table structure. (c) For prompts that interpolate borrower / entity / property / lender names, run [src/lib/ai/redact.ts](../src/lib/ai/redact.ts) `buildRedactionMap` → `redact()` forward → `unredactObject()` reverse → `findLeftoverTokens()` safety scan. `addressVariants()` (street alias) and `entityVariants()` (legal-suffix-stripped) catch partial mentions in factor explanations. Every new endpoint that calls `client.messages.create` MUST add these three layers — see A1 implementation in [src/app/api/investors/[id]/extract-criteria/route.ts](../src/app/api/investors/[id]/extract-criteria/route.ts) for the canonical post-bundle pattern.
 13. **Persona-agnostic coherence — "no matter who you are, it makes sense" (2026-07-01).** The product is one continuous thing to a broker, an underwriter, and a capital partner alike. Every surface obeys: **one Deal object** flows Borrower → Deal → Capital → Portfolio with no re-keying; **one `computeVerdict()`** so no two surfaces disagree (the mandate-vs-book bug is a violation); **verdict/answer first**, evidence on disclosure; sizing follows the **Excel-parity layout** ICC already trusts (waterfall + constraint ladder + **cushion/headroom** per binding test); **native scenario compare** instead of re-keying; and every screen orients the current persona to *their* next action. Any new surface is scored against this + [UX-AUDIT-RUBRIC.md](UX-AUDIT-RUBRIC.md); the full spec is [UX-REDESIGN-PLAN.md §13](UX-REDESIGN-PLAN.md).
+14. **API-first decision-layer; parameterize, never hardcode a customer's model (2026-07-01).** PulseClose is the decision layer *between* the CRM/POS (origination) and the LOS/loan system (closing/servicing) — see the [platform stack](#the-platform-stack--replace-excel--port-into-the-crm--api-backbone-into-the-los). Two rules follow. (a) **Every capability is an endpoint** (`validate` / `size` / `judge` / `condition` / `handoff`); the app, the CRM embed (INT-1), the share link, and the LOS push (INT-2) are all *clients* of the same API — no capability lives only inside a React component. This keeps Layers 2–3 (CRM/LOS integration) cheap when a customer gates them, and is why D6 item 1 (generic read/write API + webhooks) is the reusable foundation everything else composes on. (b) **Model *structure* is code; model *assumptions* are per-org config.** Caps, rates, fee %, contingency, DSCR floors, which constraints are "included" (finding #28) are data the underwriter owns — never constants baked into a sizer. Hardcoding ICC's numbers means we diverge the moment Damon edits a sheet, and can never sell to lender #2 (keeps multi-tenant + dual-use alive per memory `project_insignia_partnership_paths`). The sizer *shapes* (RTL / construction / DSCR / MFR-value-add) are industry-standard and shared; the parameters are the tenant's.
 
 ---
 
@@ -744,6 +754,82 @@ goal-seek + dispatcher — all to the penny (UW-1/5/6). **The remaining Excel lo
 below) is what makes the "replace" claim fully true.** Track fidelity as *models replaced /
 models ICC uses*.
 
+#### Is "replace the Excel" actually doable? (stress test, 2026-07-01 (c), Box-informed)
+
+Mining ICC's full operational Box (72GB — the models + the process docs + the pricing
+artifacts, see [CALIBRATION-FINDINGS #24–#30](CALIBRATION-FINDINGS.md)) both **confirmed the
+thesis and bounded it.** The honest read:
+
+**Why it's achievable for *this* wedge:** the models are a **bounded family of deterministic,
+closed-form** loan-sizing sheets (RTL, ground-up, DSCR, MFR value-add, stabilized takeout) —
+not "all of Excel." ICC's own institutional MFR sheet sizes with a **`Size Type` dropdown =
+MIN(LTV / Debt-Yield / DSCR)** and the intake form uses **MINIFS across LTC/LTARV** — i.e.
+the exact MIN-of-constraints engine we already shipped (finding #24). We have the golden
+fixtures to verify to the penny. The domain is tractable.
+
+**The threat (be honest about it):** Excel's real moat isn't the formulas — it's that an
+underwriter can drop in a row, override a cell, add a scenario column, or model one weird
+deal. A rigid stepper can't match open-ended cell flexibility, and **the moment Excel opens
+for the one odd deal, it stays open.** So the win condition is **not** "Excel never opens." It
+is: **PulseClose replaces the Excel for the 80–90% of standard deals to the penny, and is the
+system of record even for the 10% that still touch a sheet.** Excel becomes a scratchpad for
+edge math, not the model of record. Five design commitments make that real (each tracked below
+or in [UX-REDESIGN §13](UX-REDESIGN-PLAN.md)):
+
+1. **Radical transparency beats Excel, doesn't hide from it.** Underwriters trust Excel
+   because they can *see* every formula. Our answer is *better* provenance: every number
+   drills to its inputs + the constraint/formula that produced it (principle 8 drill-down;
+   `<ConstraintLadder>`). Excel's formulas are opaque spaghetti — a clean drill-through is a
+   feature Excel can't match.
+2. **Parameterize, don't hardcode.** The model *structure* is code; the *assumptions* (caps,
+   rates, fee %, contingency, DSCR floors) are per-org config the underwriter controls —
+   otherwise ICC tweaks a sheet and we diverge, and we can never sell to lender #2. This is
+   **cross-cutting principle 14.**
+3. **Override any computed cell.** Extend override-and-rerun (already the product) from tiers
+   to sizing inputs and intermediates, so the reason-to-reach-for-Excel (a bespoke tweak) is
+   in-product.
+4. **Quick-Quote → Full-Model progressive disclosure.** Size on the few binding inputs in
+   seconds; refine to a 40-line budget only for precision. ICC already splits this (their
+   file is literally the *"Loan Submission **Quick** Form"*). A stepper that demands 40 inputs
+   before showing a number loses to Excel.
+5. **Export *to* Excel is part of replacing Excel.** They email sheets to investors/borrowers
+   and their rate-offer letters are `.xlsx`. PulseClose must emit the artifacts (rate-offer
+   letter, investor handoff) — leaving PulseClose should never mean leaving with nothing.
+
+**Verdict:** doable and correct as the north star, with the framing above. Naive "kill Excel"
+is not the goal; **"be where the deal lives, sizes, and hands off"** is.
+
+#### The platform stack — replace Excel → port into the CRM → API backbone into the LOS
+
+This is the deliberate distribution/architecture sequence (owner-set 2026-07-01). PulseClose
+is the **decision layer** that sits *between origination (CRM/POS) and closing/servicing
+(LOS/loan system)* — confirmed by ICC's real pipeline in the Box (the LO Workflow doc:
+Salesforce opportunity → digital app → UW review → pre-approval/"needs list" → **founders
+discuss lenders + pricing** → rate-offer letter → disclose/submit into the LOS). Each layer is
+a client of the same engine:
+
+- **Layer 0 — the engine** (pure TS sizers + judgment; shipped, dormant). The IP. Platform-agnostic.
+- **Layer 1 — replace the Excel** (the app: deal stepper + Excel-parity result UI at
+  app.pulseclose.com). The standalone product an underwriter opens instead of a sheet. = UX-2 + UW-7.
+- **Layer 2 — port into the CRM** (Salesforce, confirmed as ICC's system-of-intake and the
+  *first* step in their flow). The deal is **born in the CRM**, pre-LOS — so the natural
+  distribution is a Salesforce panel on the opportunity that runs validation + sizing +
+  best-execution and writes back tier/loan/conditions. = **INT-1** / [D6](#cross-cutting--interoperability--lender-stack-integration-d6) item 3.
+- **Layer 3 — API backbone into the LOS + other systems** (push the decided, structured deal
+  *downstream* into Nexys for bridge / Encompass for resi for docgen/disclosure/funding). =
+  **INT-2** / D6 item 4.
+
+**Sequencing (stress-tested): app → CRM → LOS, never inverted.** Prove the Excel replacement
+first (value), then embed in the CRM where deals are born (distribution), then push to the LOS
+last-mile (automation). CRM comes before LOS because PulseClose's value is a *pre-LOS*
+decision function; the LOS is a downstream compliance/docgen system. Layers 2–3 are
+customer-gated integration projects (weeks each, need the customer's admin) — **but the
+API-first architecture that enables them is not-later** (principle 14, hold it now: the app,
+the CRM embed, and the LOS push are all clients of the same endpoints). Risk to watch:
+north-star scope creep into a full Argus/institutional-modeling suite — **the lens stays the
+lender/underwriter's seat** (size the loan, judge the deal), not the sponsor's equity-return
+model (we show a return *sketch* for context, nothing more).
+
 ### The plan — phased, ordered for the trial then the debut
 
 **Guiding order:** (Phase 1) make the engine model his *real* deals — the July/Aug trial
@@ -801,8 +887,10 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
    544 Sunset) into [scripts/golden-loans.ts](../scripts/golden-loans.ts); assert engine
    output **to-the-penny** (RTL Option_1 → Max Loan $2,422,000, Net $2,200,000, CTC
    $294,999). Deal-type templates (RTL / ground-up / DSCR-rental / MFR) in the stepper.
-   The proof for the "replace your Excel model" wedge. *Action: get Michael's ground-up
-   Solver `.xlsx` from Damon.* *Stage: Route.*
+   The proof for the "replace your Excel model" wedge. *(~~Action: get Michael's ground-up
+   Solver `.xlsx`~~ — resolved: it's `Loan Sizer - Construction.xlsx` in the trove, shipped as
+   `construction-sizer.ts`. Still worth grabbing Damon's condo-project Excel for a further mode.)*
+   *Stage: Route.*
 3. **UW-5 — Live-solve / goal-seek (the 10× over their Excel).** Every ICC model is
    forward-calc; Michael reaches for Excel **Solver** to invert it. Make inversion native:
    solve for max loan at a target DSCR, the advance that caps cash-to-close, the advance
@@ -818,28 +906,69 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
 5. **UW-3 — Surface the sizing depth layers (<1 day).** Promote to first-class the already-
    computed depth (`exit.ts`/`stabilization.ts`/`reserve.ts`): **DSCR in-place AND
    stabilized** (buried at [deal-stepper.tsx:851](../src/components/dashboard/deal/deal-stepper.tsx);
-   Damon asked for both), **exit/takeout** ("prove the takeout clears the bridge"), the
+   Damon asked for both — and finding #25 confirms ICC's MFR sheet ships a **dual in-place +
+   stabilized/takeout sizer**, so present them side-by-side), **exit/takeout** ("prove the
+   takeout clears the bridge" — the refi stress grid in UW-7 is the deep version), the
    **stabilization path**. *(The "confidence is low" remark maps to existing G4.2 — do
    together.)* *Stage: Route.*
 6. **UW-4 — Deposits / equity-contribution input (bundle with UW-1).** Add optional
    earnest/deposit/equity-source inputs so equity-required reconciles to the real capital
    stack — matters most on construction. *Stage: Route.*
 7. **UW-7 — Excel long-tail: the modes that make "replace the Excel" fully true.** Beyond the
-   three shipped sizers, ICC uses more model shapes; each is a golden-fixture-backed mode:
-   - **MFR value-add / stabilized** — the `MFR - Bridge or Stabilized.xlsx` + `MFR - Rehab
-     Deck.xlsx` models (multi-year cash-flow, rent-roll, stabilized DSCR). The income-based
-     `underwrite()` covers part of this; the rent-roll + multi-year ramp is the gap.
+   three shipped sizers, ICC uses more model shapes; each is a golden-fixture-backed mode.
+   The 2026-07-01 (c) Box mine (findings [#24–#30](CALIBRATION-FINDINGS.md)) made these concrete:
+   - **MFR value-add / stabilized (dual sizer) — highest value.** The institutional
+     `Insignia Multi & Value Add` sheet (finding #24, #25) sizes with a **`Size Type` dropdown
+     = MIN(LTV / Debt-Yield / DSCR)** (validates our engine) AND runs **two sizers**: an
+     **in-place bridge** sizer (in-place NOI, ~11% IO) and a separate **stabilized/takeout**
+     sizer (**forward NOI**, ~6.5%, 30yr amort) — the in-place+stabilized feedback Damon asked
+     for. Ship the two side-by-side (extends UW-3). Full 5-yr operating pro-forma (rent-roll,
+     growth vectors, opex, capital reserves → NOI) feeds forward NOI; that ramp is the build gap.
+   - **Refinance / takeout STRESS grid — "does the bridge exit?"** The construction-MF model's
+     `Loan Analysis` (finding #26) caps terminal NOI → valuation → refi proceeds at
+     MIN(market-LTV, market-DSCR-PV, market-debt-yield) − existing balance, then runs a
+     **sensitivity grid: NOI −0/5/10/15/20% → recomputed LTV, DSCR, refi proceeds.** This is
+     the single most important bridge-risk surface (the bridge's real risk is the takeout).
+     Higher-value than another point estimate; pairs with **AN-2** (reserve adequacy). Build as
+     the `<RefiStressGrid>` primitive ([UX-REDESIGN §13.2](UX-REDESIGN-PLAN.md)).
+   - **Operational-shortfall reserve as a sized use of funds** (finding #27) — both the SFR-
+     construction and MFR sheets fund negative carry (MIN of cumulative hold-period cashflow)
+     from loan proceeds. Neither the RTL nor DSCR sizer models it; belongs in the
+     construction/value-add path. Bundles with **UW-4**.
+   - **Per-constraint include/exclude toggle** (finding #28) — the actual `Loan Submission
+     Quick Form` uses an **"Include YES/NO" column → MINIFS**: underwriters turn constraints
+     off by hand. The `<ConstraintLadder>` must let a user toggle a test in/out and re-size
+     live (config, per principle 14 — not a code change).
    - **Requested-loan / "check my number" shape** — the `Loan Sizer for Park Place` variant
      (loan is an INPUT → LTC/LTARV/LTAIS + cash shortage). Pairs with finding #21; every mode
      should offer both "size it for me" and "check my requested loan."
    - **Per-investor pricing (Colchis-style rate stack)** — the `ColchisScenarioTool` shape:
      eligibility box (LTV limited by loan-amount × DSCR × product) + buyup/buydown rate stack.
      Overlaps **A1+** (Phase 3) — build once, use in both.
-   - **LOI generation** — the `ICC Construction/Bridge/Flip LOI` templates: turn a sized deal
-     into the term sheet ICC actually sends. Closes the loop from size → structure → LOI.
+   - **LOI / rate-offer-letter generation** — the `ICC Construction/Bridge/Flip LOI` templates
+     + the per-deal **rate-offer letter** (step 5 of ICC's real LO Workflow; they store one
+     `.xlsx`/`.pdf` per deal). Turn a sized deal into the artifact ICC actually sends — closes
+     the loop size → structure → LOI, and is the "export *to* Excel" escape hatch that makes
+     leaving PulseClose not mean leaving empty-handed.
+   - **Intake schema comes free from ICC's own form** (finding #30) — the blank ICC Short-Form
+     Business/Commercial app is the canonical stepper field set (Loan Type → dispatcher
+     routing; entity members + % ownership → entity pillar; **declaration questions** →
+     "borrower declared X, we verified Y" framing across the pillars).
+   - **Custom-inputs layer within a known mode (Tier 2 — build here, safe).** The "let me put
+     my own variables in" affordance *without* becoming a spreadsheet: **override any computed
+     cell** (extends override-and-rerun from tiers to sizing inputs/intermediates), **named
+     custom adjustments** ("+ $50k seismic holdback"), the constraint include/exclude toggle
+     (above), and saved **per-org assumption sets** (caps/rates/fees/DSCR floors — principle 14).
+     Because it stays inside a mode whose semantics we know, the constraint ladder, drill-through,
+     and best-execution all keep working. This delivers ~80% of the "on-the-fly variables" feel
+     that a full formula canvas promises, at a fraction of the risk.
    - **Resolve finding #23** (dispatcher DSCR asymmetry) as part of this — every mode SIZES,
      with a consistent "check my number" affordance.
-   *Track "models replaced / models ICC uses" as the fidelity metric.* *Stage: Route.*
+   *Track "models replaced / models ICC uses" as the fidelity metric.* This item is the middle
+   two tiers of the **"structured core, open edges" model**: Tier 1 = the shipped verified modes;
+   Tier 2 = the custom-inputs layer above; **Tier 3 (a governed user-authored formula layer +
+   AI-assisted `.xlsx` import) is logged in [IDEAS.md](IDEAS.md#user-authored-model-layer-formula-canvas--tier-3-governed) — built only on real trial demand**, never speculatively (the
+   calc-engine + model-correctness-liability risk is too high to chase early). *Stage: Route.*
 
 #### Phase 2 — Coherence + trust (one thing that makes sense to anyone)
 
@@ -870,31 +999,52 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
 
 #### Phase 3 — Best-execution + capital (the distribution wedge)
 
-10. **A1+ — Best-execution rate stack (not pass/fail).** Parse the 10 real seller guides /
-    DSCR matrices / quote sheets (`Lenders.zip`: ACRA, ArchWest, Conventus, Dunmor,
-    Eastview, Oakhurst, …) via the A1 parser; the evaluate engine returns a **priced rate
-    stack per investor** (rate + buyup/buydown in bps/$, binding eligibility flag), ranked —
-    the Colchis-tool structure, generalized. Wire live rate sheets so pricing stays current.
-    *Stage: Route.*
+10. **A1+ — Best-execution rate stack (not pass/fail).** The fixture set is far bigger than
+    first thought: the **ICC "Lender Grid"** (`Insignia Capital Corp.zip` → `Lender Grid/` 117
+    files + `Lenders/` 138 files + master **`ICC Lender Grid 1.20.24.xlsx`**, Downloads re-scan
+    2026-07-01) is a **~35-lender universe** of rate sheets + program guidelines — Bloomfield,
+    Corevest, Dunmor, Stormfield, YouLand, Penstock, GreenLake, Kennedy Funding, Conventus,
+    Constructive, West Bay, Wilshire, Archwest, LendingOne, LendSure, Seattle Funding Group,
+    Velocity, Futures Financial, KDM, F2 Finance, FK Capital, IronFund, Jcap, ACRA, Center
+    Street, Banc of Cal, Eastview, … — vs. the **2** buy-boxes encoded today (Colchis + Oakhurst,
+    per [BUYBOX-COLCHIS-OAKHURST.md](BUYBOX-COLCHIS-OAKHURST.md)). Parse the grid via the A1
+    parser + seed `scripts/seed-sample-investors.ts` from it; the evaluate engine
+    ([src/lib/evaluate/engine.ts](../src/lib/evaluate/engine.ts)) returns a **priced rate stack
+    per investor** (rate + buyup/buydown in bps/$, binding eligibility flag), ranked — the
+    Colchis-tool structure, generalized to ~35. This is the highest-value non-PII material in
+    the ICC data and the concrete path from a 2-investor demo to a real best-execution engine.
+    Wire live rate sheets so pricing stays current. *Stage: Route.*
 11. **CAP-1 — Concentration alerts + facility-aware sizing + portfolio roll-up.** Flag a
     borrower crossing a $ threshold ($20M) or geographic concentration ("10 big loans in
-    Bel Air"); size against the **lender's own facility capacity** (the Colchis LOC
-    Borrowing-Base-Limits model) so we never green-light a loan the facility can't hold;
-    roll network activity up to the capital partner. Damon (both businesses) is the first
+    Bel Air"); size against the **lender's own facility capacity** so we never green-light a
+    loan the facility can't hold; roll network activity up to the capital partner. **The real
+    structure is documented** (`Insignia Capital Corp.zip` → `ICC Funding I, LLC`, Downloads
+    re-scan 2026-07-01): ICC funds off a **Colchis warehouse line of credit** with monthly
+    **Borrowing-Base Certificates + Covenant-Compliance Certificates** — that IS the
+    facility-capacity model to size against (structure only; the actual figures stay out per
+    [DATA-GOVERNANCE.md](DATA-GOVERNANCE.md)). Damon (both businesses) is the first
     capital-partner user. *Stage: Portfolio / Monitor.*
 12. **CAP-2 — Priced-rate + margin overlay per investor, override-able (small).** "Price
     every loan, bake in a margin; override if the LO pushes back." Extends the per-investor
     overlay + A2. *Stage: Route.*
 13. **COND-1 — Auto-conditions from the deal profile.** Generate the likely condition set
     (ground-up → draw inspections, budget, completion; DSCR → lease/estoppel) from the deal
-    type + pillars, seeded by ICC's Master Nexys Condition List. Turns sizing into a
-    pre-underwrite. *Stage: Decide.*
+    type + pillars, seeded by ICC's Master Nexys Condition List (the freshest copy is
+    `_Nexys Conditions - NEW - MASTER.xlsx` in `_ICC Workflow Management.zip`, Downloads
+    re-scan 2026-07-01). This is a **confirmed, named step in ICC's real pipeline** — the LO
+    Workflow doc calls it the **"needs list"** the UW team sends when a file is short (Box
+    mine, 2026-07-01 (c)). Turns sizing into a pre-underwrite. *Stage: Decide.*
 
 #### Phase 4 — Additional-analysis differentiators (the moat — things Excel can't do)
 
-14. **AN-1 — Construction cost benchmarking.** Compare a budget's **$/sqft to regional
-    norms** (RSMeans-style or derived from ICC's own deal corpus) → flag under-budgeted
-    rehabs (feasibility + fraud signal). *Stage: Investigate / Route.*
+14. **AN-1 — Construction cost benchmarking.** Compare a budget's **$/sqft and $/unit to
+    regional norms** (RSMeans-style or derived from ICC's own deal corpus) → flag under-
+    budgeted rehabs (feasibility + fraud signal). The benchmark schema is the **CSI-division
+    development-budget taxonomy** decoded from ICC's construction sheets (finding #29: 40+
+    divisions — structural concrete, steel, plumbing, HVAC, electrical, elevator, fire
+    sprinkler, GC/general conditions, construction mgmt, contingency, FF&E, dev fee — each as
+    %-of-total + $/unit; SFR variant has hard/soft split). Benchmark per-division, not just a
+    blended $/sqft. *Stage: Investigate / Route.*
 15. **AN-2 — Interest-reserve adequacy over the draw timeline.** Does the reserve carry to
     stabilization given the NOI ramp? Wire `reserve.ts` + `stabilization.ts` to the draw
     schedule. *Stage: Route.*
@@ -908,13 +1058,29 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
 
 #### Phase 5 — Integration + adjacency
 
-18. **INT-1 — Salesforce connector (customer-gated) = [D6 item 3](#cross-cutting--interoperability--lender-stack-integration-d6).**
-    Damon asked twice; Insignia is standing up SF/Encompass now. Reconfirms SF as the
-    priority connector when the field-mapping need lands. *Stage: Interoperability.*
-19. **Consumer Bridge — logged adjacency, NOT built.** The trove's `Consumer Bridge.zip` is
-    an owner-occupied **HPML/HOEPA/TILA** product (TaliMar-modeled) — a different regulatory
-    animal from the business-purpose ICP. Captured in [IDEAS.md](IDEAS.md); revisit only if
-    ICC actually pursues consumer bridge.
+18. **INT-1 — Salesforce connector = Layer 2 of the platform stack (customer-gated) = [D6 item 3](#cross-cutting--interoperability--lender-stack-integration-d6).**
+    Damon asked twice; Insignia is standing up SF/Encompass now. The Box's **LO Workflow doc
+    confirms Salesforce is step 1 of ICC's real pipeline** — the deal is *born* in the CRM,
+    pre-LOS — so SF is the correct *first* embed, not speculative. Scope: a Salesforce panel on
+    the opportunity that runs validation + sizing + best-execution (as an API client, principle
+    14) and writes tier / loan amount / conditions back to SF fields. Build against the first
+    customer who commits the workflow. *Stage: Interoperability.*
+19. **INT-2 — LOS / loan-system push = Layer 3 = [D6 item 4](#cross-cutting--interoperability--lender-stack-integration-d6).**
+    Once a deal is *decided* in PulseClose (via app or CRM), push the structured output
+    *downstream* into the LOS for docgen/disclosure/funding: **Nexys for bridge (ICC)**,
+    **Encompass for resi (Insignia Mortgage)**. Reconciles the memory note "pre-flight scrub
+    feeds Nexys, not the LOS" — PulseClose is the *pre-flight decision layer*, the loan-system
+    is the downstream consumer. Each target API is its own project (~2–4 wks); never
+    speculative — one paying customer at a time, and only after Layers 1–2 prove value.
+    *Stage: Interoperability.*
+20. **Consumer Bridge — logged adjacency, NOT built (but more developed than "logged").** The
+    `Consumer Bridge.zip` + in-Box `Consumer Bridge/` folder hold **drafted product artifacts**
+    (Downloads re-scan 2026-07-01): a 10-month **HPML** consumer-bridge **policy manual**, an
+    underwriting **checklist**, an **APR calculator**, a CA foreclosure-timeline memo, a
+    TILA/irrevocable-trust memo, and the TaliMar program. Still an owner-occupied HPML/HOEPA/TILA
+    animal — a different regulatory posture from the business-purpose ICP — so unchanged status:
+    **logged, not built**; but if ICC pursues it, the design substance already exists. Captured
+    in [IDEAS.md](IDEAS.md); revisit only on real pursuit.
 
 **Non-product action items from the reset call (don't lose these):**
 - **Email Damon the AAPL conference info** (Nov 9–11, Vegas) — he asked; can't find it in his inbox.
@@ -935,6 +1101,69 @@ never sets the number or the tier (same spine as always).
 ---
 
 ## Decisions log (append-only)
+
+### 2026-07-01 (e) — "structured core, open edges" tiering decided
+Resolved how far to push "replace the Excel." **Tier 1** = shipped verified modes (default +
+trust anchor); **Tier 2** = a custom-inputs layer inside a known mode (override-any-cell, named
+adjustments, constraint toggle, per-org assumptions) — committed into UW-7 + UX-REDESIGN §13.2
+`<CustomInputs>`, delivers ~80% of the "on-the-fly variables" feel safely; **Tier 3** = a
+*governed* user-authored formula canvas + AI-assisted `.xlsx` import — logged in
+[IDEAS.md](IDEAS.md#user-authored-model-layer-formula-canvas--tier-3-governed) with five
+guardrails (embed-don't-build the calc engine; anchor to a structured output skeleton; cells
+bind to verified data; label user formulas "custom/unverified"; import = AI-assisted mapping,
+not full render). Tier 3 is **built only on real trial demand**, never speculatively — the
+calc-engine + model-correctness-liability risk is too high to chase early. Hard line: never
+render an arbitrary user grid without a structured output skeleton.
+
+### 2026-07-01 (d) — doc-staleness sweep + full Downloads re-scan
+Two verification passes. (1) **Doc audit** — fixed the stale North Star (led with concluded NPLA
+→ now AAPL Nov 9-11 + July/Aug ICC trial as the forcing functions), refreshed the Status snapshot
+(engine shipped/dormant), marked the "get Michael's Solver" action resolved, corrected E2E-TEST-
+PLAN migration count (25→51), and added HISTORICAL header notes to NPLA-RUNBOOK + DEMO-DATA-
+HYGIENE. Created a persistent **[DATA-GOVERNANCE.md](DATA-GOVERNANCE.md)** (the Box PII/off-limits
+policy previously only in ephemeral pickup.md) and added it to the CLAUDE.md session-start list.
+(2) **Downloads re-scan** (beyond the Box) — surfaced net-new non-PII material (findings
+[#31–#33](CALIBRATION-FINDINGS.md)): the **~35-lender "Lender Grid"** in `Insignia Capital
+Corp.zip` (→ A1+ fixture set, vs. 2 encoded today), **ICC's Colchis warehouse-LOC capital stack**
+(→ CAP-1 facility-capacity model), 4 packaged "Deal Spotlight" deals (calibration/case-study),
+and confirmation the Consumer-Bridge adjacency has real draft artifacts. Folded into A1+, CAP-1,
+COND-1, and the Consumer-Bridge item. Governance held throughout — no PII/financials/accounting/
+captured-server-data opened.
+
+### 2026-07-01 (c) — ICC operational Box mined → "replace the Excel" hardened into a platform stack
+Went through the full ICC operational Box (`~/Downloads/Private Folder.zip`, **72GB / 94,751
+files** — the 60GB+ download the 07-01(b) entry was waiting on). Mined **only** the underwriting
+models + process/pricing docs; stayed out of borrower-PII packets (1003s w/ SSN/DOB), QuickBooks
+/accounting files, and captured-server-data (governance note in [pickup.md](../pickup.md) +
+memory); **nothing persisted to the repo** — synthesis only. Findings logged as
+[CALIBRATION-FINDINGS #24–#30](CALIBRATION-FINDINGS.md). What it changed:
+- **Validated the engine:** ICC's institutional MFR sheet sizes via `MIN(LTV/Debt-Yield/DSCR)`
+  and the intake form via `MINIFS(LTC,LTARV)` — the exact MIN-of-constraints engine we shipped.
+- **Sharpened + stress-tested the north star.** "Replace the Excel" is doable for this bounded,
+  deterministic model family — but the honest framing is **replace it for 80–90% of standard
+  deals + be system-of-record even for the 10% that still touch a sheet** (not "kill Excel").
+  Five design commitments make that real: radical drill-through transparency, parameterize-don't-
+  hardcode, override-any-cell, Quick-Quote→Full-Model progressive disclosure, and export-*to*-Excel.
+- **Defined the platform stack** (new north-star subsection): Layer 0 engine → Layer 1 replace-the-
+  Excel app → **Layer 2 port into the CRM (Salesforce, INT-1)** → **Layer 3 API backbone into the
+  LOS (Nexys/Encompass, INT-2)**. CRM before LOS because PulseClose is the *pre-LOS decision layer*;
+  the deal is born in the CRM (confirmed by ICC's LO Workflow doc). Sequence app→CRM→LOS, never
+  inverted; Layers 2–3 are customer-gated, but the API-first architecture is not-later.
+- **New cross-cutting principle 14** — API-first decision-layer + parameterize-never-hardcode a
+  customer's model (keeps multi-tenant/dual-use alive).
+- **Expanded UW-7** with the concrete long-tail: dual in-place+stabilized MFR sizer (#25),
+  refinance/takeout **stress grid** (#26, the "does the bridge exit?" surface, pairs with AN-2),
+  operational-shortfall reserve (#27), per-constraint include/exclude toggle (#28), LOI/rate-offer-
+  letter generation, and the intake schema straight from ICC's own app (#30). Strengthened UW-3
+  (dual sizer), AN-1 (CSI-division budget taxonomy, #29), COND-1 ("needs list" is a confirmed real
+  step), and added **INT-2** (LOS push). Also surfaced market intel: ICC = two businesses (bridge +
+  consumer resi) + a defunct NPL-servicing shop; a real private-lender network (FCI-serviced, e.g.
+  Nomad One LLC) feeding A1; and the "DREAM Program" (100% financing / physician / CRA) as the
+  Consumer-Bridge adjacency anchor. Docs updated: STRATEGY (platform-stack subsection), IDEAS
+  (new adjacency/idea entries), UX-REDESIGN §13 (RefiStressGrid + DualSizer primitives, constraint
+  toggle, Quick-Quote→Full-Model, show-the-math/export trust), CALIBRATION-FINDINGS (#24–#30).
+Next action: unchanged — **wire the shipped sizers into the deal stepper (UX-2)**; fold the refi
+stress grid + dual sizer into that surface.
 
 ### 2026-07-01 (b) — ICC data trove decoded → expanded phased plan
 ICC handed over a large data trove (`~/Downloads`: `Loan Sizer.zip`, `Insignia Capital

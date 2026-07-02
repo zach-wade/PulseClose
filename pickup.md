@@ -11,10 +11,15 @@
 > wire the shipped sizers into the deal stepper (UX-2)** — precise steps + a prod-drive gate in
 > §NEXT below.
 >
-> **⭐ NORTH STAR for the underwriting thread: REPLACE THE EXCEL** (owner-set) — an underwriter
-> opens PulseClose *instead of* their spreadsheet; every ICC model becomes a to-the-penny mode.
-> See ROADMAP §North star + **UW-7** (the Excel long-tail: MFR, requested-loan shape, per-investor
-> pricing, LOI gen). This is also the standalone cold wedge ("kill your Excel UW model").
+> **⭐ NORTH STAR for the underwriting thread: REPLACE THE EXCEL → port into the CRM → API
+> backbone into the LOS** (owner-set; sharpened + stress-tested 2026-07-01 (c) after mining the
+> 72GB ICC Box). The honest framing: replace the Excel for **80–90% of standard deals + be
+> system-of-record even for the 10% that still touch a sheet** (not "kill Excel"). The **platform
+> stack**: engine → replace-the-Excel app → **Salesforce embed (INT-1, Layer 2)** → **LOS push
+> (Nexys/Encompass, INT-2, Layer 3)**; CRM before LOS (the deal is born in the CRM, pre-LOS);
+> API-first throughout (principle 14). See ROADMAP §North star (platform stack + stress test) +
+> **UW-7** (dual sizer · refi stress grid · operational shortfall · constraint toggle · LOI/rate-
+> offer gen). Also the standalone cold wedge ("kill your Excel UW model").
 >
 > **Active plan:** ROADMAP [Post-Damon-reset sequence](docs/ROADMAP.md#post-damon-reset-sequence-2026-07-01--construction-sizing-coherence-craft).
 > Prior session's SOS-coverage state is preserved under §Critical context (still valid).
@@ -59,7 +64,14 @@ ICC handed over a large data trove. Product-relevant models decoded + pulled int
 deal* (proceeds waterfall + initial-advance-vs-holdback + prepaid-interest + cash-to-close +
 Tier×Rehab buy-box with cushion per test). Also: Construction Budget, DSCR/PITIA calc, Colchis
 rate-stack pricing tool, Track Record schema. `Lenders.zip` = 10 real investor guides (A1 set).
-⚠️ The **full ICC Box folder (60GB+)** is still downloading (`~/Downloads/Unconfirmed*.crdownload`) — a MAJOR data source (every ICC deal/model/guideline/LOI); mine it when it lands.
+✅ **The full ICC Box landed + was mined (2026-07-01 (c))** — `~/Downloads/Private Folder.zip`,
+**72GB / 94,751 files**. Synthesis-only (nothing persisted to repo); findings folded into
+ROADMAP (platform stack + UW-7 long-tail + INT-2 + principle 14), STRATEGY, IDEAS, UX-REDESIGN
+§13, CALIBRATION-FINDINGS **#24–#30**. Highlights: ICC's MFR sheet sizes with `MIN(LTV/DY/DSCR)`
+(validates the engine); a **dual in-place+stabilized sizer**; a **refinance NOI-stress grid**
+("does the bridge exit?"); operational-shortfall reserve; per-constraint include/exclude toggle;
+the CSI-division cost taxonomy (AN-1); intake schema from ICC's own loan app. Mined ONLY models/
+process docs — stayed out of PII packets, QuickBooks/accounting, captured-server-data.
 > **🔒 DATA-GOVERNANCE (surfaced 2026-07-01):** the Box is NOT just models — it holds
 > **BOIR/FINCEN beneficial-ownership filings, employee withholding (PII), ICC financials, and a
 > "Cyber Attack File / Captured Server Data" folder (`clients.xls`, `Event_log`)**. Treat it as
@@ -192,7 +204,11 @@ pending sub-approval. Free SOS state lookups need **no** keys.*
 2. **COH-2 sequencing** — the mandate-reads-raw trust-killer is a live bug on the capital-partner surface Damon-as-fund sees in the trial; consider pulling it forward (ahead of / alongside the stepper) rather than leaving it in Phase 2.
 3. **RentCast (owner)** — separate Build-Folio onto its own account/plan or upgrade; audit its 17.5% error rate. PulseClose itself is fine (~0 usage).
 4. **Vendor ledger ⚠️ CONFIRM rows** — verify Supabase/Vercel/Sentry/Cobalt/Realie/Regrid/OpenSanctions/GoDaddy costs against dashboards.
-5. **ICC Box (60GB)** — when it lands, extract ONLY models; do NOT ingest wholesale (PII/FINCEN/captured-server-data — see governance note above). Check it for `ICC SFR 1-4 Construction Deck V.1.01.xlsx`.
+5. **ICC Box (72GB)** — ✅ landed + mined 2026-07-01 (c) (synthesis-only, findings in CALIBRATION #24–#30). Governance held: models/process docs only, no PII/QuickBooks/captured-server-data. Still worth a targeted look for `ICC SFR 1-4 Construction Deck V.1.01.xlsx` + Damon's condo-project Excel if/when needed.
 6. **CALICO (carried)** — chase the CBC sub approval (bizfile@sos.ca.gov); CA works via Cobalt meanwhile.
+7. **Lender Grid (~35 lenders)** — Downloads re-scan (2026-07-01 (d)) found `Insignia Capital Corp.zip` → `Lender Grid/` + master `ICC Lender Grid 1.20.24.xlsx` = ~35 real lender rate sheets/guidelines (Bloomfield, Corevest, Dunmor, Archwest, LendingOne, Conventus, ACRA, Eastview, …). We've encoded **2** (Colchis + Oakhurst). This is the A1+ fixture set → seed `scripts/seed-sample-investors.ts` from it. See CALIBRATION #31–#33.
+8. **Formula-canvas decision — RESOLVED + encoded (2026-07-01).** "Structured core, open edges": **Tier 1** (shipped verified modes) + **Tier 2** (override-any-cell + custom adjustments + constraint toggle + per-org assumptions) committed in ROADMAP UW-7 + UX-REDESIGN §13.2 `<CustomInputs>`; **Tier 3** (governed user-authored formula canvas + AI-assisted xlsx import, embedded engine, structured output skeleton, labeled "custom/unverified") logged in IDEAS with guardrails — **built only on real trial demand.** Hard line: never render an arbitrary user grid without a structured output skeleton.
 
-**Also queued:** UW-7 (Excel long-tail → the "replace the Excel" north star) · UW-3 (surface depth layers) · UW-4 (deposits/equity).
+**Also queued:** UW-7 (Excel long-tail → the "replace the Excel" north star) · UW-3 (surface depth layers) · UW-4 (deposits/equity) · A1+ (parse the ~35-lender Lender Grid).
+
+**Doc-staleness sweep (2026-07-01 (d)):** North Star de-NPLA'd (→ AAPL Nov 9-11 + July/Aug ICC trial); Status snapshot notes engine shipped/dormant; E2E migration count 25→51; NPLA-RUNBOOK + DEMO-DATA-HYGIENE marked HISTORICAL; created **docs/DATA-GOVERNANCE.md** (persistent Box-PII policy) + added to CLAUDE.md read-list. Full audit + re-scan folded into ROADMAP/STRATEGY/IDEAS/UX-REDESIGN/CALIBRATION.
