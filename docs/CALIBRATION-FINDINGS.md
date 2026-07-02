@@ -467,6 +467,30 @@ inventory + structure only; no PII / financials / accounting / captured-server-d
     drive-download zips are a separate fintech DD engagement — out of PulseClose/ICC scope;
     the HDSR "Agentic AI" PDFs are academic, no proprietary signal.)*
 
+## Real funded-deal validation — #10049 M Fili sizer (2026-07-01 (e))
+
+Read the actual **funded** ICC sizer for loan **#10049** (99 To 100 LLC · 9390 SW 99th St,
+Miami · ground-up-to-flip). Raw model stays in the **consulting** repo (it belongs with
+`clients/insignia-capital/data/loan-sizer-trove-2026-07/`, alongside the generic sizers) — NOT
+copied here; this is the synthesized value only. De-identified deal economics; no borrower PII read.
+
+34. **🟢 The construction ratio math is validated against a real funded deal, to the penny.**
+    Deal: Purchase $1,400,000 · Construction $2,178,318 · AIV $1,400,000 · ARV $5,350,000 ·
+    Initial Loan $277,301 · Holdback $2,178,318 · Interest Reserve $361,188 · **Total Loan
+    $2,816,807** · rate 10.99% · 18mo. Every ratio our `construction-sizer.ts` computes matches
+    ICC's sheet exactly: LTP `initial/purchase` 19.807% · LTAIV `initial/AIV` 19.807% ·
+    **LTC excl-IR** `loan/totalCost` 78.72% · **LTC incl-IR** `loan/(totalCost+IR)` 71.50% ·
+    LTARV `loan/ARV` 52.65%. Two refinements for UW-7:
+    - **Dual LTC.** ICC reports LTC **both** ways — including and excluding the interest-reserve
+      in the denominator. Our sizer should surface both (it already has the reserve-in-basis flag;
+      expose the pair).
+    - **Check-my-number shape confirmed (finding #21).** The sheet **types the Total Loan +
+      Interest Reserve as inputs** (`Initial = TotalLoan − Holdback − IR`) and computes the
+      ratios from them — it's the requested-loan/metrics shape, not an auto-sizer. Interest
+      reserve here ≈ **12.8% of loan** (a draw-weighted ~0.78 factor vs. our closed-form's full-
+      term reserve — concrete grounding for finding #20's draw-weight note / AN-2).
+    A great trial signal: the deterministic engine reproduces ICC's real funded numbers.
+
 ## Carried into the product plan (2026-07-01, Damon reset)
 
 The findings above are the evidence base for the ROADMAP
