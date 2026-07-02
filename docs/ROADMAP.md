@@ -42,16 +42,21 @@
 > implications, and [UX-PLAN.md](./UX-PLAN.md) for the coherent-product UX plan.
 
 **Live at app.pulseclose.com.** Multi-tenant SaaS, Stripe billing, real vendor
-data flowing. **51 migrations applied (00001–00051).**
+data flowing. **52 migrations applied (00001–00052).**
 
-> **Update (2026-07-01):** the **deal-sizing engine layer shipped + deployed** (dormant —
-> imported by no UI yet, so additive/safe): `src/lib/underwriting/{rtl-sizer, construction-sizer,
-> dscr-sizer, solve, dispatch}.ts` — RTL/fix&flip + ground-up construction + DSCR + live-solve
-> goal-seek + dispatcher, all math-verified to the penny (**91 assertions**; the "Solver" proven a
-> closed-form circular interest reserve — no iteration needed). **Next = wire into the deal stepper
-> (UX-2).** North star sharpened to **"replace the Excel → CRM (Salesforce) → LOS API backbone"**
-> (see below). The full ICC operational Box (72GB) was mined 2026-07-01 (c) — findings in
-> [CALIBRATION-FINDINGS #24–#30](CALIBRATION-FINDINGS.md).
+> **Update (2026-07-01 (e)) — UX-2 SHIPPED + drive-verified.** The deal-sizing engine
+> (`src/lib/underwriting/{rtl-sizer, construction-sizer, dscr-sizer, solve, dispatch}.ts`, 91
+> assertions to the penny) is now **wired into the deal stepper and live**: the Sizing step
+> resolves the mode from `loan_type`, shows mode-specific inputs, and renders the mode-tagged
+> result through the Excel-parity `<StructuredSizing>` (`<ProceedsWaterfall>` + `<ConstraintLadder
+> cushion>`, `src/components/dashboard/deal/structured-sizing.tsx`). Mode-first `/api/underwrite`
+> persists the `uwStructuredResultV1` envelope (migration **00052**: `structured` col; inputs/sizing
+> nullable). A **prod Playwright drive** matched the golden fixtures to the penny: Fix&Flip
+> **$2,422,000**, Ground-Up **$1,444,444**, DSCR **$297,477**. Finding **#23** resolved (DSCR
+> sizes via closed-form residential-PITIA). North star: **"replace the Excel → CRM (Salesforce)
+> → LOS API backbone."** The 72GB ICC Box was mined (findings [#24–#34](CALIBRATION-FINDINGS.md)).
+> **Next = UW-7/Tier-2 depth on top of the live UI** (dual sizer, refi stress grid, custom-inputs
+> override, solve sliders).
 
 **Shipped since the last snapshot (2026-06-22 → 06-23):**
 - **Underwriting Workbench (Module 10) + AI UW Copilot (Module 6)** — ported from
@@ -808,9 +813,10 @@ Salesforce opportunity → digital app → UW review → pre-approval/"needs lis
 discuss lenders + pricing** → rate-offer letter → disclose/submit into the LOS). Each layer is
 a client of the same engine:
 
-- **Layer 0 — the engine** (pure TS sizers + judgment; shipped, dormant). The IP. Platform-agnostic.
+- **Layer 0 — the engine** (pure TS sizers + judgment; shipped). The IP. Platform-agnostic.
 - **Layer 1 — replace the Excel** (the app: deal stepper + Excel-parity result UI at
-  app.pulseclose.com). The standalone product an underwriter opens instead of a sheet. = UX-2 + UW-7.
+  app.pulseclose.com). **UX-2 shipped + drive-verified (2026-07-01 (e))** — mode-first sizing +
+  `<StructuredSizing>` render live. UW-7 depth (dual sizer, refi grid, custom-inputs) is the remainder.
 - **Layer 2 — port into the CRM** (Salesforce, confirmed as ICC's system-of-intake and the
   *first* step in their flow). The deal is **born in the CRM**, pre-LOS — so the natural
   distribution is a Salesforce panel on the opportunity that runs validation + sizing +
@@ -878,9 +884,11 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
      ([dispatch.ts](../src/lib/underwriting/dispatch.ts) — `sizingModeForLoanType()` routes
      the Nexys loan_type → the right sizer, honoring CALIBRATION #14's economics override;
      `sizeDeal()` returns a mode-tagged result; [verify-dispatch.ts](../scripts/verify-dispatch.ts)
-     14/14). The full engine layer is done; **next is UI: wire into the deal stepper**
-     (UX-2 Excel-parity layout + UW-5 sliders), then UW-3 (depth layers) + UW-4 (deposits).
-   *Stage: Route / underwrite.*
+     14/14). **The engine is wired into the deal stepper and LIVE (UX-2, 2026-07-01 (e))** —
+     mode-specific inputs + Excel-parity `<StructuredSizing>` render, mode-first `/api/underwrite`,
+     migration 00052, prod-drive-verified to the penny. Remaining depth: UW-5 solve sliders,
+     UW-3 (depth layers), UW-4 (deposits), UW-7 (dual sizer + refi grid + custom-inputs override).
+   *Stage: Route / underwrite. **SHIPPED.***
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
    trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
    the pre-existing ones (One Sheet Bridge/Construction/Lilac, MFR Rehab, 286 Virginia /
@@ -994,8 +1002,12 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
    headroom shown everywhere** a constraint binds (Damon's "art of massaging the deal");
    **native scenario compare** (Option_1/Option_2 columns); a first-run path that orients
    any persona (broker / underwriter / capital partner) to *their* next action. Full spec:
-   [UX-REDESIGN-PLAN.md §13](UX-REDESIGN-PLAN.md). *Woven through Phases 1–4; this item is
-   the dedicated consolidation pass.*
+   [UX-REDESIGN-PLAN.md §13](UX-REDESIGN-PLAN.md).
+   **✅ Sizing-layer done (2026-07-01 (e)):** the Excel-parity sizing layout (waterfall +
+   constraint-ladder-with-cushion) ships as `<StructuredSizing>` and is live + drive-verified
+   for RTL/construction/DSCR. **Remaining:** native scenario compare (`<ScenarioColumns>`),
+   one-Deal-object re-key elimination across surfaces, and persona wayfinding — the broader
+   consolidation pass woven through Phases 1–4.
 
 #### Phase 3 — Best-execution + capital (the distribution wedge)
 
@@ -1101,6 +1113,24 @@ never sets the number or the tier (same spine as always).
 ---
 
 ## Decisions log (append-only)
+
+### 2026-07-01 (e) — UX-2 shipped: the sizing engine is wired into the product + drive-verified
+Took the dormant deal-sizing engine to a live, verified feature in five increments (commits
+`0a1ea53 → c68d99b`): (1) resolved finding **#23** — DSCR now SIZES via a closed-form residential-
+PITIA `sizeDscr` (dispatcher `dscr` branch), `dscrForLoan` kept as check-my-number; (2) migration
+**00052** — `uw_models.structured` jsonb + inputs/sizing nullable + has-a-result CHECK, and the
+`uwStructuredResultV1` typed envelope (engine-owned payload, no hand-mirroring drift); (3) mode-first
+`/api/underwrite` — `sizingModeForLoanType` → `sizeDeal`, persists the structured envelope, bridge
+path unchanged, GET/judge readers guarded for null sizing; (4) stepper wiring — mode-specific input
+fields + the Excel-parity `<StructuredSizing>` (`<ProceedsWaterfall>` + `<ConstraintLadder cushion>`)
+in `structured-sizing.tsx`; percent inputs ÷100 in `structured-request.ts`; fixed `sizingModeForLoanType`
+to normalize `_`/`-` so `ground_up`/`fix_flip` enum values route; (5) **prod Playwright drive** —
+Fix&Flip **$2,422,000** (CTC $294,999.996), Ground-Up **$1,444,444**, DSCR **$297,477**, all matching
+the golden fixtures to the penny; the real funded deal #10049 also validated (finding **#34**).
+Decisions along the way: persistence via a new column + migration (owner-chosen); nullable inputs/
+sizing so a row is a bridge model OR a structured model; Tier-3 formula canvas stays logged (IDEAS),
+not built. **Next:** UW-7/Tier-2 depth on the live UI — dual sizer (#25), refi stress grid (#26),
+`<CustomInputs>` override-any-cell, UW-5 solve sliders; then Phase 3 A1+ (the ~35-lender Lender Grid).
 
 ### 2026-07-01 (e) — "structured core, open edges" tiering decided
 Resolved how far to push "replace the Excel." **Tier 1** = shipped verified modes (default +

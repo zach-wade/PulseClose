@@ -556,7 +556,12 @@ pass. It builds on §11 (verdict-first) — this is §11 extended from "answer-f
    gets the mandator spine (§4); extend the pattern so no persona lands on a dead end.
 
 ### 13.2 Coherence primitives to add (beyond §11.4's kit)
-- **`<ProceedsWaterfall>`** — the money movement (advance + holdback − prepaid − closing →
+> **STATUS (2026-07-01 (e)):** `<ProceedsWaterfall>`, `<ConstraintLadder cushion>`, and the
+> `<StructuredSizing>` dispatcher are **BUILT + live + prod-drive-verified** (RTL/construction/DSCR)
+> in `src/components/dashboard/deal/structured-sizing.tsx`. `<CustomInputs>` mode-INPUTS are wired
+> into the stepper; the override-any-cell layer is not yet built. `<DualSizer>`, `<RefiStressGrid>`,
+> `<SolveControl>` (logic ships in `solve.ts`), and `<ScenarioColumns>` remain to build.
+- **`<ProceedsWaterfall>`** ✅ **BUILT** — the money movement (advance + holdback − prepaid − closing →
   net → cash-to-close → equity%), from the decoded RTL sizer. The artifact that makes it
   *replace* the Excel.
 - **`<ConstraintLadder cushion>`** — the binding-constraint table with **headroom per test**

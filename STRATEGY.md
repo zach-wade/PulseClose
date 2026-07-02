@@ -174,7 +174,10 @@ portfolio scale — the far edge of where a loan-level decision engine could eve
 ## Where we are today (2026-06-23)
 
 Live at `app.pulseclose.com`, multi-tenant SaaS, Stripe billing, real
-vendor data, production-stable through **51 migrations (00001–00051)**.
+vendor data, production-stable through **52 migrations (00001–00052)**. The deal-type sizing
+engine (RTL / ground-up construction / DSCR) is **wired into the deal stepper and live** as of
+2026-07-01 — mode-first `/api/underwrite` + Excel-parity `<StructuredSizing>` render, prod-drive-
+verified against ICC's golden fixtures to the penny.
 NPLA Atlantic City (2026-06-22/23) just happened — the forcing function
 is now behind us; execution shifts to the post-NPLA sequence.
 

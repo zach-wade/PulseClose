@@ -267,7 +267,7 @@ These are the "didn't think to test" cases that bite during demos.
 
 | # | Item | How to verify |
 |---|---|---|
-| 16.1 | All 51 migrations idempotent on a **fresh** tenant (00001–00051) | Spin up a 2nd test org; run `supabase db push` from scratch; validate one xlsx through full flow |
+| 16.1 | All 52 migrations idempotent on a **fresh** tenant (00001–00052) | Spin up a 2nd test org; run `supabase db push` from scratch; validate one xlsx through full flow |
 | 16.2 | Print test on real paper | Cmd+P on `/handoff/[id]` and `/validations/[id]/risk-methodology`; check page-breaks, margins, color rules |
 | 16.3 | OpenSanctions key rotated before 2026-05-28 | New trial key in `OPENSANCTIONS_API_KEY` (Vercel + .env.local); run one validation with sanctions-positive borrower |
 | 16.4 | Cobalt key rotation strategy in place by ~6/10 | Either round-robin in `cobalt.ts` or env-swap pre-demo; document in pickup |

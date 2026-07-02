@@ -38,7 +38,8 @@
 ---
 
 ## Where we are — headline (2026-07-01)
-On `main`, deployed green; **migrations 00001–00051 (no new migrations)**; build clean. The
+On `main`, deployed green; **migrations 00001–00052** (00052 = uw_models.structured, applied to
+prod); build clean; **UX-2 sizing UI live + prod-drive-verified to the penny**. The
 prior session's **free-SOS coverage (12 free entity states + Cobalt fallback)** is live and
 unchanged. The gap that blocked the ICC trial — the engine was loan-type-agnostic while ~27%
 of ICC's book is construction+F&F — is now **CLOSED at the engine layer**: RTL, ground-up
@@ -101,8 +102,10 @@ The whole sizing-engine layer is built + verified (pure modules, no UI yet):
 **91 assertions total, `tsc` + lint clean.** Findings `docs/CALIBRATION-FINDINGS.md` #19–23
 (#23 = dispatcher DSCR asymmetry — decide before the stepper: route DSCR mode to `maxLoanByDscr`
 so all modes SIZE, with `dscrForLoan` as a "check my number" affordance).
-**MERGED to main + deployed 2026-07-01** (engine is dormant — imported by no surface yet, so the
-deploy is additive/safe). Vendor work merged too (VENDOR-LEDGER RentCast plan + temp-probe removal).
+**MERGED to main + deployed 2026-07-01.** *(This engine was later WIRED into the deal stepper +
+prod-drive-verified — UX-2, 2026-07-01 (e); finding #23 resolved: DSCR sizes via closed-form
+residential-PITIA `sizeDscr`. See the SHIPPED-UX-2 banner up top.)* Vendor work merged too
+(VENDOR-LEDGER RentCast plan + temp-probe removal).
 
 ## RentCast / vendor note (2026-07-01)
 The 85% RentCast burn is **NOT PulseClose** (70 req lifetime, 0 last week) — it's the shared
@@ -179,8 +182,8 @@ Fixed `sizingModeForLoanType` to normalize `_`/`-` so the `ground_up`/`fix_flip`
 ## Reference
 - **Repo:** `/Users/zachwade/code/active/pulseclose` · **Prod:** https://app.pulseclose.com
 - **Vercel:** `buildfolios-projects-e8f9d80e/pulseclose` · **Supabase:** `oazwscmgyqknwatqgtyc`
-- **Commits this session:** the UW engine layer + docs + vendor audit (`73802d0 → 22e0614`), merged to `main`. Migrations **00001–00051** (unchanged, no new).
-- **Engine files (dormant, tested):** `src/lib/underwriting/{rtl-sizer,construction-sizer,dscr-sizer,solve,dispatch}.ts` · tests `scripts/verify-{rtl,construction,dscr,solve,dispatch}*.ts` (run all to re-green).
+- **Commits (UX-2 session):** `0a1ea53` (engine #23 + persistence scaffold) → `2a1031e` (mode-first API) → `a7c6bd5` (#34) → `07a1bc3` (structured-sizing components) → `c68d99b` (stepper wiring) → `709f1f8` (pickup). Migrations **00001–00052** (00052 applied to prod).
+- **Engine files (LIVE, tested):** `src/lib/underwriting/{rtl-sizer,construction-sizer,dscr-sizer,solve,dispatch,structured-request}.ts` · UI `src/components/dashboard/deal/structured-sizing.tsx` · wired in `deal-stepper.tsx` + `/api/underwrite/route.ts` · schema `uwStructuredResultV1` (jsonb.ts) · tests `scripts/verify-{rtl,construction,dscr,solve,dispatch}*.ts` (run all to re-green).
 - **Decoded models + golden fixtures:** `clients/insignia-capital/data/loan-sizer-trove-2026-07/` (+ README with the math).
 - **Test orgs (pw `Test1234!`):** uw@ `27296b6b-87f2-4b71-9e84-2c71f652449c` · solo@
   `db330e86-bce5-4428-9cd3-81c2a683884a` · fund@ `0aada23e-56f5-47ce-b400-a872be3daaf1` (org_type=fund)

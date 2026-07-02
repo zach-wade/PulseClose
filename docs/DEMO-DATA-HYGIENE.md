@@ -91,7 +91,7 @@ The migration order is fixed; run them as a stack. `supabase db push` from a cle
 # 1. Create the new tenant org via signup (or via SQL if you have service-role).
 #    A signup auto-creates user + org via 00002 handle_new_user trigger.
 
-# 2. Apply all 51 migrations (00001–00051) on the Supabase project:
+# 2. Apply all 52 migrations (00001–00052) on the Supabase project:
 supabase db push
 
 # 3. Seed lender + ZHVI reference data (idempotent — safe to run on existing tenants):

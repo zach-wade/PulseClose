@@ -97,13 +97,13 @@ src/
     track-record/             # verify-core.ts (deed-chain matcher, parseAddressForState)
     investors/                # extract.ts (A1 Claude prompt + parse) + validator.ts
     evaluate/                 # engine.ts (multi-investor eligibility; min_dscr/min_debt_yield criteria)
-    underwriting/             # sizing.ts (bridge income model) + rtl-sizer/construction-sizer/dscr-sizer (deal-type sizers 2026-07) + solve.ts (goal-seek) + dispatch.ts (sizeDeal router) + per-investor.ts + judgment.ts (AI UW copilot) + facts.ts
+    underwriting/             # sizing.ts (bridge income model) + rtl-sizer/construction-sizer/dscr-sizer (deal-type sizers, LIVE in the stepper via UX-2 2026-07) + solve.ts (goal-seek) + dispatch.ts (sizeDeal router; mode-first) + structured-request.ts (API body → SizeDealInput) + per-investor.ts + judgment.ts (AI UW copilot) + facts.ts
     analytics/                # PostHog client + server capture (no-op without keys)
     litigation/               # extract + materialize
     gc/                       # lookup.ts (DB-first contractor_licenses → CSLB fallback)
     sos/                      # lookup.ts (DB-first sos_entities cache → Cobalt fallback — de-rents Cobalt)
 supabase/
-  migrations/                 # 51 migrations (00001-00051); recent: 00046 contractor_licenses, 00048 litigation not_run, 00049 documents-bucket-50MB, 00050 sos_entities cache, 00051 org_type
+  migrations/                 # 52 migrations (00001-00052); recent: 00049 documents-bucket-50MB, 00050 sos_entities cache, 00051 org_type, 00052 uw_models.structured (mode-tagged sizing; inputs/sizing nullable)
 wordpress/                    # Marketing-site content + publish scripts (separate from app)
 docs/                         # All strategic + operational docs
 scripts/                      # ETL / cleanup / verification (FDIC ingest, ZHVI refresh, cleanup-broken-validations, etc.)

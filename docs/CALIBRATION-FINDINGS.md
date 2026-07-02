@@ -491,6 +491,13 @@ copied here; this is the synthesized value only. De-identified deal economics; n
       term reserve — concrete grounding for finding #20's draw-weight note / AN-2).
     A great trial signal: the deterministic engine reproduces ICC's real funded numbers.
 
+> **Prod-drive verified (2026-07-01 (e)) — UX-2.** The sizers are now wired into the deal stepper
+> and live. A Playwright drive of all three modes on app.pulseclose.com matched the golden fixtures
+> **to the penny**: Fix&Flip **$2,422,000** (cash-to-close $294,999.996, bound by Initial LTV) ·
+> Ground-Up **$1,444,444** · DSCR **$297,477** (PV of supportable P&I at DSCR 1.20). The UI
+> (`<StructuredSizing>`) renders the engine output verbatim — no distortion. Findings #23 (DSCR
+> sizes) and #34 (construction ratios) both confirmed on the live surface.
+
 ## Carried into the product plan (2026-07-01, Damon reset)
 
 The findings above are the evidence base for the ROADMAP
