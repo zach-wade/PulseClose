@@ -58,6 +58,17 @@ export async function POST(
 
   const body = (await request.json().catch(() => ({}))) as JudgeBody;
 
+  // The AI judgment currently reads the bridge income model. Structured-only
+  // models (RTL / construction / DSCR) have null inputs+sizing — judging those
+  // through the deal-type engine is a follow-on (Phase 4); surface a clear 422
+  // rather than a validation crash.
+  if (model.inputs == null || model.sizing == null) {
+    return NextResponse.json(
+      { error: "AI judgment for structured (fix&flip / ground-up / DSCR) models is not available yet.", code: "STRUCTURED_JUDGE_UNSUPPORTED" },
+      { status: 422 },
+    );
+  }
+
   // Strict-parse the stored deterministic inputs + sizing (these came from the
   // engine; validation guards against a hand-edited row).
   let inputs, sizing;
