@@ -614,6 +614,24 @@ export const uwStructuredResultV1 = z.object({
 export type UwStructuredResultV1 = z.infer<typeof uwStructuredResultV1>;
 export const parseUwStructuredResultV1Strict = strict(uwStructuredResultV1, "uw_models.structured");
 
+// The human override layer (UW-7 Tier-2, migration 00053) — named ± dollar
+// adjustments to the engine's sized loan → a final approved loan. The engine
+// sizes; the underwriter (never AI) applies explicit, labeled, audited overrides.
+export const uwAdjustmentItemV1 = z.object({
+  label: z.string().min(1).max(120),
+  amount: z.number().finite(), // signed dollars: +increase / −reduce the loan
+  reason: z.string().max(500).optional(),
+});
+export const uwAdjustmentsV1 = z.object({
+  schema_version: schemaVersion,
+  base_loan: z.number(), // the engine-sized loan the adjustments start from
+  items: z.array(uwAdjustmentItemV1).max(50),
+  final_loan: z.number(), // base_loan + Σ items (recomputed + stored server-side)
+});
+export type UwAdjustmentItemV1 = z.infer<typeof uwAdjustmentItemV1>;
+export type UwAdjustmentsV1 = z.infer<typeof uwAdjustmentsV1>;
+export const parseUwAdjustmentsV1Strict = strict(uwAdjustmentsV1, "uw_models.adjustments");
+
 const uwDimensionReadV1 = z.object({
   dimension: z.enum(["sponsor", "economics", "market", "structure", "exit"]),
   severity: z.enum(["strength", "neutral", "concern", "dealkiller"]),

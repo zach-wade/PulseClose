@@ -56,7 +56,8 @@ import {
 import { StructuredSizing } from "@/components/dashboard/deal/structured-sizing";
 import { SolveControl } from "@/components/dashboard/deal/solve-control";
 import { RefiStressGrid } from "@/components/dashboard/deal/refi-stress-grid";
-import { buildStructuredInput } from "@/lib/underwriting/structured-request";
+import { CustomAdjustments } from "@/components/dashboard/deal/custom-adjustments";
+import { buildStructuredInput, summarizeStructured } from "@/lib/underwriting/structured-request";
 import { sizingModeForLoanType, type SizeDealResult, type SizingMode } from "@/lib/underwriting/dispatch";
 
 type StepId = "terms" | "eligibility" | "sizing" | "judgment" | "handoff";
@@ -935,6 +936,13 @@ function StepSizing({
         {deal.structured && deal.structured.mode !== "bridge" && (
           <div className="space-y-4 pt-2 border-t border-border">
             <StructuredSizing result={deal.structured} />
+            {deal.uw_model_id && (
+              <CustomAdjustments
+                key={`adj-${deal.uw_model_id}-${summarizeStructured(deal.structured).maxLoan}`}
+                uwModelId={deal.uw_model_id}
+                baseLoan={summarizeStructured(deal.structured).maxLoan}
+              />
+            )}
           </div>
         )}
 
@@ -1122,6 +1130,13 @@ function StepSizing({
                 </div>
                 <p className="text-xs text-muted-foreground">{sizing.interestReserve.summary}</p>
               </div>
+            )}
+            {deal.uw_model_id && (
+              <CustomAdjustments
+                key={`adj-${deal.uw_model_id}-${sizing.maxLoan}`}
+                uwModelId={deal.uw_model_id}
+                baseLoan={sizing.maxLoan}
+              />
             )}
             <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
               {!deal.optedInJudgment ? (
