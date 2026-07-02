@@ -894,8 +894,11 @@ not deferred to the end — UX-2 is only the dedicated consolidation pass.
      **UW-7 refi NOI-stress grid SHIPPED + drive-verified (2026-07-02, commit `bb48afe`)** —
      `stressTakeout()` re-runs the takeout across NOI haircuts (−0/5/10/15/20%) with a closed-form
      break-even; `<RefiStressGrid>` renders it in the exit/takeout panel (finding #26). Dual-LTC for
-     construction also shipped (#34). Remaining depth: UW-7 `<DualSizer>` (in-place|stabilized, #25) +
-     `<CustomInputs>` (Tier-2 override-any-cell); UW-3 (depth layers); UW-4 (deposits).
+     construction also shipped (#34). **Tier-2 `<CustomAdjustments>` (human override layer) SHIPPED +
+     drive-verified (2026-07-02, commit `8cfe75c`, migration 00053)** — named ± dollar adjustments to
+     the sized loan → final approved loan, base derived server-side + audited. Remaining depth: UW-7
+     `<DualSizer>` (in-place|stabilized, #25 — needs the forward pro-forma ramp); per-org **assumption
+     sets** (principle 14); UW-3 (depth layers); UW-4 (deposits).
    *Stage: Route / underwrite. **SHIPPED.***
 2. **UW-2 — Import ICC's Excel models as golden fixtures + deal-type templates.** Wire the
    trove models (`loan-sizer-trove-2026-07/` RTL sizer, construction budget, DSCR calc) +
@@ -1121,6 +1124,22 @@ never sets the number or the tier (same spine as always).
 ---
 
 ## Decisions log (append-only)
+
+### 2026-07-02 (c) — UW-7 Tier-2 human override layer shipped (`<CustomAdjustments>`)
+Shipped the last of the five "replace the Excel" design commitments (commit `8cfe75c`, migration
+00053): the escape hatch that keeps a bespoke, deal-specific tweak in-product instead of a
+spreadsheet. **Design decision: extend override-and-rerun (already the product for the tier) to the
+loan amount, human-only.** The deterministic engine sizes; the underwriter adds named ± dollar
+adjustments (seller credit, cross-collateral bump, environmental holdback) → a final approved loan.
+Two guardrails held the spine: (1) **AI never touches it** — only the human overrides (same rule as
+the tier); (2) the **base loan is derived server-side** from the stored model (bridge `sizing.maxLoan`
+/ structured `summarizeStructured`) so the client can't spoof the number the adjustment applies to.
+Persisted in `uw_models.adjustments` jsonb (nullable, versioned CHECK — no not-null churn), validated
+by `uwAdjustmentsV1` (≤50 items, finite amounts, 1–120-char labels), audited via `activity_events`.
+`applyAdjustments()` floors at 0. `verify-adjustments.ts` 11/11; prod-drive-verified (+$150k on a
+$2,422,000 fix&flip → $2,572,000, base derived server-side, Saved). **Next:** per-org **assumption
+sets** (principle 14 — the parameterize-don't-hardcode commitment, so house caps/rates/floors are
+config not code) + `<DualSizer>` (#25, needs the forward pro-forma ramp).
 
 ### 2026-07-02 (b) — UW-7 refi NOI-stress grid shipped ("does the bridge exit under stress?")
 Shipped the highest-value exit surface (finding #26, commit `bb48afe`). **Key design choice:

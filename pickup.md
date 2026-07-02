@@ -38,7 +38,7 @@
 ---
 
 ## Where we are — headline (2026-07-01)
-On `main`, deployed green; **migrations 00001–00052** (00052 = uw_models.structured, applied to
+On `main`, deployed green; **migrations 00001–00053** (00053 = uw_models.adjustments, applied to prod; 00052 = uw_models.structured, applied to
 prod); build clean; **UX-2 sizing UI live + prod-drive-verified to the penny**. The
 prior session's **free-SOS coverage (12 free entity states + Cobalt fallback)** is live and
 unchanged. The gap that blocked the ICC trial — the engine was loan-type-agnostic while ~27%
@@ -124,9 +124,13 @@ $297,477). Finding **#23** resolved (DSCR sizes via closed-form residential-PITI
 Fixed `sizingModeForLoanType` to normalize `_`/`-` so the `ground_up`/`fix_flip` enum values route.
 
 ## NEXT — the remaining UW-7 / Tier-2 depth (all on top of the now-live sizing UI)
-1. **Tier-2 `<CustomInputs>` (override-any-cell)** — the mode INPUTS are wired; the "structured
-   core, open edges" Tier-2 override-any-computed-cell + named custom adjustments + per-org
-   assumption sets is still to build (ROADMAP UW-7 + principle 14; IDEAS Tier-3 logged).
+1. **Tier-2 override layer — ✅ `<CustomAdjustments>` SHIPPED + drive-verified (2026-07-02, commit
+   `8cfe75c`, migration 00053 applied to prod).** The human override escape hatch: named ± dollar
+   adjustments to the engine's sized loan (seller credit / cross-collateral / holdback) → a final
+   approved loan, base derived server-side + audited (`PATCH /api/underwrite/[id]/adjust`). Renders on
+   both bridge + structured results. Prod-drive: +$150k → **$2,572,000** (base $2,422,000). `verify-
+   adjustments.ts` 11/11. **Still to build:** per-org **assumption sets** (principle 14 — parameterize
+   house caps/rates/floors as per-org config) + Tier-3 formula canvas (IDEAS, demand-gated).
 2. **✅ UW-5 `<SolveControl>` SHIPPED + drive-verified (2026-07-02).** Live goal-seek in the deal
    stepper: `solve.ts` gained dispatch-aware `solveDeal()`/`trySolveDeal()` (invert a whole
    mode-tagged deal — vary a lever, re-run `sizeDeal()`, read a metric via bisection) + `SOLVE_OPTIONS`
