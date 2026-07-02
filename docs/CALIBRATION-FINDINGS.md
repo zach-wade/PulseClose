@@ -489,9 +489,12 @@ copied here; this is the synthesized value only. De-identified deal economics; n
     ICC's sheet exactly: LTP `initial/purchase` 19.807% · LTAIV `initial/AIV` 19.807% ·
     **LTC excl-IR** `loan/totalCost` 78.72% · **LTC incl-IR** `loan/(totalCost+IR)` 71.50% ·
     LTARV `loan/ARV` 52.65%. Two refinements for UW-7:
-    - **Dual LTC.** ICC reports LTC **both** ways — including and excluding the interest-reserve
-      in the denominator. Our sizer should surface both (it already has the reserve-in-basis flag;
-      expose the pair).
+    - **Dual LTC. ✅ SHIPPED (2026-07-02, commit `2f4de16`).** ICC reports LTC **both** ways —
+      including and excluding the interest-reserve in the denominator (on the hard-cost basis
+      purchase+construction). `construction-sizer.ts` now returns `ltcExclReserve`/`ltcInclReserve`
+      and the result UI shows the pair ("LTC 78.7% excl. reserve · 71.5% incl."). `verify-construction-sizer.ts`
+      reconstructs #10049 through the sizer (total loan $2,816,807, reserve $361,188) and asserts both
+      LTCs; prod-drive-verified (`scripts/drive-construction-ltc.ts`).
     - **Check-my-number shape confirmed (finding #21).** The sheet **types the Total Loan +
       Interest Reserve as inputs** (`Initial = TotalLoan − Holdback − IR`) and computes the
       ratios from them — it's the requested-loan/metrics shape, not an auto-sizer. Interest

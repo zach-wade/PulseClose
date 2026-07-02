@@ -140,7 +140,9 @@ Fixed `sizingModeForLoanType` to normalize `_`/`-` so the `ground_up`/`fix_flip`
    it as open HIGH were stale.
 3. **UW-7 dual sizer + refi stress grid** — `<DualSizer>` (in-place | stabilized, finding #25) +
    `<RefiStressGrid>` (NOI −0/5/10/15/20% → LTV/DSCR/refi proceeds, finding #26). Highest-value
-   "does the bridge exit?" surface. Dual-LTC (incl/excl IR) per finding #34.
+   "does the bridge exit?" surface. ~~Dual-LTC (incl/excl IR) per finding #34~~ — **DONE
+   (2026-07-02, commit `2f4de16`):** construction result shows "LTC 78.7% excl. reserve · 71.5% incl.";
+   funded deal #10049 reproduced through the sizer to the penny; prod-drive-verified.
 4. **UW-3 depth layers** (surface exit/stabilization) · **UW-4 deposits/equity + operational shortfall** (#27).
 - **Phase 2 (coherence+trust):** ~~COH-2 mandate-reads-raw fix (HIGH)~~ — **DONE** (already shipped; the mandate reads through disambiguation/classification/not-run, `verify-mandate-fix.ts` green). · UX-1 craft/de-AI.
 - **Phase 3:** A1+ rate stack (**~35-lender Lender Grid**, finding #31) · CAP-1 concentration + facility-aware (**Colchis warehouse LOC**, #32) · CAP-2 pricing · COND-1 auto-conditions.
